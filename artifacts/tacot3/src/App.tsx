@@ -91,7 +91,7 @@ function HomeRedirect() {
               <line x1="12" y1="11" x2="12" y2="17" />
             </svg>
           </div>
-          <h1 className="text-4xl font-bold tracking-tight">TacoTracker3</h1>
+          <h1 className="text-4xl font-bold tracking-tight">TacoTrackerT3</h1>
           <p className="mt-2 text-muted-foreground text-lg">Engineering Project Operations</p>
           <p className="mt-1 text-sm text-muted-foreground">Track projects, departments, tasks, and timelines</p>
           <a
