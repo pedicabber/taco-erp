@@ -4,6 +4,7 @@ import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import type { Request } from "express";
+import { BOOTSTRAP_ADMINS } from "../bootstrapAdmins";
 
 export async function syncUserFromClerk(req: Request): Promise<typeof usersTable.$inferSelect | null> {
   const auth = getAuth(req);
@@ -19,11 +20,13 @@ export async function syncUserFromClerk(req: Request): Promise<typeof usersTable
     const name = `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || email;
     const avatarUrl = clerkUser.imageUrl ?? null;
 
+    const role = BOOTSTRAP_ADMINS.includes(email) ? "admin" : "member";
+
     const [newUser] = await db.insert(usersTable).values({
       clerkId,
       name,
       email,
-      role: "member",
+      role,
       avatarUrl,
     }).returning();
     return newUser;
