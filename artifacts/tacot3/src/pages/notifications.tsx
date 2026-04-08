@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
+import type { Notification } from "@/lib/types";
 import { Bell, CheckCheck, AlertTriangle, Clock, User, Tag, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -51,7 +52,7 @@ export default function NotificationsPage() {
     },
   });
 
-  const unread = (notifications as any[]).filter(n => !n.isRead);
+  const unread = (notifications as Notification[]).filter(n => !n.isRead);
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -94,7 +95,7 @@ export default function NotificationsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {(notifications as any[]).map((n, i) => {
+          {(notifications as Notification[]).map((n, i) => {
             const Icon = TYPE_ICONS[n.type] ?? Bell;
             const iconColor = TYPE_COLORS[n.type] ?? "text-primary";
             return (

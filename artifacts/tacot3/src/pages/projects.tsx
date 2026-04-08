@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
+import type { Project } from "@/lib/types";
 import { Plus, FolderKanban, FileText, Search, Loader2, ChevronRight, Building2, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -154,7 +155,7 @@ export default function ProjectsPage() {
     queryFn: () => apiClient.get("/projects").then(r => r.data),
   });
 
-  const filtered = projects.filter((p: any) =>
+  const filtered = (projects as Project[]).filter(p =>
     [p.name, p.company, p.projectId].some(v => v?.toLowerCase().includes(search.toLowerCase()))
   );
 
@@ -196,7 +197,7 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((project: any, i: number) => (
+          {filtered.map((project, i: number) => (
             <motion.div
               key={project.id}
               initial={{ opacity: 0, y: 16 }}

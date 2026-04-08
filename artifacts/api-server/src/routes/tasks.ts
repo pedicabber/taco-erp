@@ -549,9 +549,38 @@ router.post("/tasks/:taskId/attachments", requireAuth, async (req: Authenticated
   });
 });
 
-router.delete("/tasks/:taskId/attachments/:attachmentId", requireAuth, async (req, res): Promise<void> => {
+router.delete("/tasks/:taskId/attachments/:attachmentId", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
   const taskId = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
   const attachmentId = parseInt(Array.isArray(req.params.attachmentId) ? req.params.attachmentId[0] : req.params.attachmentId, 10);
+  const clerkId = req.userId;
+
+  if (!clerkId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const [dbUser] = await db.select({ id: usersTable.id, role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.clerkId, clerkId));
+
+  if (!dbUser) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const [attachment] = await db.select({ uploadedById: taskAttachmentsTable.uploadedById })
+    .from(taskAttachmentsTable)
+    .where(and(eq(taskAttachmentsTable.id, attachmentId), eq(taskAttachmentsTable.taskId, taskId)));
+
+  if (!attachment) {
+    res.status(404).json({ error: "Attachment not found" });
+    return;
+  }
+
+  if (dbUser.role !== "admin" && attachment.uploadedById !== dbUser.id) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   await db.delete(taskAttachmentsTable).where(
     and(eq(taskAttachmentsTable.id, attachmentId), eq(taskAttachmentsTable.taskId, taskId))

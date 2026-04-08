@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
+import type { Department, Task } from "@/lib/types";
 import {
   ArrowLeft, Plus, Settings, Loader2, Building2, FileText,
   Calendar, CheckSquare, MoreHorizontal, Trash2, Edit2,
@@ -116,8 +117,8 @@ export default function ProjectDetailPage() {
 
   const { data: departments = [] } = useQuery({
     queryKey: ["departments", projectId],
-    queryFn: () => apiClient.get(`/departments?projectId=${projectId}`).then(r => r.data as any[])
-      .then(depts => depts.filter((d: any) => d.projectId === projectId)),
+    queryFn: () => apiClient.get(`/departments?projectId=${projectId}`).then(r => (r.data as Department[]))
+      .then(depts => depts.filter(d => d.projectId === projectId)),
   });
 
   const { data: tasks = [] } = useQuery({
@@ -160,7 +161,7 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const completedTasks = tasks.filter((t: any) => t.status === "complete").length;
+  const completedTasks = (tasks as Task[]).filter(t => t.status === "complete").length;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -277,12 +278,12 @@ export default function ProjectDetailPage() {
             </Card>
           ) : (
             <div className="space-y-2">
-              {departments.map((dept: any) => {
-                const deptTasks = tasks.filter((t: any) => t.departmentId === dept.id);
+              {(departments as Department[]).map(dept => {
+                const deptTasks = (tasks as Task[]).filter(t => t.departmentId === dept.id);
                 return (
                   <Card key={dept.id}>
                     <CardContent className="p-3 flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: dept.color }} />
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: dept.color ?? "#6B7280" }} />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{dept.name}</div>
                         <div className="text-xs text-muted-foreground">{deptTasks.length} tasks</div>
@@ -333,7 +334,7 @@ export default function ProjectDetailPage() {
             </Card>
           ) : (
             <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-              {tasks.slice(0, 10).map((task: any) => (
+              {(tasks as Task[]).slice(0, 10).map(task => (
                 <TaskCard key={task.id} task={task} compact />
               ))}
               {tasks.length > 10 && (
