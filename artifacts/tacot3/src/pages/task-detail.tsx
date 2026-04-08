@@ -161,35 +161,46 @@ export default function TaskDetailPage() {
     },
   });
 
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = ""; // reset so same file can be re-uploaded
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast({ title: "File too large", description: "Maximum file size is 50 MB.", variant: "destructive" });
+      return;
+    }
+
     setUploading(true);
     try {
       const urlRes = await apiClient.post("/storage/uploads/request-url", {
         name: file.name,
         size: file.size,
-        contentType: file.type,
+        contentType: file.type || "application/octet-stream",
       });
       const { uploadURL, objectPath } = urlRes.data;
 
-      await fetch(uploadURL, {
+      const putRes = await fetch(uploadURL, {
         method: "PUT",
         body: file,
-        headers: { "Content-Type": file.type },
+        headers: { "Content-Type": file.type || "application/octet-stream" },
       });
+      if (!putRes.ok) throw new Error(`Storage PUT failed: ${putRes.status}`);
 
       await apiClient.post(`/tasks/${taskId}/attachments`, {
         fileName: file.name,
         objectPath,
         fileSize: file.size,
-        mimeType: file.type,
+        mimeType: file.type || "application/octet-stream",
       });
 
       qc.invalidateQueries({ queryKey: ["task-attachments", taskId] });
-      toast({ title: "File uploaded" });
-    } catch {
-      toast({ title: "Upload failed", variant: "destructive" });
+      toast({ title: "File uploaded", description: file.name });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast({ title: "Upload failed", description: msg, variant: "destructive" });
     } finally {
       setUploading(false);
     }

@@ -528,7 +528,8 @@ router.post("/tasks/:taskId/attachments", requireAuth, async (req: Authenticated
     return;
   }
 
-  const OBJECT_PATH_RE = /^\/objects\/[0-9a-f-]{36}(?:\/[^/]+)?$/i;
+  // Matches /objects/uploads/UUID or /objects/UUID (any reasonable sub-path)
+  const OBJECT_PATH_RE = /^\/objects\/[a-z0-9/_-]+$/i;
   if (!OBJECT_PATH_RE.test(parsed.data.objectPath)) {
     res.status(400).json({ error: "Invalid object path" });
     return;

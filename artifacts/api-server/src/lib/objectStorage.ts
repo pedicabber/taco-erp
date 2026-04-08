@@ -160,6 +160,7 @@ export class ObjectStorageService {
     }
 
     const url = new URL(rawPath);
+    // pathname always starts with "/", e.g. "/bucket-name/dir/uploads/uuid"
     const rawObjectPath = url.pathname;
 
     let objectEntityDir = this.getPrivateObjectDir();
@@ -167,11 +168,16 @@ export class ObjectStorageService {
       objectEntityDir = `${objectEntityDir}/`;
     }
 
-    if (!rawObjectPath.startsWith(objectEntityDir)) {
+    // Strip the leading "/" from pathname before comparing with objectEntityDir
+    const pathWithoutLeadingSlash = rawObjectPath.startsWith("/")
+      ? rawObjectPath.slice(1)
+      : rawObjectPath;
+
+    if (!pathWithoutLeadingSlash.startsWith(objectEntityDir)) {
       return rawObjectPath;
     }
 
-    const entityId = rawObjectPath.slice(objectEntityDir.length);
+    const entityId = pathWithoutLeadingSlash.slice(objectEntityDir.length);
     return `/objects/${entityId}`;
   }
 
