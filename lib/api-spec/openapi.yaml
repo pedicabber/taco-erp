@@ -3,20 +3,34 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: TacoTracker3 (TacoT3) API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User management
+  - name: projects
+    description: Project management
+  - name: departments
+    description: Department management
+  - name: tasks
+    description: Task management
+  - name: notifications
+    description: Notification management
+  - name: calendar
+    description: Calendar/timeline views
+  - name: storage
+    description: File storage
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +38,822 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Users ───────────────────────────────────────────────────────────────────
+
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get current authenticated user profile
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthorized
+    patch:
+      operationId: updateMe
+      tags: [users]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeBody"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserProfile"
+
+  /users/{userId}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user by ID
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          description: Not found
+
+  # ─── Projects ────────────────────────────────────────────────────────────────
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all projects
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectBody"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{projectId}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get project by ID
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectBody"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /projects/{projectId}/summary:
+    get:
+      operationId: getProjectSummary
+      tags: [projects]
+      summary: Get project summary with task counts per status and department
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSummary"
+
+  /projects/parse-pdf:
+    post:
+      operationId: parsePdf
+      tags: [projects]
+      summary: Parse a quote PDF to extract project details
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+                - file
+      responses:
+        "200":
+          description: Parsed project details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParsedPdfData"
+
+  # ─── Departments ─────────────────────────────────────────────────────────────
+
+  /departments:
+    get:
+      operationId: listDepartments
+      tags: [departments]
+      summary: List all departments
+      responses:
+        "200":
+          description: List of departments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Department"
+    post:
+      operationId: createDepartment
+      tags: [departments]
+      summary: Create a department
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDepartmentBody"
+      responses:
+        "201":
+          description: Created department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Department"
+
+  /departments/{departmentId}:
+    get:
+      operationId: getDepartment
+      tags: [departments]
+      summary: Get department by ID
+      parameters:
+        - name: departmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Department"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateDepartment
+      tags: [departments]
+      summary: Update a department
+      parameters:
+        - name: departmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDepartmentBody"
+      responses:
+        "200":
+          description: Updated department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Department"
+    delete:
+      operationId: deleteDepartment
+      tags: [departments]
+      summary: Delete a department
+      parameters:
+        - name: departmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Tasks ───────────────────────────────────────────────────────────────────
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List tasks with optional filters
+      parameters:
+        - name: projectId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: departmentId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: assigneeId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: status
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a new task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskBody"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{taskId}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Get task by ID
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Update a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskBody"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      summary: Delete a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /tasks/{taskId}/timer/start:
+    post:
+      operationId: startTaskTimer
+      tags: [tasks]
+      summary: Start the timer for a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task with updated timer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{taskId}/timer/stop:
+    post:
+      operationId: stopTaskTimer
+      tags: [tasks]
+      summary: Stop the timer for a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task with updated timer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{taskId}/timer/edit:
+    patch:
+      operationId: editTaskTimer
+      tags: [tasks]
+      summary: Manually edit the elapsed time for a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditTimerBody"
+      responses:
+        "200":
+          description: Task with updated elapsed time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{taskId}/followers:
+    post:
+      operationId: followTask
+      tags: [tasks]
+      summary: Follow a task (receive notifications)
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+    delete:
+      operationId: unfollowTask
+      tags: [tasks]
+      summary: Unfollow a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{taskId}/relations:
+    get:
+      operationId: getTaskRelations
+      tags: [tasks]
+      summary: Get linked/related tasks
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Related tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: addTaskRelation
+      tags: [tasks]
+      summary: Link a related task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddTaskRelationBody"
+      responses:
+        "201":
+          description: Relation added
+    delete:
+      operationId: removeTaskRelation
+      tags: [tasks]
+      summary: Remove a task relation
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddTaskRelationBody"
+      responses:
+        "204":
+          description: Relation removed
+
+  /tasks/{taskId}/attachments:
+    get:
+      operationId: listTaskAttachments
+      tags: [tasks]
+      summary: List attachments for a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskAttachment"
+    post:
+      operationId: addTaskAttachment
+      tags: [tasks]
+      summary: Add a file attachment to a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddAttachmentBody"
+      responses:
+        "201":
+          description: Created attachment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskAttachment"
+
+  /tasks/{taskId}/attachments/{attachmentId}:
+    delete:
+      operationId: deleteTaskAttachment
+      tags: [tasks]
+      summary: Delete a task attachment
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Kanban ──────────────────────────────────────────────────────────────────
+
+  /kanban:
+    get:
+      operationId: getKanbanColumns
+      tags: [tasks]
+      summary: Get tasks grouped by status (Kanban view)
+      parameters:
+        - name: projectId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: departmentId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Tasks grouped by column/status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KanbanColumn"
+
+  # ─── Calendar ────────────────────────────────────────────────────────────────
+
+  /calendar/events:
+    get:
+      operationId: getCalendarEvents
+      tags: [calendar]
+      summary: Get calendar events (tasks with dates) for Gantt view
+      parameters:
+        - name: projectId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: departmentId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: assigneeId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: startDate
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: endDate
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Calendar events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CalendarEvent"
+
+  # ─── Dashboard ───────────────────────────────────────────────────────────────
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [projects]
+      summary: Get overall dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /activity:
+    get:
+      operationId: getActivityFeed
+      tags: [tasks]
+      summary: Get recent activity across all tasks
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Activity feed items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  # ─── Notifications ───────────────────────────────────────────────────────────
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications for current user
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{notificationId}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a notification as read
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
+  /notifications/read-all:
+    patch:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                required:
+                  - count
+
+  # ─── Storage ─────────────────────────────────────────────────────────────────
+
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
+
+  /storage/objects/{objectPath}:
+    get:
+      operationId: getObject
+      tags: [storage]
+      summary: Serve a stored object
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Object file
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +864,621 @@ components:
       required:
         - status
 
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        clerkId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, member]
+        departmentId:
+          type: ["integer", "null"]
+        departmentName:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - clerkId
+        - name
+        - email
+        - role
+        - departmentId
+        - departmentName
+        - avatarUrl
+        - createdAt
+
+    UpdateMeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        departmentId:
+          type: ["integer", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        company:
+          type: string
+        projectId:
+          type: string
+        description:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, completed, on_hold, cancelled]
+        createdById:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - company
+        - projectId
+        - description
+        - startDate
+        - status
+        - createdById
+        - createdAt
+        - updatedAt
+
+    CreateProjectBody:
+      type: object
+      properties:
+        name:
+          type: string
+        company:
+          type: string
+        projectId:
+          type: string
+        description:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, completed, on_hold, cancelled]
+      required:
+        - name
+        - company
+        - projectId
+
+    UpdateProjectBody:
+      type: object
+      properties:
+        name:
+          type: string
+        company:
+          type: string
+        projectId:
+          type: string
+        description:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, completed, on_hold, cancelled]
+
+    ParsedPdfData:
+      type: object
+      properties:
+        company:
+          type: string
+        name:
+          type: string
+        projectId:
+          type: string
+        description:
+          type: string
+        startDate:
+          type: string
+      required:
+        - company
+        - name
+        - projectId
+        - description
+        - startDate
+
+    ProjectSummary:
+      type: object
+      properties:
+        projectId:
+          type: integer
+        totalTasks:
+          type: integer
+        tasksByStatus:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                type: string
+              count:
+                type: integer
+            required:
+              - status
+              - count
+        tasksByDepartment:
+          type: array
+          items:
+            type: object
+            properties:
+              departmentId:
+                type: integer
+              departmentName:
+                type: string
+              count:
+                type: integer
+            required:
+              - departmentId
+              - departmentName
+              - count
+        overdueTasks:
+          type: integer
+      required:
+        - projectId
+        - totalTasks
+        - tasksByStatus
+        - tasksByDepartment
+        - overdueTasks
+
+    Department:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: ["string", "null"]
+        projectId:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - color
+        - projectId
+        - createdAt
+
+    CreateDepartmentBody:
+      type: object
+      properties:
+        name:
+          type: string
+        color:
+          type: ["string", "null"]
+        projectId:
+          type: integer
+      required:
+        - name
+        - projectId
+
+    UpdateDepartmentBody:
+      type: object
+      properties:
+        name:
+          type: string
+        color:
+          type: ["string", "null"]
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [backlog, in_progress, in_review, blocked, complete]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        projectId:
+          type: integer
+        departmentId:
+          type: ["integer", "null"]
+        assigneeId:
+          type: ["integer", "null"]
+        assignerId:
+          type: ["integer", "null"]
+        followerIds:
+          type: array
+          items:
+            type: integer
+        expectedHours:
+          type: ["number", "null"]
+        dueDate:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        elapsedSeconds:
+          type: integer
+        timerRunning:
+          type: boolean
+        timerStartedAt:
+          type: ["string", "null"]
+        completedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        assignee:
+          $ref: "#/components/schemas/UserProfileMini"
+          nullable: true
+        assigner:
+          $ref: "#/components/schemas/UserProfileMini"
+          nullable: true
+        department:
+          $ref: "#/components/schemas/DepartmentMini"
+          nullable: true
+      required:
+        - id
+        - title
+        - description
+        - status
+        - priority
+        - projectId
+        - departmentId
+        - assigneeId
+        - assignerId
+        - followerIds
+        - expectedHours
+        - dueDate
+        - startDate
+        - elapsedSeconds
+        - timerRunning
+        - timerStartedAt
+        - completedAt
+        - createdAt
+        - updatedAt
+        - assignee
+        - assigner
+        - department
+
+    UserProfileMini:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        departmentName:
+          type: ["string", "null"]
+      required:
+        - id
+        - name
+        - avatarUrl
+        - departmentName
+
+    DepartmentMini:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: ["string", "null"]
+      required:
+        - id
+        - name
+        - color
+
+    CreateTaskBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [backlog, in_progress, in_review, blocked, complete]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        projectId:
+          type: integer
+        departmentId:
+          type: ["integer", "null"]
+        assigneeId:
+          type: ["integer", "null"]
+        expectedHours:
+          type: ["number", "null"]
+        dueDate:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+      required:
+        - title
+        - projectId
+
+    UpdateTaskBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [backlog, in_progress, in_review, blocked, complete]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        departmentId:
+          type: ["integer", "null"]
+        assigneeId:
+          type: ["integer", "null"]
+        expectedHours:
+          type: ["number", "null"]
+        dueDate:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+
+    EditTimerBody:
+      type: object
+      properties:
+        elapsedSeconds:
+          type: integer
+      required:
+        - elapsedSeconds
+
+    AddTaskRelationBody:
+      type: object
+      properties:
+        relatedTaskId:
+          type: integer
+      required:
+        - relatedTaskId
+
+    TaskAttachment:
+      type: object
+      properties:
+        id:
+          type: integer
+        taskId:
+          type: integer
+        fileName:
+          type: string
+        objectPath:
+          type: string
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+        uploadedById:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - taskId
+        - fileName
+        - objectPath
+        - fileSize
+        - mimeType
+        - uploadedById
+        - createdAt
+
+    AddAttachmentBody:
+      type: object
+      properties:
+        fileName:
+          type: string
+        objectPath:
+          type: string
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+      required:
+        - fileName
+        - objectPath
+
+    KanbanColumn:
+      type: object
+      properties:
+        status:
+          type: string
+        label:
+          type: string
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+      required:
+        - status
+        - label
+        - tasks
+
+    CalendarEvent:
+      type: object
+      properties:
+        taskId:
+          type: integer
+        title:
+          type: string
+        status:
+          type: string
+        startDate:
+          type: ["string", "null"]
+        dueDate:
+          type: ["string", "null"]
+        expectedHours:
+          type: ["number", "null"]
+        elapsedSeconds:
+          type: integer
+        timerRunning:
+          type: boolean
+        projectId:
+          type: integer
+        projectName:
+          type: string
+        departmentId:
+          type: ["integer", "null"]
+        departmentName:
+          type: ["string", "null"]
+        departmentColor:
+          type: ["string", "null"]
+        assigneeId:
+          type: ["integer", "null"]
+        assigneeName:
+          type: ["string", "null"]
+      required:
+        - taskId
+        - title
+        - status
+        - startDate
+        - dueDate
+        - expectedHours
+        - elapsedSeconds
+        - timerRunning
+        - projectId
+        - projectName
+        - departmentId
+        - departmentName
+        - departmentColor
+        - assigneeId
+        - assigneeName
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalProjects:
+          type: integer
+        activeProjects:
+          type: integer
+        totalTasks:
+          type: integer
+        overdueTasks:
+          type: integer
+        tasksInProgress:
+          type: integer
+        tasksCompleted:
+          type: integer
+        myTasks:
+          type: integer
+        myOverdueTasks:
+          type: integer
+      required:
+        - totalProjects
+        - activeProjects
+        - totalTasks
+        - overdueTasks
+        - tasksInProgress
+        - tasksCompleted
+        - myTasks
+        - myOverdueTasks
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        taskId:
+          type: integer
+        taskTitle:
+          type: string
+        projectName:
+          type: string
+        action:
+          type: string
+        actorId:
+          type: integer
+        actorName:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - taskId
+        - taskTitle
+        - projectName
+        - action
+        - actorId
+        - actorName
+        - createdAt
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        taskId:
+          type: ["integer", "null"]
+        type:
+          type: string
+          enum: [overdue, assigned, mentioned, status_changed, timer_alert, followed]
+        message:
+          type: string
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - userId
+        - taskId
+        - type
+        - message
+        - isRead
+        - createdAt
+
+    RequestUploadUrlBody:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+      required:
+        - name
+        - size
+        - contentType
+
+    RequestUploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+      required:
+        - uploadURL
+        - objectPath

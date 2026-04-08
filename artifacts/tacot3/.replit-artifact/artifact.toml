@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "TacoTracker3 (TacoT3)"
+version = "1.0.0"
+id = "artifacts/tacot3"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19801
+
+[services.development]
+run = "pnpm --filter @workspace/tacot3 run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tacot3", "run", "build" ]
+publicDir = "artifacts/tacot3/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19801"
+BASE_PATH = "/"
