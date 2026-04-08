@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, departmentsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { requireAdmin } from "../middlewares/requireAdmin";
 import {
   CreateDepartmentBody,
   GetDepartmentResponse,
@@ -76,7 +77,7 @@ router.patch("/departments/:departmentId", requireAuth, async (req, res): Promis
   res.json(UpdateDepartmentResponse.parse(buildDept(updated)));
 });
 
-router.delete("/departments/:departmentId", requireAuth, async (req, res): Promise<void> => {
+router.delete("/departments/:departmentId", requireAdmin, async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.departmentId) ? req.params.departmentId[0] : req.params.departmentId, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid department ID" });

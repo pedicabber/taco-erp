@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, tasksTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, notificationsTable, activityLogTable, projectsTable } from "@workspace/db";
 import { eq, and, inArray, or, isNull } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
 import { createNotification } from "./notifications";
 import {
@@ -57,7 +58,6 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
   if (task.assignerId) {
     const [u] = await db.select().from(usersTable).where(eq(usersTable.id, task.assignerId));
     if (u) {
-      assignee = assignee; // already set
       assigner = { id: u.id, name: u.name, avatarUrl: u.avatarUrl, departmentName: null };
     }
   }
@@ -244,7 +244,7 @@ router.patch("/tasks/:taskId", requireAuth, async (req: AuthenticatedRequest, re
   res.json(UpdateTaskResponse.parse(built));
 });
 
-router.delete("/tasks/:taskId", requireAuth, async (req, res): Promise<void> => {
+router.delete("/tasks/:taskId", requireAdmin, async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid task ID" });
@@ -586,6 +586,9 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
   if (req.query.projectId) conditions.push(eq(tasksTable.projectId, Number(req.query.projectId)));
   if (req.query.departmentId) conditions.push(eq(tasksTable.departmentId, Number(req.query.departmentId)));
   if (req.query.assigneeId) conditions.push(eq(tasksTable.assigneeId, Number(req.query.assigneeId)));
+  if (req.query.status && typeof req.query.status === "string") {
+    conditions.push(eq(tasksTable.status, req.query.status));
+  }
   if (conditions.length > 0) query = query.where(and(...conditions));
 
   const tasks = await query;

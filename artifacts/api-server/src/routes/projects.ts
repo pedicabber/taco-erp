@@ -4,6 +4,7 @@ import { parsePdfText } from "../lib/pdfParseAdapter";
 import { db, projectsTable, departmentsTable, tasksTable } from "@workspace/db";
 import { eq, count, and } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
 import {
   CreateProjectBody,
@@ -172,7 +173,7 @@ router.patch("/projects/:projectId", requireAuth, async (req, res): Promise<void
   res.json(UpdateProjectResponse.parse(buildProject(updated)));
 });
 
-router.delete("/projects/:projectId", requireAuth, async (req, res): Promise<void> => {
+router.delete("/projects/:projectId", requireAdmin, async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.projectId) ? req.params.projectId[0] : req.params.projectId, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid project ID" });

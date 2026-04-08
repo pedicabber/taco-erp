@@ -105,21 +105,45 @@ function GanttRow({ task }: { task: any }) {
   );
 }
 
+const TASK_STATUSES = [
+  { value: "backlog", label: "Backlog" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "in_review", label: "In Review" },
+  { value: "blocked", label: "Blocked" },
+  { value: "complete", label: "Complete" },
+];
+
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"month" | "gantt">("month");
   const [filterProject, setFilterProject] = useState("all");
+  const [filterDepartment, setFilterDepartment] = useState("all");
+  const [filterAssignee, setFilterAssignee] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => apiClient.get("/projects").then(r => r.data),
   });
 
+  const { data: departments = [] } = useQuery({
+    queryKey: ["departments"],
+    queryFn: () => apiClient.get("/departments").then(r => r.data),
+  });
+
+  const { data: users = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => apiClient.get("/users").then(r => r.data),
+  });
+
   const queryParams = new URLSearchParams();
   if (filterProject !== "all") queryParams.set("projectId", filterProject);
+  if (filterDepartment !== "all") queryParams.set("departmentId", filterDepartment);
+  if (filterAssignee !== "all") queryParams.set("assigneeId", filterAssignee);
+  if (filterStatus !== "all") queryParams.set("status", filterStatus);
 
   const { data: events = [], isLoading } = useQuery({
-    queryKey: ["calendar-events", filterProject],
+    queryKey: ["calendar-events", filterProject, filterDepartment, filterAssignee, filterStatus],
     queryFn: () => apiClient.get(`/calendar/events?${queryParams.toString()}`).then(r => r.data),
     refetchInterval: 15000,
   });
@@ -150,13 +174,46 @@ export default function CalendarPage() {
         <span className="font-semibold">Calendar</span>
         <div className="flex-1" />
         <Select value={filterProject} onValueChange={setFilterProject}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="All projects" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All projects</SelectItem>
             {(projects as any[]).map(p => (
               <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="All departments" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All departments</SelectItem>
+            {(departments as any[]).map(d => (
+              <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="All assignees" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All assignees</SelectItem>
+            {(users as any[]).map(u => (
+              <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            {TASK_STATUSES.map(s => (
+              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
