@@ -386,6 +386,8 @@ export interface CalendarEvent {
   expectedHours: number | null;
   elapsedSeconds: number;
   timerRunning: boolean;
+  /** @nullable */
+  timerStartedAt: string | null;
   projectId: number;
   projectName: string;
   /** @nullable */

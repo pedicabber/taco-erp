@@ -983,6 +983,7 @@ export const GetCalendarEventsResponseItem = zod.object({
   expectedHours: zod.number().nullable(),
   elapsedSeconds: zod.number(),
   timerRunning: zod.boolean(),
+  timerStartedAt: zod.string().nullable(),
   projectId: zod.number(),
   projectName: zod.string(),
   departmentId: zod.number().nullable(),

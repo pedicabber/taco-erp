@@ -740,6 +740,7 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
       expectedHours: task.expectedHours,
       elapsedSeconds: task.elapsedSeconds,
       timerRunning: task.timerRunning,
+      timerStartedAt: task.timerStartedAt?.toISOString() ?? null,
       projectId: task.projectId,
       projectName: project?.name ?? "Unknown Project",
       departmentId: task.departmentId,

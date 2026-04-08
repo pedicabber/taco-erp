@@ -30,6 +30,15 @@ import { useLiveTimer } from "@/hooks/useLiveTimer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const DEPT_FALLBACK = "#6B7280";
+
+function formatSeconds(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${seconds}s`;
+}
+
 const DAY_PX = 44;
 
 /* ─── Task size preference ─────────────────────────────────────── */
@@ -127,7 +136,7 @@ function AssigneeAvatar({
 
 /* ─── Task chip (used for every occurrence of a task on a day) ── */
 function TaskChip({ task, taskSize = "md" }: { task: CalendarEvent; taskSize?: TaskSize }) {
-  const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, null);
+  const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, task.timerStartedAt ?? null);
   const color = task.departmentColor ?? DEPT_FALLBACK;
   const isOverTime = !!(task.expectedHours && elapsed > task.expectedHours * 3600);
   const priority = (task.priority ?? "medium") as Priority;
@@ -183,8 +192,9 @@ function TaskChip({ task, taskSize = "md" }: { task: CalendarEvent; taskSize?: T
             </div>
           )}
           {task.expectedHours && (
-            <div className="text-xs">
-              {(elapsed / 3600).toFixed(1)}h / {task.expectedHours}h
+            <div className="text-xs flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {formatSeconds(elapsed)} / {task.expectedHours}h
             </div>
           )}
         </div>
@@ -369,6 +379,125 @@ function MonthView({
   );
 }
 
+/* ─── Gantt row — extracted so useLiveTimer hook is valid ───────── */
+function GanttRow({
+  task,
+  displayStart,
+  days,
+  totalPx,
+  todayX,
+  taskColW,
+}: {
+  task: CalendarEvent;
+  displayStart: Date;
+  days: Date[];
+  totalPx: number;
+  todayX: number | null;
+  taskColW: number;
+}) {
+  const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, task.timerStartedAt ?? null);
+  const color = task.departmentColor ?? DEPT_FALLBACK;
+  const isOverTime = !!(task.expectedHours && elapsed > task.expectedHours * 3600);
+
+  const start = task.startDate ? startOfDay(parseLocalDate(task.startDate)) : null;
+  const due = task.dueDate ? startOfDay(parseLocalDate(task.dueDate)) : null;
+  const barStart = start ?? due!;
+  const barEnd = due ?? start!;
+  const barLeft = differenceInCalendarDays(barStart, displayStart) * DAY_PX;
+  const barWidth = Math.max(DAY_PX, (differenceInCalendarDays(barEnd, barStart) + 1) * DAY_PX);
+  const progressWidth = task.expectedHours
+    ? Math.min(barWidth, (elapsed / (task.expectedHours * 3600)) * barWidth)
+    : 0;
+
+  return (
+    <div
+      className="flex items-stretch border-b border-border hover:bg-muted/20 transition-colors"
+      style={{ height: 40 }}
+    >
+      <Link href={`/tasks/${task.taskId}`}>
+        <div
+          style={{ width: taskColW }}
+          className="flex-shrink-0 border-r border-border px-3 flex items-center gap-2 text-sm hover:text-primary cursor-pointer truncate h-full"
+        >
+          {task.timerRunning && (
+            <Clock className="w-3 h-3 text-primary animate-pulse flex-shrink-0" />
+          )}
+          <span className="truncate flex-1">{task.title}</span>
+          {task.assigneeId && (
+            <AssigneeAvatar
+              name={task.assigneeName}
+              avatarUrl={task.assigneeAvatarUrl ?? null}
+              size={18}
+            />
+          )}
+        </div>
+      </Link>
+
+      <div className="relative flex-shrink-0" style={{ width: totalPx }}>
+        {days.map((day, i) => (
+          <div
+            key={i}
+            className={cn(
+              "absolute top-0 bottom-0 border-r",
+              day.getDay() === 0 || day.getDay() === 6
+                ? "border-border/30 bg-muted/10"
+                : "border-border/20"
+            )}
+            style={{ left: i * DAY_PX, width: DAY_PX }}
+          />
+        ))}
+        {todayX !== null && (
+          <div
+            className="absolute top-0 bottom-0 w-px bg-primary/60 z-10"
+            style={{ left: todayX }}
+          />
+        )}
+        <div
+          className="absolute rounded overflow-hidden"
+          style={{
+            left: barLeft,
+            width: barWidth,
+            top: "50%",
+            transform: "translateY(-50%)",
+            height: 20,
+            backgroundColor: `${color}30`,
+            border: `1px solid ${color}60`,
+          }}
+        >
+          {progressWidth > 0 && (
+            <div
+              className="absolute inset-y-0 left-0"
+              style={{
+                width: progressWidth,
+                backgroundColor: isOverTime ? "#f97316" : color,
+                opacity: 0.75,
+              }}
+            />
+          )}
+          <span
+            className="absolute inset-0 flex items-center px-1.5 text-[10px] font-medium truncate z-10"
+            style={{ color }}
+          >
+            {task.title}
+          </span>
+        </div>
+      </div>
+
+      <div className="w-24 flex-shrink-0 border-l border-border text-xs text-muted-foreground flex items-center justify-end px-2 gap-0.5">
+        {task.expectedHours ? (
+          <span className={cn(isOverTime && "text-orange-500")}>
+            {formatSeconds(elapsed)} / {task.expectedHours}h
+          </span>
+        ) : elapsed > 0 ? (
+          <span>{formatSeconds(elapsed)}</span>
+        ) : (
+          "—"
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Gantt view ───────────────────────────────────────────────── */
 function GanttView({ events }: { events: CalendarEvent[] }) {
   const tasksWithDates = events.filter(e => e.startDate || e.dueDate);
@@ -456,7 +585,7 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
                 {format(day, "d")}
               </div>
             ))}
-            <div className="w-20 flex-shrink-0 border-l border-border text-xs font-semibold text-muted-foreground px-2 py-1 text-right">
+            <div className="w-24 flex-shrink-0 border-l border-border text-xs font-semibold text-muted-foreground px-2 py-1 text-right">
               Time
             </div>
           </div>
@@ -468,108 +597,17 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
             No tasks with dates found
           </p>
         ) : (
-          tasksWithDates.map(task => {
-            const elapsed = task.elapsedSeconds ?? 0;
-            const color = task.departmentColor ?? DEPT_FALLBACK;
-            const isOverTime = !!(task.expectedHours && elapsed > task.expectedHours * 3600);
-
-            const start = task.startDate ? startOfDay(parseLocalDate(task.startDate)) : null;
-            const due = task.dueDate ? startOfDay(parseLocalDate(task.dueDate)) : null;
-            const barStart = start ?? due!;
-            const barEnd = due ?? start!;
-            const barLeft = differenceInCalendarDays(barStart, displayStart) * DAY_PX;
-            const barWidth = Math.max(
-              DAY_PX,
-              (differenceInCalendarDays(barEnd, barStart) + 1) * DAY_PX
-            );
-            const progressWidth = task.expectedHours
-              ? Math.min(barWidth, (elapsed / (task.expectedHours * 3600)) * barWidth)
-              : 0;
-
-            return (
-              <div
-                key={task.taskId}
-                className="flex items-stretch border-b border-border hover:bg-muted/20 transition-colors"
-                style={{ height: 40 }}
-              >
-                <Link href={`/tasks/${task.taskId}`}>
-                  <div
-                    style={{ width: TASK_COL_W }}
-                    className="flex-shrink-0 border-r border-border px-3 flex items-center gap-2 text-sm hover:text-primary cursor-pointer truncate h-full"
-                  >
-                    {task.timerRunning && (
-                      <Clock className="w-3 h-3 text-primary animate-pulse flex-shrink-0" />
-                    )}
-                    <span className="truncate flex-1">{task.title}</span>
-                    {task.assigneeId && (
-                      <AssigneeAvatar
-                        name={task.assigneeName}
-                        avatarUrl={
-                          (task as CalendarEvent & { assigneeAvatarUrl?: string | null })
-                            .assigneeAvatarUrl ?? null
-                        }
-                        size={18}
-                      />
-                    )}
-                  </div>
-                </Link>
-                <div className="relative flex-shrink-0" style={{ width: totalPx }}>
-                  {days.map((day, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        "absolute top-0 bottom-0 border-r",
-                        day.getDay() === 0 || day.getDay() === 6
-                          ? "border-border/30 bg-muted/10"
-                          : "border-border/20"
-                      )}
-                      style={{ left: i * DAY_PX, width: DAY_PX }}
-                    />
-                  ))}
-                  {todayX !== null && (
-                    <div
-                      className="absolute top-0 bottom-0 w-px bg-primary/60 z-10"
-                      style={{ left: todayX }}
-                    />
-                  )}
-                  <div
-                    className="absolute rounded overflow-hidden"
-                    style={{
-                      left: barLeft,
-                      width: barWidth,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      height: 20,
-                      backgroundColor: `${color}30`,
-                      border: `1px solid ${color}60`,
-                    }}
-                  >
-                    {progressWidth > 0 && (
-                      <div
-                        className="absolute inset-y-0 left-0"
-                        style={{
-                          width: progressWidth,
-                          backgroundColor: isOverTime ? "#f97316" : color,
-                          opacity: 0.75,
-                        }}
-                      />
-                    )}
-                    <span
-                      className="absolute inset-0 flex items-center px-1.5 text-[10px] font-medium truncate z-10"
-                      style={{ color }}
-                    >
-                      {task.title}
-                    </span>
-                  </div>
-                </div>
-                <div className="w-20 flex-shrink-0 border-l border-border text-xs text-muted-foreground flex items-center justify-end px-2">
-                  {task.expectedHours
-                    ? `${(elapsed / 3600).toFixed(1)}/${task.expectedHours}h`
-                    : "—"}
-                </div>
-              </div>
-            );
-          })
+          tasksWithDates.map(task => (
+            <GanttRow
+              key={task.taskId}
+              task={task}
+              displayStart={displayStart}
+              days={days}
+              totalPx={totalPx}
+              todayX={todayX}
+              taskColW={TASK_COL_W}
+            />
+          ))
         )}
       </div>
     </div>
