@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, usersTable, departmentsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { syncUserFromClerk, getOrCreateUser } from "../lib/userSync";
 import { UpdateMeBody, UpdateMeResponse, ListUsersResponse, GetUserResponse } from "@workspace/api-zod";
@@ -71,10 +71,7 @@ router.get("/users", requireAuth, async (_req, res): Promise<void> => {
   const deptIds = [...new Set(users.map(u => u.departmentId).filter(Boolean))] as number[];
 
   const depts = deptIds.length > 0
-    ? await db.select().from(departmentsTable).where((t) => {
-        const inClause = deptIds.map(id => eq(t.id, id));
-        return inClause.length === 1 ? inClause[0] : inClause.reduce((a, b) => ({ ...(a as any), OR: b } as any));
-      })
+    ? await db.select().from(departmentsTable).where(inArray(departmentsTable.id, deptIds))
     : [];
 
   const deptMap = new Map(depts.map(d => [d.id, d.name]));
