@@ -531,7 +531,8 @@ router.post("/tasks/:taskId/attachments", requireAuth, async (req: Authenticated
   // Matches /objects/uploads/UUID or /objects/UUID (any reasonable sub-path)
   const OBJECT_PATH_RE = /^\/objects\/[a-z0-9/_-]+$/i;
   if (!OBJECT_PATH_RE.test(parsed.data.objectPath)) {
-    res.status(400).json({ error: "Invalid object path" });
+    req.log.warn({ objectPath: parsed.data.objectPath }, "Rejected objectPath");
+    res.status(400).json({ error: "Invalid object path", received: parsed.data.objectPath });
     return;
   }
 

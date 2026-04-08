@@ -32,8 +32,9 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
 
     // Organise uploads by task so each ticket has its own folder
     const subDir = taskId ? `uploads/tasks/${taskId}` : "uploads";
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL(subDir);
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+    const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL(subDir);
+
+    req.log.info({ objectPath }, "Generated upload URL");
 
     res.json(
       RequestUploadUrlResponse.parse({
