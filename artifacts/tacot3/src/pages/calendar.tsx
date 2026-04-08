@@ -33,6 +33,31 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 const DEPT_FALLBACK = "#6B7280";
 const DAY_PX = 44;
 
+/* ─── Task size preference ─────────────────────────────────────── */
+type TaskSize = "sm" | "md" | "lg" | "xl";
+
+const TASK_SIZE_CONFIG: Record<
+  TaskSize,
+  { label: string; fontSize: number; py: number; iconSize: number; avatarSize: number }
+> = {
+  sm: { label: "Small",       fontSize: 9,  py: 1, iconSize: 9,  avatarSize: 12 },
+  md: { label: "Medium",      fontSize: 10, py: 2, iconSize: 10, avatarSize: 14 },
+  lg: { label: "Large",       fontSize: 12, py: 3, iconSize: 12, avatarSize: 16 },
+  xl: { label: "Extra Large", fontSize: 13, py: 4, iconSize: 13, avatarSize: 18 },
+};
+
+const COOKIE_KEY = "cal_task_size";
+
+function getCookie(name: string): string | null {
+  const match = document.cookie.split("; ").find(r => r.startsWith(name + "="));
+  return match ? decodeURIComponent(match.split("=")[1]) : null;
+}
+
+function setCookie(name: string, value: string, days = 365) {
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+}
+
 /* ─── Priority config ──────────────────────────────────────────── */
 type Priority = "urgent" | "high" | "medium" | "low";
 
@@ -96,34 +121,38 @@ function AssigneeAvatar({
 }
 
 /* ─── Task chip (used for every occurrence of a task on a day) ── */
-function TaskChip({ task }: { task: CalendarEvent }) {
+function TaskChip({ task, taskSize = "md" }: { task: CalendarEvent; taskSize?: TaskSize }) {
   const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, null);
   const color = task.departmentColor ?? DEPT_FALLBACK;
   const isOverTime = !!(task.expectedHours && elapsed > task.expectedHours * 3600);
   const priority = (task.priority ?? "medium") as Priority;
+  const sz = TASK_SIZE_CONFIG[taskSize];
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Link href={`/tasks/${task.taskId}`}>
           <div
-            className="text-[10px] font-medium px-1 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity w-full flex items-center gap-1"
+            className="font-medium px-1 rounded cursor-pointer hover:opacity-80 transition-opacity w-full flex items-center gap-1"
             style={{
               backgroundColor: `${color}22`,
               color,
               borderLeft: `2px solid ${color}`,
+              fontSize: sz.fontSize,
+              paddingTop: sz.py,
+              paddingBottom: sz.py,
             }}
           >
             {/* Priority icon — leftmost */}
-            <PriorityIcon priority={priority} size={10} />
-            {task.timerRunning && <Clock className="w-2 h-2 flex-shrink-0" />}
+            <PriorityIcon priority={priority} size={sz.iconSize} />
+            {task.timerRunning && <Clock style={{ width: sz.iconSize - 1, height: sz.iconSize - 1 }} className="flex-shrink-0" />}
             <span className="truncate flex-1 leading-none">{task.title}</span>
-            {isOverTime && <span className="flex-shrink-0 text-orange-500 text-[9px]">!</span>}
+            {isOverTime && <span className="flex-shrink-0 text-orange-500">!</span>}
             {task.assigneeId && (
               <AssigneeAvatar
                 name={task.assigneeName}
                 avatarUrl={task.assigneeAvatarUrl ?? null}
-                size={14}
+                size={sz.avatarSize}
               />
             )}
           </div>
@@ -200,6 +229,7 @@ function MonthView({
   onPrev,
   onNext,
   slideDir,
+  taskSize,
 }: {
   days: Date[];
   currentDate: Date;
@@ -207,6 +237,7 @@ function MonthView({
   onPrev: () => void;
   onNext: () => void;
   slideDir: 1 | -1 | 0;
+  taskSize: TaskSize;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -319,7 +350,7 @@ function MonthView({
                     {/* Task chips — one per task per day, scrollable */}
                     <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-1 space-y-0.5 scrollbar-hide">
                       {dayEvents.map((task, i) => (
-                        <TaskChip key={`${task.taskId}-${i}`} task={task} />
+                        <TaskChip key={`${task.taskId}-${i}`} task={task} taskSize={taskSize} />
                       ))}
                     </div>
                   </div>
@@ -558,6 +589,10 @@ export default function CalendarPage() {
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [slideDir, setSlideDir] = useState<1 | -1 | 0>(0);
+  const [taskSize, setTaskSize] = useState<TaskSize>(() => {
+    const saved = getCookie(COOKIE_KEY);
+    return (saved && saved in TASK_SIZE_CONFIG) ? (saved as TaskSize) : "md";
+  });
 
   const goPrev = useCallback(() => {
     setSlideDir(-1);
@@ -614,6 +649,27 @@ export default function CalendarPage() {
         <span className="font-semibold flex-shrink-0">Calendar</span>
 
         <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+          {/* Task size */}
+          <Select
+            value={taskSize}
+            onValueChange={(v: string) => {
+              const s = v as TaskSize;
+              setTaskSize(s);
+              setCookie(COOKIE_KEY, s);
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs w-[110px] flex-shrink-0">
+              <SelectValue placeholder="Task size" />
+            </SelectTrigger>
+            <SelectContent align="start">
+              {(Object.keys(TASK_SIZE_CONFIG) as TaskSize[]).map(k => (
+                <SelectItem key={k} value={k}>
+                  {TASK_SIZE_CONFIG[k].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Select value={filterProject} onValueChange={setFilterProject}>
             <SelectTrigger className="h-8 text-xs w-[130px] flex-shrink-0">
               <SelectValue placeholder="All projects" />
@@ -724,6 +780,7 @@ export default function CalendarPage() {
           onPrev={goPrev}
           onNext={goNext}
           slideDir={slideDir}
+          taskSize={taskSize}
         />
       ) : (
         <GanttView events={events as CalendarEvent[]} />
