@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
 import { ChevronLeft, ChevronRight, CalendarDays, Loader2, Clock } from "lucide-react";
@@ -18,12 +18,19 @@ import {
   subMonths,
   startOfWeek,
   endOfWeek,
+  addDays,
+  subDays,
+  differenceInCalendarDays,
+  min as dateMin,
+  max as dateMax,
+  startOfDay,
 } from "date-fns";
 import { Link } from "wouter";
 import { useLiveTimer } from "@/hooks/useLiveTimer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const DEPT_FALLBACK = "#6B7280";
+const DAY_PX = 44; // pixels per day column in Gantt
 
 function TaskDot({ task }: { task: CalendarEvent }) {
   const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, null);
@@ -35,10 +42,10 @@ function TaskDot({ task }: { task: CalendarEvent }) {
       <TooltipTrigger asChild>
         <Link href={`/tasks/${task.taskId}`}>
           <div
-            className="text-[10px] font-medium px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity max-w-full"
+            className="text-[10px] font-medium px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity w-full"
             style={{ backgroundColor: `${color}25`, color, borderLeft: `2px solid ${color}` }}
           >
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-0.5">
               {task.timerRunning && <Clock className="w-2 h-2 flex-shrink-0" />}
               <span className="truncate">{task.title}</span>
               {isOverTime && <span className="flex-shrink-0 text-orange-500">!</span>}
@@ -52,8 +59,7 @@ function TaskDot({ task }: { task: CalendarEvent }) {
           <div className="text-xs text-muted-foreground">{task.projectName}</div>
           {task.expectedHours && (
             <div className="text-xs">
-              Expected: {task.expectedHours}h |
-              Elapsed: {(elapsed / 3600).toFixed(1)}h
+              Expected: {task.expectedHours}h | Elapsed: {(elapsed / 3600).toFixed(1)}h
             </div>
           )}
         </div>
@@ -62,45 +68,197 @@ function TaskDot({ task }: { task: CalendarEvent }) {
   );
 }
 
-function GanttRow({ task }: { task: CalendarEvent }) {
-  const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, null);
-  if (!task.startDate && !task.dueDate) return null;
+function GanttView({ events }: { events: CalendarEvent[] }) {
+  const tasksWithDates = events.filter(e => e.startDate || e.dueDate);
 
-  const color = task.departmentColor ?? DEPT_FALLBACK;
-  const isOverTime = task.expectedHours && elapsed > task.expectedHours * 3600;
+  const { displayStart, displayEnd, days, totalPx } = useMemo(() => {
+    const today = startOfDay(new Date());
+    if (tasksWithDates.length === 0) {
+      const s = subDays(today, 7);
+      const e = addDays(today, 21);
+      const d = eachDayOfInterval({ start: s, end: e });
+      return { displayStart: s, displayEnd: e, days: d, totalPx: d.length * DAY_PX };
+    }
+    const allDates: Date[] = tasksWithDates.flatMap(ev => [
+      ev.startDate ? startOfDay(new Date(ev.startDate)) : null,
+      ev.dueDate ? startOfDay(new Date(ev.dueDate)) : null,
+    ]).filter((d): d is Date => d !== null);
+
+    const s = subDays(dateMin(allDates), 3);
+    const e = addDays(dateMax(allDates), 3);
+    const d = eachDayOfInterval({ start: s, end: e });
+    return { displayStart: s, displayEnd: e, days: d, totalPx: d.length * DAY_PX };
+  }, [tasksWithDates]);
+
+  // Group days by week for the week-range header row
+  const weekGroups: { label: string; days: Date[] }[] = useMemo(() => {
+    const groups: { label: string; days: Date[] }[] = [];
+    let i = 0;
+    while (i < days.length) {
+      const weekStart = startOfWeek(days[i], { weekStartsOn: 0 });
+      const weekEnd = endOfWeek(days[i], { weekStartsOn: 0 });
+      const group = days.filter(d => d >= weekStart && d <= weekEnd);
+      const label = `${format(group[0], "MMM d")} – ${format(group[group.length - 1], "MMM d")}`;
+      groups.push({ label, days: group });
+      i += group.length;
+    }
+    return groups;
+  }, [days]);
+
+  const today = startOfDay(new Date());
+  const todayOffset = differenceInCalendarDays(today, displayStart);
+  const todayX = todayOffset >= 0 && todayOffset < days.length ? todayOffset * DAY_PX + DAY_PX / 2 : null;
+
+  const TASK_COL_W = 200;
 
   return (
-    <div className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-      <Link href={`/tasks/${task.taskId}`}>
-        <div className="text-sm hover:text-primary cursor-pointer w-48 truncate">{task.title}</div>
-      </Link>
-      <div className="flex-1 relative h-7 flex items-center">
-        {/* Expected timeline bar */}
-        {task.startDate && task.dueDate && (
-          <div
-            className="h-3 rounded-full opacity-30 absolute"
-            style={{ backgroundColor: color, left: 0, right: 0 }}
-          />
-        )}
-        {/* Actual elapsed bar */}
-        {task.expectedHours && (
-          <div
-            className={cn("h-3 rounded-full absolute", isOverTime ? "opacity-90" : "opacity-70")}
-            style={{
-              backgroundColor: isOverTime ? "#f97316" : color,
-              width: `${Math.min(100, (elapsed / (task.expectedHours * 3600)) * 100)}%`,
-              left: 0,
-            }}
-          />
-        )}
-        {task.timerRunning && (
-          <div className="absolute right-1 flex items-center gap-0.5">
-            <Clock className="w-3 h-3 text-primary animate-pulse" />
+    <div className="flex-1 overflow-auto">
+      <div style={{ minWidth: TASK_COL_W + totalPx }}>
+        {/* Sticky two-level header */}
+        <div className="sticky top-0 z-20 bg-card border-b border-border">
+          {/* Week-range row */}
+          <div className="flex">
+            <div style={{ width: TASK_COL_W }} className="flex-shrink-0 border-r border-border" />
+            <div className="flex">
+              {weekGroups.map(wg => (
+                <div
+                  key={wg.label}
+                  className="text-xs font-semibold text-muted-foreground border-r border-border px-2 py-1 flex-shrink-0"
+                  style={{ width: wg.days.length * DAY_PX }}
+                >
+                  {wg.label}
+                </div>
+              ))}
+            </div>
           </div>
+          {/* Individual day row */}
+          <div className="flex border-t border-border/50">
+            <div
+              style={{ width: TASK_COL_W }}
+              className="flex-shrink-0 border-r border-border text-xs font-semibold text-muted-foreground px-3 py-1"
+            >
+              Task
+            </div>
+            {days.map(day => (
+              <div
+                key={day.toISOString()}
+                style={{ width: DAY_PX }}
+                className={cn(
+                  "text-center text-xs py-1 border-r border-border flex-shrink-0 font-medium",
+                  isSameDay(day, today) && "text-primary font-bold",
+                  day.getDay() === 0 || day.getDay() === 6 ? "text-muted-foreground/60" : "text-muted-foreground"
+                )}
+              >
+                {format(day, "d")}
+              </div>
+            ))}
+            <div className="w-20 flex-shrink-0 border-l border-border text-xs font-semibold text-muted-foreground px-2 py-1 text-right">
+              Time
+            </div>
+          </div>
+        </div>
+
+        {/* Task rows */}
+        {tasksWithDates.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-10">No tasks with dates found</p>
+        ) : (
+          tasksWithDates.map(task => {
+            const elapsed = task.elapsedSeconds ?? 0;
+            const color = task.departmentColor ?? DEPT_FALLBACK;
+            const isOverTime = task.expectedHours && elapsed > task.expectedHours * 3600;
+
+            const start = task.startDate ? startOfDay(new Date(task.startDate)) : null;
+            const due = task.dueDate ? startOfDay(new Date(task.dueDate)) : null;
+            const barStart = start ?? due!;
+            const barEnd = due ?? start!;
+            const barLeft = differenceInCalendarDays(barStart, displayStart) * DAY_PX;
+            const barWidth = Math.max(DAY_PX, (differenceInCalendarDays(barEnd, barStart) + 1) * DAY_PX);
+            const progressWidth = task.expectedHours
+              ? Math.min(barWidth, (elapsed / (task.expectedHours * 3600)) * barWidth)
+              : 0;
+
+            return (
+              <div
+                key={task.taskId}
+                className="flex items-stretch border-b border-border hover:bg-muted/20 transition-colors"
+                style={{ height: 40 }}
+              >
+                {/* Task name */}
+                <Link href={`/tasks/${task.taskId}`}>
+                  <div
+                    style={{ width: TASK_COL_W }}
+                    className="flex-shrink-0 border-r border-border px-3 flex items-center text-sm hover:text-primary cursor-pointer truncate h-full"
+                  >
+                    {task.timerRunning && <Clock className="w-3 h-3 mr-1.5 text-primary animate-pulse flex-shrink-0" />}
+                    <span className="truncate">{task.title}</span>
+                  </div>
+                </Link>
+
+                {/* Day columns with bar */}
+                <div className="relative flex-shrink-0" style={{ width: totalPx }}>
+                  {/* Vertical day gridlines */}
+                  {days.map((day, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        "absolute top-0 bottom-0 border-r",
+                        day.getDay() === 0 || day.getDay() === 6
+                          ? "border-border/30 bg-muted/10"
+                          : "border-border/20"
+                      )}
+                      style={{ left: i * DAY_PX, width: DAY_PX }}
+                    />
+                  ))}
+
+                  {/* Today line */}
+                  {todayX !== null && (
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-primary/60 z-10"
+                      style={{ left: todayX }}
+                    />
+                  )}
+
+                  {/* Task bar */}
+                  <div
+                    className="absolute rounded"
+                    style={{
+                      left: barLeft,
+                      width: barWidth,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      height: 20,
+                      backgroundColor: `${color}30`,
+                      border: `1px solid ${color}60`,
+                    }}
+                  >
+                    {/* Progress fill */}
+                    {progressWidth > 0 && (
+                      <div
+                        className="absolute inset-y-0 left-0 rounded"
+                        style={{
+                          width: progressWidth,
+                          backgroundColor: isOverTime ? "#f97316" : color,
+                          opacity: 0.75,
+                        }}
+                      />
+                    )}
+                    {/* Task label inside bar */}
+                    <span className="absolute inset-0 flex items-center px-1.5 text-[10px] font-medium truncate z-10" style={{ color }}>
+                      {task.title}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Time column */}
+                <div className="w-20 flex-shrink-0 border-l border-border text-xs text-muted-foreground flex items-center justify-end px-2">
+                  {task.expectedHours
+                    ? `${(elapsed / 3600).toFixed(1)}/${task.expectedHours}h`
+                    : "—"}
+                </div>
+              </div>
+            );
+          })
         )}
-      </div>
-      <div className="text-xs text-muted-foreground w-20 text-right flex-shrink-0">
-        {task.expectedHours ? `${(elapsed / 3600).toFixed(1)}/${task.expectedHours}h` : "—"}
       </div>
     </div>
   );
@@ -154,6 +312,7 @@ export default function CalendarPage() {
   const calStart = startOfWeek(monthStart, { weekStartsOn: 0 });
   const calEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
   const days = eachDayOfInterval({ start: calStart, end: calEnd });
+  const weeks = days.length / 7;
 
   function getTasksForDay(date: Date) {
     return (events as CalendarEvent[]).filter(e => {
@@ -168,85 +327,91 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-card">
-        <CalendarDays className="w-5 h-5 text-muted-foreground" />
-        <span className="font-semibold">Calendar</span>
-        <div className="flex-1" />
-        <Select value={filterProject} onValueChange={setFilterProject}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="All projects" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All projects</SelectItem>
-            {(projects as Project[]).map(p => (
-              <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="All departments" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All departments</SelectItem>
-            {(departments as Department[]).map(d => (
-              <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="All assignees" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All assignees</SelectItem>
-            {(users as UserProfileMini[]).map(u => (
-              <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {TASK_STATUSES.map(s => (
-              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex items-center bg-muted rounded-lg p-0.5">
-          <Button
-            variant={view === "month" ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setView("month")}
-            className="h-7"
-          >
-            Month
-          </Button>
-          <Button
-            variant={view === "gantt" ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setView("gantt")}
-            className="h-7"
-          >
-            Gantt
-          </Button>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentDate(d => subMonths(d, 1))}>
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <span className="text-sm font-medium w-28 text-center">{format(currentDate, "MMMM yyyy")}</span>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentDate(d => addMonths(d, 1))}>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date())} className="h-8">
-            Today
-          </Button>
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Toolbar — horizontally scrollable on mobile */}
+      <div className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b border-border bg-card overflow-x-auto scrollbar-hide">
+        <CalendarDays className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+        <span className="font-semibold flex-shrink-0">Calendar</span>
+
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+          <Select value={filterProject} onValueChange={setFilterProject}>
+            <SelectTrigger className="h-8 text-xs w-[130px] flex-shrink-0">
+              <SelectValue placeholder="All projects" />
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectItem value="all">All projects</SelectItem>
+              {(projects as Project[]).map(p => (
+                <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+            <SelectTrigger className="h-8 text-xs w-[130px] flex-shrink-0">
+              <SelectValue placeholder="All departments" />
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectItem value="all">All departments</SelectItem>
+              {(departments as Department[]).map(d => (
+                <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+            <SelectTrigger className="h-8 text-xs w-[120px] flex-shrink-0">
+              <SelectValue placeholder="All assignees" />
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectItem value="all">All assignees</SelectItem>
+              {(users as UserProfileMini[]).map(u => (
+                <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="h-8 text-xs w-[110px] flex-shrink-0">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectItem value="all">All statuses</SelectItem>
+              {TASK_STATUSES.map(s => (
+                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center bg-muted rounded-lg p-0.5 flex-shrink-0">
+            <Button
+              variant={view === "month" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setView("month")}
+              className="h-7 text-xs"
+            >
+              Month
+            </Button>
+            <Button
+              variant={view === "gantt" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setView("gantt")}
+              className="h-7 text-xs"
+            >
+              Gantt
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentDate(d => subMonths(d, 1))}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-medium w-24 text-center tabular-nums">
+              {format(currentDate, "MMM yyyy")}
+            </span>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentDate(d => addMonths(d, 1))}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date())} className="h-8 text-xs">
+              Today
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -255,87 +420,63 @@ export default function CalendarPage() {
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
       ) : view === "month" ? (
-        <div className="flex-1 overflow-auto p-4">
+        <div className="flex-1 flex flex-col overflow-hidden">
           {/* Weekday headers */}
-          <div className="grid grid-cols-7 mb-2">
+          <div className="grid grid-cols-7 flex-shrink-0 bg-card border-b border-border">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
-              <div key={d} className="text-xs font-semibold text-muted-foreground text-center py-1">
+              <div key={d} className="text-xs font-semibold text-muted-foreground text-center py-2 border-r border-border last:border-r-0">
                 {d}
               </div>
             ))}
           </div>
-          {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1">
-            {days.map(day => {
+
+          {/* Calendar grid — fills all remaining height, rows are equal fractions */}
+          <div
+            className="flex-1 grid grid-cols-7"
+            style={{ gridTemplateRows: `repeat(${weeks}, 1fr)` }}
+          >
+            {days.map((day, idx) => {
               const dayTasks = getTasksForDay(day);
               const isCurrentMonth = isSameMonth(day, currentDate);
               const today = isToday(day);
+              const isLastRow = idx >= days.length - 7;
               return (
                 <div
                   key={day.toISOString()}
                   className={cn(
-                    "min-h-[80px] rounded-lg p-1.5 border border-border text-xs",
-                    !isCurrentMonth && "opacity-40 bg-muted/20",
-                    today && "ring-2 ring-primary ring-offset-1"
+                    "flex flex-col border-r border-b border-border overflow-hidden",
+                    !isCurrentMonth && "bg-muted/10",
+                    isLastRow && "border-b-0",
+                    (idx + 1) % 7 === 0 && "border-r-0"
                   )}
                 >
-                  <div className={cn(
-                    "font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full",
-                    today && "bg-primary text-primary-foreground"
-                  )}>
-                    {format(day, "d")}
+                  {/* Date number */}
+                  <div className="flex-shrink-0 p-1">
+                    <span
+                      className={cn(
+                        "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
+                        today && "bg-primary text-primary-foreground",
+                        !today && !isCurrentMonth && "text-muted-foreground/40",
+                        !today && isCurrentMonth && "text-foreground"
+                      )}
+                    >
+                      {format(day, "d")}
+                    </span>
                   </div>
-                  <div className="space-y-0.5 overflow-hidden">
-                    {dayTasks.slice(0, 3).map(task => (
+
+                  {/* Task list — scrollable if many */}
+                  <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-1 space-y-0.5 scrollbar-hide">
+                    {dayTasks.map(task => (
                       <TaskDot key={`${task.taskId}-${day.toISOString()}`} task={task} />
                     ))}
-                    {dayTasks.length > 3 && (
-                      <div className="text-[10px] text-muted-foreground px-1">
-                        +{dayTasks.length - 3} more
-                      </div>
-                    )}
                   </div>
                 </div>
               );
             })}
           </div>
-
-          {/* Legend */}
-          {events.length > 0 && (
-            <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-2 rounded-full bg-gray-300 opacity-30" />
-                <span>Expected timeline</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-2 rounded-full bg-primary opacity-70" />
-                <span>Actual progress</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-2 rounded-full bg-orange-500 opacity-70" />
-                <span>Over expected</span>
-              </div>
-            </div>
-          )}
         </div>
       ) : (
-        // Gantt view
-        <div className="flex-1 overflow-auto p-4">
-          <div className="max-w-4xl">
-            <div className="flex items-center gap-3 mb-4 pb-2 border-b border-border text-xs font-semibold text-muted-foreground">
-              <div className="w-48">Task</div>
-              <div className="flex-1">Timeline (expected vs actual)</div>
-              <div className="w-20 text-right">Time</div>
-            </div>
-            {(events as CalendarEvent[]).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-10">No tasks with dates found</p>
-            ) : (
-              (events as CalendarEvent[]).map(event => (
-                <GanttRow key={event.taskId} task={event} />
-              ))
-            )}
-          </div>
-        </div>
+        <GanttView events={events as CalendarEvent[]} />
       )}
     </div>
   );
