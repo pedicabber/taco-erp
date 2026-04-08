@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
 import {
@@ -53,6 +53,58 @@ export default function BoardPage() {
   const [showAddCol, setShowAddCol] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState("#6b7280");
+
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  // Redirect vertical wheel → horizontal scroll on the board track
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // already horizontal
+      if (e.deltaY === 0) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // Mouse drag-to-scroll on the board track
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    let isDown = false;
+    let startX = 0;
+    let scrollLeft = 0;
+    const onMouseDown = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).closest("[draggable]")) return;
+      if ((e.target as HTMLElement).closest("button, input, select, a, [role='button']")) return;
+      isDown = true;
+      startX = e.pageX - el.offsetLeft;
+      scrollLeft = el.scrollLeft;
+      el.style.cursor = "grabbing";
+      el.style.userSelect = "none";
+    };
+    const onMouseLeave = () => { isDown = false; el.style.cursor = ""; el.style.userSelect = ""; };
+    const onMouseUp = () => { isDown = false; el.style.cursor = ""; el.style.userSelect = ""; };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - el.offsetLeft;
+      el.scrollLeft = scrollLeft - (x - startX);
+    };
+    el.addEventListener("mousedown", onMouseDown);
+    el.addEventListener("mouseleave", onMouseLeave);
+    el.addEventListener("mouseup", onMouseUp);
+    el.addEventListener("mousemove", onMouseMove);
+    return () => {
+      el.removeEventListener("mousedown", onMouseDown);
+      el.removeEventListener("mouseleave", onMouseLeave);
+      el.removeEventListener("mouseup", onMouseUp);
+      el.removeEventListener("mousemove", onMouseMove);
+    };
+  }, []);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -227,7 +279,8 @@ export default function BoardPage() {
         </div>
       ) : (
         <div
-          className="flex-1 overflow-x-auto overflow-y-hidden p-3 md:p-4 scrollbar-hide"
+          ref={boardRef}
+          className="flex-1 overflow-x-auto overflow-y-hidden p-3 md:p-4 scrollbar-hide cursor-grab active:cursor-grabbing"
           style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           <div
