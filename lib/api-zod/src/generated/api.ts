@@ -1032,6 +1032,7 @@ export const GetCalendarEventsResponseItem = zod.object({
   departmentColor: zod.string().nullable(),
   assigneeId: zod.number().nullable(),
   assigneeName: zod.string().nullable(),
+  assigneeAvatarUrl: zod.string().nullable(),
 });
 export const GetCalendarEventsResponse = zod.array(
   GetCalendarEventsResponseItem,

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
 import { ChevronLeft, ChevronRight, CalendarDays, Loader2, Clock } from "lucide-react";
@@ -24,6 +24,7 @@ import {
   min as dateMin,
   max as dateMax,
   startOfDay,
+  parseISO,
 } from "date-fns";
 import { Link } from "wouter";
 import { useLiveTimer } from "@/hooks/useLiveTimer";
@@ -31,11 +32,45 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 const DEPT_FALLBACK = "#6B7280";
 const DAY_PX = 44;
-const DATE_NUM_H = 28; // px height reserved for the date number row
-const LANE_H = 22;    // px height per spanning-event lane
 
-/* ─── Tiny chip for single-day events ─────────────────────────── */
-function TaskDot({ task }: { task: CalendarEvent }) {
+/* ─── Assignee avatar ──────────────────────────────────────────── */
+function AssigneeAvatar({
+  name,
+  avatarUrl,
+  size = 14,
+}: {
+  name: string | null;
+  avatarUrl: string | null;
+  size?: number;
+}) {
+  const initials = name
+    ? name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
+    : "?";
+
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name ?? "assignee"}
+        className="rounded-full flex-shrink-0 object-cover"
+        style={{ width: size, height: size }}
+        onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="rounded-full flex-shrink-0 bg-muted flex items-center justify-center text-muted-foreground font-medium"
+      style={{ width: size, height: size, fontSize: size * 0.45 }}
+    >
+      {initials}
+    </div>
+  );
+}
+
+/* ─── Task chip (used for every occurrence of a task on a day) ── */
+function TaskChip({ task }: { task: CalendarEvent }) {
   const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, null);
   const color = task.departmentColor ?? DEPT_FALLBACK;
   const isOverTime = !!(task.expectedHours && elapsed > task.expectedHours * 3600);
@@ -45,14 +80,23 @@ function TaskDot({ task }: { task: CalendarEvent }) {
       <TooltipTrigger asChild>
         <Link href={`/tasks/${task.taskId}`}>
           <div
-            className="text-[10px] font-medium px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity w-full"
-            style={{ backgroundColor: `${color}25`, color, borderLeft: `2px solid ${color}` }}
+            className="text-[10px] font-medium px-1 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity w-full flex items-center gap-1"
+            style={{
+              backgroundColor: `${color}22`,
+              color,
+              borderLeft: `2px solid ${color}`,
+            }}
           >
-            <span className="flex items-center gap-0.5">
-              {task.timerRunning && <Clock className="w-2 h-2 flex-shrink-0" />}
-              <span className="truncate">{task.title}</span>
-              {isOverTime && <span className="flex-shrink-0 text-orange-500">!</span>}
-            </span>
+            {task.timerRunning && <Clock className="w-2 h-2 flex-shrink-0" />}
+            <span className="truncate flex-1 leading-none">{task.title}</span>
+            {isOverTime && <span className="flex-shrink-0 text-orange-500 text-[9px]">!</span>}
+            {task.assigneeId && (
+              <AssigneeAvatar
+                name={task.assigneeName}
+                avatarUrl={(task as CalendarEvent & { assigneeAvatarUrl?: string | null }).assigneeAvatarUrl ?? null}
+                size={14}
+              />
+            )}
           </div>
         </Link>
       </TooltipTrigger>
@@ -60,9 +104,19 @@ function TaskDot({ task }: { task: CalendarEvent }) {
         <div className="space-y-1">
           <div className="font-medium text-sm">{task.title}</div>
           <div className="text-xs text-muted-foreground">{task.projectName}</div>
+          {task.assigneeName && (
+            <div className="text-xs flex items-center gap-1">
+              <AssigneeAvatar
+                name={task.assigneeName}
+                avatarUrl={(task as CalendarEvent & { assigneeAvatarUrl?: string | null }).assigneeAvatarUrl ?? null}
+                size={16}
+              />
+              {task.assigneeName}
+            </div>
+          )}
           {task.expectedHours && (
             <div className="text-xs">
-              Expected: {task.expectedHours}h | Elapsed: {(elapsed / 3600).toFixed(1)}h
+              {(elapsed / 3600).toFixed(1)}h / {task.expectedHours}h
             </div>
           )}
         </div>
@@ -71,82 +125,165 @@ function TaskDot({ task }: { task: CalendarEvent }) {
   );
 }
 
-/* ─── Types for the month-view event classification ───────────── */
-interface SpanningBar {
-  event: CalendarEvent;
-  startCol: number; // 0-6 within this week
-  endCol: number;   // 0-6 within this week
-  isStart: boolean; // visually starts here (rounded left end)
-  isEnd: boolean;   // visually ends here (rounded right end)
-  lane: number;     // vertical stack index
-}
-
-/** Classify events for a single week row into spanning bars and single-day chips. */
-function classifyWeekEvents(
-  weekDays: Date[],
-  events: CalendarEvent[],
-  laneMap: Map<number, number>, // taskId → persisted lane across rows
-) {
-  const weekStart = weekDays[0];
-  const weekEnd = weekDays[6];
-  const spanning: SpanningBar[] = [];
-  const singleByDay = new Map<string, CalendarEvent[]>();
+/* ─── Build per-day event map ──────────────────────────────────── */
+/**
+ * For each CalendarEvent, add a copy to every day in [startDate, dueDate].
+ * If only one date is set, it appears on just that day.
+ */
+function buildDayMap(events: CalendarEvent[], calDays: Date[]) {
+  const map = new Map<string, CalendarEvent[]>();
 
   for (const e of events) {
-    const eStart = e.startDate ? startOfDay(new Date(e.startDate)) : null;
-    const eDue = e.dueDate ? startOfDay(new Date(e.dueDate)) : null;
-    if (!eStart && !eDue) continue;
+    const eStart = e.startDate ? startOfDay(parseISO(e.startDate)) : null;
+    const eDue = e.dueDate ? startOfDay(parseISO(e.dueDate)) : null;
+    const rangeStart = eStart ?? eDue!;
+    const rangeEnd = eDue ?? eStart!;
 
-    const effectiveStart = eStart ?? eDue!;
-    const effectiveEnd = eDue ?? eStart!;
-    const isMultiDay =
-      eStart && eDue && differenceInCalendarDays(eDue, eStart) > 0;
-
-    if (isMultiDay) {
-      // Does this span overlap the current week?
-      if (effectiveStart > weekEnd || effectiveEnd < weekStart) continue;
-
-      const clipStart = effectiveStart < weekStart ? weekStart : effectiveStart;
-      const clipEnd = effectiveEnd > weekEnd ? weekEnd : effectiveEnd;
-
-      const startCol = weekDays.findIndex(d => isSameDay(d, clipStart));
-      const endCol = weekDays.findIndex(d => isSameDay(d, clipEnd));
-
-      // Assign / retrieve a stable lane for this event
-      let lane = laneMap.get(e.taskId);
-      if (lane === undefined) {
-        // Find the first lane that doesn't conflict in this week
-        const usedLanes = new Set(spanning.map(s => s.lane));
-        let l = 0;
-        while (usedLanes.has(l)) l++;
-        lane = l;
-        laneMap.set(e.taskId, lane);
-      }
-
-      spanning.push({
-        event: e,
-        startCol: startCol >= 0 ? startCol : 0,
-        endCol: endCol >= 0 ? endCol : 6,
-        isStart: isSameDay(clipStart, effectiveStart),
-        isEnd: isSameDay(clipEnd, effectiveEnd),
-        lane,
-      });
-    } else {
-      // Single-day: show on whichever day it falls within this week
-      for (const day of weekDays) {
-        const hit =
-          (eStart && isSameDay(day, eStart)) ||
-          (eDue && !eStart && isSameDay(day, eDue));
-        if (hit) {
-          const key = format(day, "yyyy-MM-dd");
-          if (!singleByDay.has(key)) singleByDay.set(key, []);
-          singleByDay.get(key)!.push(e);
-        }
-      }
+    for (const day of calDays) {
+      if (day < rangeStart || day > rangeEnd) continue;
+      const key = format(day, "yyyy-MM-dd");
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(e);
     }
   }
 
-  return { spanning, singleByDay };
+  return map;
+}
+
+/* ─── Month view ───────────────────────────────────────────────── */
+function MonthView({
+  days,
+  currentDate,
+  events,
+  onPrev,
+  onNext,
+}: {
+  days: Date[];
+  currentDate: Date;
+  events: CalendarEvent[];
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Touch swipe
+  const touchStartX = useRef<number | null>(null);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const delta = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(delta) > 50) {
+      delta < 0 ? onNext() : onPrev();
+    }
+    touchStartX.current = null;
+  };
+
+  // Mouse-wheel to navigate months (vertical scroll)
+  const wheelTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      e.preventDefault();
+      if (wheelTimeout.current) return; // debounce
+      if (e.deltaY > 0) onNext();
+      else onPrev();
+      wheelTimeout.current = setTimeout(() => { wheelTimeout.current = null; }, 400);
+    },
+    [onNext, onPrev]
+  );
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
+
+  const weekRows = useMemo(() => {
+    const rows: Date[][] = [];
+    for (let i = 0; i < days.length; i += 7) rows.push(days.slice(i, i + 7));
+    return rows;
+  }, [days]);
+
+  const dayMap = useMemo(() => buildDayMap(events, days), [events, days]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="flex-1 flex flex-col overflow-hidden select-none"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Weekday header */}
+      <div className="grid grid-cols-7 flex-shrink-0 bg-card border-b border-border">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
+          <div
+            key={d}
+            className="text-xs font-semibold text-muted-foreground text-center py-2 border-r border-border last:border-r-0"
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Week rows */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {weekRows.map((weekDays, weekIdx) => {
+          const isLastWeek = weekIdx === weekRows.length - 1;
+
+          return (
+            <div
+              key={weekIdx}
+              className={cn(
+                "flex-1 grid grid-cols-7 min-h-[70px]",
+                !isLastWeek && "border-b border-border"
+              )}
+            >
+              {weekDays.map((day, colIdx) => {
+                const dayStr = format(day, "yyyy-MM-dd");
+                const dayEvents = dayMap.get(dayStr) ?? [];
+                const isCurrentMonth = isSameMonth(day, currentDate);
+                const today = isToday(day);
+
+                return (
+                  <div
+                    key={colIdx}
+                    className={cn(
+                      "h-full flex flex-col border-r border-border overflow-hidden",
+                      colIdx === 6 && "border-r-0",
+                      !isCurrentMonth && "bg-muted/10"
+                    )}
+                  >
+                    {/* Date number */}
+                    <div className="flex-shrink-0 p-1">
+                      <span
+                        className={cn(
+                          "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
+                          today && "bg-primary text-primary-foreground",
+                          !today && !isCurrentMonth && "text-muted-foreground/40",
+                          !today && isCurrentMonth && "text-foreground"
+                        )}
+                      >
+                        {format(day, "d")}
+                      </span>
+                    </div>
+
+                    {/* Task chips — one per task per day, scrollable */}
+                    <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-1 space-y-0.5 scrollbar-hide">
+                      {dayEvents.map((task, i) => (
+                        <TaskChip key={`${task.taskId}-${i}`} task={task} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 /* ─── Gantt view ───────────────────────────────────────────────── */
@@ -161,10 +298,12 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
       const d = eachDayOfInterval({ start: s, end: e });
       return { displayStart: s, displayEnd: e, days: d, totalPx: d.length * DAY_PX };
     }
-    const allDates: Date[] = tasksWithDates.flatMap(ev => [
-      ev.startDate ? startOfDay(new Date(ev.startDate)) : null,
-      ev.dueDate ? startOfDay(new Date(ev.dueDate)) : null,
-    ]).filter((d): d is Date => d !== null);
+    const allDates: Date[] = tasksWithDates
+      .flatMap(ev => [
+        ev.startDate ? startOfDay(new Date(ev.startDate)) : null,
+        ev.dueDate ? startOfDay(new Date(ev.dueDate)) : null,
+      ])
+      .filter((d): d is Date => d !== null);
 
     const s = subDays(dateMin(allDates), 3);
     const e = addDays(dateMax(allDates), 3);
@@ -188,9 +327,10 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
 
   const today = startOfDay(new Date());
   const todayOffset = differenceInCalendarDays(today, displayStart);
-  const todayX = todayOffset >= 0 && todayOffset < days.length
-    ? todayOffset * DAY_PX + DAY_PX / 2
-    : null;
+  const todayX =
+    todayOffset >= 0 && todayOffset < days.length
+      ? todayOffset * DAY_PX + DAY_PX / 2
+      : null;
 
   const TASK_COL_W = 200;
 
@@ -241,7 +381,9 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
 
         {/* Task rows */}
         {tasksWithDates.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-10">No tasks with dates found</p>
+          <p className="text-sm text-muted-foreground text-center py-10">
+            No tasks with dates found
+          </p>
         ) : (
           tasksWithDates.map(task => {
             const elapsed = task.elapsedSeconds ?? 0;
@@ -253,7 +395,10 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
             const barStart = start ?? due!;
             const barEnd = due ?? start!;
             const barLeft = differenceInCalendarDays(barStart, displayStart) * DAY_PX;
-            const barWidth = Math.max(DAY_PX, (differenceInCalendarDays(barEnd, barStart) + 1) * DAY_PX);
+            const barWidth = Math.max(
+              DAY_PX,
+              (differenceInCalendarDays(barEnd, barStart) + 1) * DAY_PX
+            );
             const progressWidth = task.expectedHours
               ? Math.min(barWidth, (elapsed / (task.expectedHours * 3600)) * barWidth)
               : 0;
@@ -267,10 +412,22 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
                 <Link href={`/tasks/${task.taskId}`}>
                   <div
                     style={{ width: TASK_COL_W }}
-                    className="flex-shrink-0 border-r border-border px-3 flex items-center text-sm hover:text-primary cursor-pointer truncate h-full"
+                    className="flex-shrink-0 border-r border-border px-3 flex items-center gap-2 text-sm hover:text-primary cursor-pointer truncate h-full"
                   >
-                    {task.timerRunning && <Clock className="w-3 h-3 mr-1.5 text-primary animate-pulse flex-shrink-0" />}
-                    <span className="truncate">{task.title}</span>
+                    {task.timerRunning && (
+                      <Clock className="w-3 h-3 text-primary animate-pulse flex-shrink-0" />
+                    )}
+                    <span className="truncate flex-1">{task.title}</span>
+                    {task.assigneeId && (
+                      <AssigneeAvatar
+                        name={task.assigneeName}
+                        avatarUrl={
+                          (task as CalendarEvent & { assigneeAvatarUrl?: string | null })
+                            .assigneeAvatarUrl ?? null
+                        }
+                        size={18}
+                      />
+                    )}
                   </div>
                 </Link>
                 <div className="relative flex-shrink-0" style={{ width: totalPx }}>
@@ -287,182 +444,50 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
                     />
                   ))}
                   {todayX !== null && (
-                    <div className="absolute top-0 bottom-0 w-px bg-primary/60 z-10" style={{ left: todayX }} />
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-primary/60 z-10"
+                      style={{ left: todayX }}
+                    />
                   )}
                   <div
-                    className="absolute rounded"
+                    className="absolute rounded overflow-hidden"
                     style={{
-                      left: barLeft, width: barWidth,
-                      top: "50%", transform: "translateY(-50%)", height: 20,
-                      backgroundColor: `${color}30`, border: `1px solid ${color}60`,
+                      left: barLeft,
+                      width: barWidth,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      height: 20,
+                      backgroundColor: `${color}30`,
+                      border: `1px solid ${color}60`,
                     }}
                   >
                     {progressWidth > 0 && (
                       <div
-                        className="absolute inset-y-0 left-0 rounded"
-                        style={{ width: progressWidth, backgroundColor: isOverTime ? "#f97316" : color, opacity: 0.75 }}
+                        className="absolute inset-y-0 left-0"
+                        style={{
+                          width: progressWidth,
+                          backgroundColor: isOverTime ? "#f97316" : color,
+                          opacity: 0.75,
+                        }}
                       />
                     )}
-                    <span className="absolute inset-0 flex items-center px-1.5 text-[10px] font-medium truncate z-10" style={{ color }}>
+                    <span
+                      className="absolute inset-0 flex items-center px-1.5 text-[10px] font-medium truncate z-10"
+                      style={{ color }}
+                    >
                       {task.title}
                     </span>
                   </div>
                 </div>
                 <div className="w-20 flex-shrink-0 border-l border-border text-xs text-muted-foreground flex items-center justify-end px-2">
-                  {task.expectedHours ? `${(elapsed / 3600).toFixed(1)}/${task.expectedHours}h` : "—"}
+                  {task.expectedHours
+                    ? `${(elapsed / 3600).toFixed(1)}/${task.expectedHours}h`
+                    : "—"}
                 </div>
               </div>
             );
           })
         )}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Month view ───────────────────────────────────────────────── */
-function MonthView({ days, currentDate, events }: {
-  days: Date[];
-  currentDate: Date;
-  events: CalendarEvent[];
-}) {
-  const weekRows = useMemo(() => {
-    const rows: Date[][] = [];
-    for (let i = 0; i < days.length; i += 7) rows.push(days.slice(i, i + 7));
-    return rows;
-  }, [days]);
-
-  // Stable lane assignments across all week rows (taskId → lane)
-  const laneMap = useMemo(() => new Map<number, number>(), [events]);
-
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Weekday header */}
-      <div className="grid grid-cols-7 flex-shrink-0 bg-card border-b border-border">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
-          <div key={d} className="text-xs font-semibold text-muted-foreground text-center py-2 border-r border-border last:border-r-0">
-            {d}
-          </div>
-        ))}
-      </div>
-
-      {/* Week rows */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {weekRows.map((weekDays, weekIdx) => {
-          const { spanning, singleByDay } = classifyWeekEvents(weekDays, events, laneMap);
-          const maxLane = spanning.length > 0 ? Math.max(...spanning.map(s => s.lane)) + 1 : 0;
-          const spanAreaH = maxLane * LANE_H + (maxLane > 0 ? 4 : 0);
-          const isLastWeek = weekIdx === weekRows.length - 1;
-
-          return (
-            <div
-              key={weekIdx}
-              className={cn("flex-1 relative min-h-[70px]", !isLastWeek && "border-b border-border")}
-            >
-              {/* Day columns */}
-              <div className="absolute inset-0 grid grid-cols-7">
-                {weekDays.map((day, colIdx) => {
-                  const dayStr = format(day, "yyyy-MM-dd");
-                  const dayEvents = singleByDay.get(dayStr) ?? [];
-                  const isCurrentMonth = isSameMonth(day, currentDate);
-                  const today = isToday(day);
-
-                  return (
-                    <div
-                      key={colIdx}
-                      className={cn(
-                        "h-full flex flex-col border-r border-border overflow-hidden",
-                        colIdx === 6 && "border-r-0",
-                        !isCurrentMonth && "bg-muted/10"
-                      )}
-                    >
-                      {/* Date number */}
-                      <div className="flex-shrink-0 p-1" style={{ height: DATE_NUM_H }}>
-                        <span
-                          className={cn(
-                            "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
-                            today && "bg-primary text-primary-foreground",
-                            !today && !isCurrentMonth && "text-muted-foreground/40",
-                            !today && isCurrentMonth && "text-foreground"
-                          )}
-                        >
-                          {format(day, "d")}
-                        </span>
-                      </div>
-
-                      {/* Reserve space for spanning bars */}
-                      <div className="flex-shrink-0" style={{ height: spanAreaH }} />
-
-                      {/* Single-day events — scrollable */}
-                      <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-1 space-y-0.5 scrollbar-hide">
-                        {dayEvents.map(task => (
-                          <TaskDot key={task.taskId} task={task} />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Spanning event bars (float above the grid) */}
-              {spanning.map(span => {
-                const color = span.event.departmentColor ?? DEPT_FALLBACK;
-                const left = `${(span.startCol / 7) * 100}%`;
-                const width = `${((span.endCol - span.startCol + 1) / 7) * 100}%`;
-                const top = DATE_NUM_H + span.lane * LANE_H + 2;
-
-                return (
-                  <Link
-                    key={`${span.event.taskId}-w${weekIdx}`}
-                    href={`/tasks/${span.event.taskId}`}
-                  >
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className="absolute flex items-center text-[10px] font-medium cursor-pointer hover:opacity-80 transition-opacity z-10 overflow-hidden"
-                          style={{
-                            top,
-                            height: LANE_H - 4,
-                            left: `calc(${left} + 2px)`,
-                            width: `calc(${width} - 4px)`,
-                            backgroundColor: `${color}22`,
-                            color,
-                            borderTop: `1px solid ${color}60`,
-                            borderBottom: `1px solid ${color}60`,
-                            borderLeft: span.isStart ? `3px solid ${color}` : "none",
-                            borderRight: span.isEnd ? `1px solid ${color}60` : "none",
-                            borderRadius: `${span.isStart ? 4 : 0}px ${span.isEnd ? 4 : 0}px ${span.isEnd ? 4 : 0}px ${span.isStart ? 4 : 0}px`,
-                            paddingLeft: span.isStart ? 6 : 4,
-                            paddingRight: 4,
-                          }}
-                        >
-                          {span.isStart && (
-                            <span className="truncate leading-none">{span.event.title}</span>
-                          )}
-                          {!span.isStart && (
-                            /* continuation bar — show a subtle arrow-like spacer */
-                            <span className="w-full h-full" />
-                          )}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[220px]">
-                        <div className="space-y-1">
-                          <div className="font-medium text-sm">{span.event.title}</div>
-                          {span.event.startDate && span.event.dueDate && (
-                            <div className="text-xs text-muted-foreground">
-                              {format(new Date(span.event.startDate), "MMM d")} – {format(new Date(span.event.dueDate), "MMM d, yyyy")}
-                            </div>
-                          )}
-                          <div className="text-xs text-muted-foreground">{span.event.projectName}</div>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </Link>
-                );
-              })}
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -486,9 +511,21 @@ export default function CalendarPage() {
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => apiClient.get("/projects").then(r => r.data) });
-  const { data: departments = [] } = useQuery({ queryKey: ["departments"], queryFn: () => apiClient.get("/departments").then(r => r.data) });
-  const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: () => apiClient.get("/users").then(r => r.data) });
+  const goPrev = useCallback(() => setCurrentDate(d => subMonths(d, 1)), []);
+  const goNext = useCallback(() => setCurrentDate(d => addMonths(d, 1)), []);
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => apiClient.get("/projects").then(r => r.data),
+  });
+  const { data: departments = [] } = useQuery({
+    queryKey: ["departments"],
+    queryFn: () => apiClient.get("/departments").then(r => r.data),
+  });
+  const { data: users = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => apiClient.get("/users").then(r => r.data),
+  });
 
   const queryParams = new URLSearchParams();
   if (filterProject !== "all") queryParams.set("projectId", filterProject);
@@ -497,8 +534,15 @@ export default function CalendarPage() {
   if (filterStatus !== "all") queryParams.set("status", filterStatus);
 
   const { data: events = [], isLoading } = useQuery({
-    queryKey: ["calendar-events", filterProject, filterDepartment, filterAssignee, filterStatus],
-    queryFn: () => apiClient.get(`/calendar/events?${queryParams.toString()}`).then(r => r.data),
+    queryKey: [
+      "calendar-events",
+      filterProject,
+      filterDepartment,
+      filterAssignee,
+      filterStatus,
+    ],
+    queryFn: () =>
+      apiClient.get(`/calendar/events?${queryParams.toString()}`).then(r => r.data),
     refetchInterval: 15000,
   });
 
@@ -517,48 +561,98 @@ export default function CalendarPage() {
 
         <div className="flex items-center gap-2 ml-auto flex-shrink-0">
           <Select value={filterProject} onValueChange={setFilterProject}>
-            <SelectTrigger className="h-8 text-xs w-[130px] flex-shrink-0"><SelectValue placeholder="All projects" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs w-[130px] flex-shrink-0">
+              <SelectValue placeholder="All projects" />
+            </SelectTrigger>
             <SelectContent align="start">
               <SelectItem value="all">All projects</SelectItem>
-              {(projects as Project[]).map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+              {(projects as Project[]).map(p => (
+                <SelectItem key={p.id} value={String(p.id)}>
+                  {p.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+
           <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-            <SelectTrigger className="h-8 text-xs w-[130px] flex-shrink-0"><SelectValue placeholder="All departments" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs w-[130px] flex-shrink-0">
+              <SelectValue placeholder="All departments" />
+            </SelectTrigger>
             <SelectContent align="start">
               <SelectItem value="all">All departments</SelectItem>
-              {(departments as Department[]).map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+              {(departments as Department[]).map(d => (
+                <SelectItem key={d.id} value={String(d.id)}>
+                  {d.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+
           <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-            <SelectTrigger className="h-8 text-xs w-[120px] flex-shrink-0"><SelectValue placeholder="All assignees" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs w-[120px] flex-shrink-0">
+              <SelectValue placeholder="All assignees" />
+            </SelectTrigger>
             <SelectContent align="start">
               <SelectItem value="all">All assignees</SelectItem>
-              {(users as UserProfileMini[]).map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+              {(users as UserProfileMini[]).map(u => (
+                <SelectItem key={u.id} value={String(u.id)}>
+                  {u.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="h-8 text-xs w-[110px] flex-shrink-0"><SelectValue placeholder="All statuses" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs w-[110px] flex-shrink-0">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
             <SelectContent align="start">
               <SelectItem value="all">All statuses</SelectItem>
-              {TASK_STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+              {TASK_STATUSES.map(s => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
           <div className="flex items-center bg-muted rounded-lg p-0.5 flex-shrink-0">
-            <Button variant={view === "month" ? "secondary" : "ghost"} size="sm" onClick={() => setView("month")} className="h-7 text-xs">Month</Button>
-            <Button variant={view === "gantt" ? "secondary" : "ghost"} size="sm" onClick={() => setView("gantt")} className="h-7 text-xs">Gantt</Button>
+            <Button
+              variant={view === "month" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setView("month")}
+              className="h-7 text-xs"
+            >
+              Month
+            </Button>
+            <Button
+              variant={view === "gantt" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setView("gantt")}
+              className="h-7 text-xs"
+            >
+              Gantt
+            </Button>
           </div>
 
           <div className="flex items-center gap-1 flex-shrink-0">
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentDate(d => subMonths(d, 1))}>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={goPrev}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <span className="text-sm font-medium w-24 text-center tabular-nums">{format(currentDate, "MMM yyyy")}</span>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentDate(d => addMonths(d, 1))}>
+            <span className="text-sm font-medium w-24 text-center tabular-nums">
+              {format(currentDate, "MMM yyyy")}
+            </span>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={goNext}>
               <ChevronRight className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date())} className="h-8 text-xs">Today</Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCurrentDate(new Date())}
+              className="h-8 text-xs"
+            >
+              Today
+            </Button>
           </div>
         </div>
       </div>
@@ -568,7 +662,13 @@ export default function CalendarPage() {
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
       ) : view === "month" ? (
-        <MonthView days={days} currentDate={currentDate} events={events as CalendarEvent[]} />
+        <MonthView
+          days={days}
+          currentDate={currentDate}
+          events={events as CalendarEvent[]}
+          onPrev={goPrev}
+          onNext={goNext}
+        />
       ) : (
         <GanttView events={events as CalendarEvent[]} />
       )}

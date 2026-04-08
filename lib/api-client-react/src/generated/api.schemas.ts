@@ -398,6 +398,8 @@ export interface CalendarEvent {
   assigneeId: number | null;
   /** @nullable */
   assigneeName: string | null;
+  /** @nullable */
+  assigneeAvatarUrl: string | null;
 }
 
 export interface DashboardSummary {

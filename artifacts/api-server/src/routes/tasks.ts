@@ -656,9 +656,11 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
     const project = projectMap.get(task.projectId);
     const dept = task.departmentId ? deptMap.get(task.departmentId) : null;
     let assigneeName: string | null = null;
+    let assigneeAvatarUrl: string | null = null;
     if (task.assigneeId) {
       const [u] = await db.select().from(usersTable).where(eq(usersTable.id, task.assigneeId));
       assigneeName = u?.name ?? null;
+      assigneeAvatarUrl = u?.avatarUrl ?? null;
     }
 
     return {
@@ -677,6 +679,7 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
       departmentColor: dept?.color ?? null,
       assigneeId: task.assigneeId,
       assigneeName,
+      assigneeAvatarUrl,
     };
   }));
 
