@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
 import type { Project } from "@/lib/types";
-import { Plus, FolderKanban, FileText, Search, Loader2, ChevronRight, Building2, Calendar } from "lucide-react";
+import { Plus, FolderKanban, FileText, Search, Loader2, ChevronRight, Building2, Calendar, Eraser } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,20 +28,32 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   cancelled: "destructive",
 };
 
+const EMPTY_FORM = { name: "", company: "", projectId: "", description: "", startDate: "", status: "active", address: "", contactName: "", contactPhone: "", contactEmail: "", totalPrice: "" };
+
 function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name: "", company: "", projectId: "", description: "", startDate: "", status: "active", address: "", contactName: "", contactPhone: "", contactEmail: "", totalPrice: "" });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [file, setFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
+
+  function clearForm() {
+    setForm(EMPTY_FORM);
+    setFile(null);
+  }
+
+  function handleClose(v: boolean) {
+    if (!v) clearForm();
+    onOpenChange(v);
+  }
 
   const mutation = useMutation({
     mutationFn: (data: typeof form) => apiClient.post("/projects", data).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast({ title: "Project created" });
+      clearForm();
       onOpenChange(false);
-      setForm({ name: "", company: "", projectId: "", description: "", startDate: "", status: "active", address: "", contactName: "", contactPhone: "", contactEmail: "", totalPrice: "" });
     },
     onError: () => toast({ title: "Failed to create project", variant: "destructive" }),
   });
@@ -63,7 +75,7 @@ function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -95,31 +107,31 @@ function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             </div>
             <div>
               <Label>Company</Label>
-              <Input value={form.company} onChange={e => setForm(p => ({ ...p, company: e.target.value }))} placeholder="Customer name" />
+              <Input value={form.company} onChange={e => setForm(p => ({ ...p, company: e.target.value }))} placeholder="Acme Manufacturing Co." />
             </div>
             <div>
               <Label>Quote / Project ID</Label>
-              <Input value={form.projectId} onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))} placeholder="24-1084REVC" />
+              <Input value={form.projectId} onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))} placeholder="QT-2024-0042" />
             </div>
             <div className="col-span-2">
               <Label>Address</Label>
-              <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="123 Main St, City, CA 90001" />
+              <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="742 Evergreen Terrace, Springfield, CA 90210" />
             </div>
             <div>
               <Label>Contact Name</Label>
-              <Input value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} placeholder="Mr. John Smith" />
+              <Input value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} placeholder="Jane Smith" />
             </div>
             <div>
               <Label>Contact Phone</Label>
-              <Input value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} placeholder="714-555-1234" />
+              <Input value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} placeholder="555-867-5309" />
             </div>
             <div>
               <Label>Contact Email</Label>
-              <Input value={form.contactEmail} onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))} placeholder="contact@company.com" />
+              <Input value={form.contactEmail} onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))} placeholder="jsmith@acmemfg.com" />
             </div>
             <div>
               <Label>Total Price</Label>
-              <Input value={form.totalPrice} onChange={e => setForm(p => ({ ...p, totalPrice: e.target.value }))} placeholder="$1,213,808.00" />
+              <Input value={form.totalPrice} onChange={e => setForm(p => ({ ...p, totalPrice: e.target.value }))} placeholder="$85,000.00" />
             </div>
             <div>
               <Label>Start Date</Label>
@@ -144,21 +156,27 @@ function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
               <Textarea
                 value={form.description}
                 onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                placeholder="Project description..."
+                placeholder="Brief description of the project scope..."
                 rows={3}
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button
-              onClick={() => mutation.mutate(form)}
-              disabled={!form.name || mutation.isPending}
-            >
-              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Create Project
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" size="sm" onClick={clearForm} className="text-muted-foreground">
+              <Eraser className="w-4 h-4 mr-1.5" />
+              Clear
             </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+              <Button
+                onClick={() => mutation.mutate(form)}
+                disabled={!form.name || mutation.isPending}
+              >
+                {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Create Project
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
