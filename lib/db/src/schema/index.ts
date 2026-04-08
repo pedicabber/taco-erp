@@ -7,3 +7,4 @@ export * from "./task_attachments";
 export * from "./task_timer_sessions";
 export * from "./notifications";
 export * from "./activity_log";
+export * from "./kanban_columns";

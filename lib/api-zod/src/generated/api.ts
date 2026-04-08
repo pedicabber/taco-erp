@@ -318,13 +318,7 @@ export const ListTasksResponseItem = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.enum([
-    "backlog",
-    "in_progress",
-    "in_review",
-    "blocked",
-    "complete",
-  ]),
+  status: zod.string(),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
@@ -372,9 +366,7 @@ export const ListTasksResponse = zod.array(ListTasksResponseItem);
 export const CreateTaskBody = zod.object({
   title: zod.string(),
   description: zod.string().nullish(),
-  status: zod
-    .enum(["backlog", "in_progress", "in_review", "blocked", "complete"])
-    .optional(),
+  status: zod.string().optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
   projectId: zod.number(),
   departmentId: zod.number().nullish(),
@@ -395,13 +387,7 @@ export const GetTaskResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.enum([
-    "backlog",
-    "in_progress",
-    "in_review",
-    "blocked",
-    "complete",
-  ]),
+  status: zod.string(),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
@@ -452,9 +438,7 @@ export const UpdateTaskParams = zod.object({
 export const UpdateTaskBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().nullish(),
-  status: zod
-    .enum(["backlog", "in_progress", "in_review", "blocked", "complete"])
-    .optional(),
+  status: zod.string().optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
   departmentId: zod.number().nullish(),
   assigneeId: zod.number().nullish(),
@@ -467,13 +451,7 @@ export const UpdateTaskResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.enum([
-    "backlog",
-    "in_progress",
-    "in_review",
-    "blocked",
-    "complete",
-  ]),
+  status: zod.string(),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
@@ -532,13 +510,7 @@ export const StartTaskTimerResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.enum([
-    "backlog",
-    "in_progress",
-    "in_review",
-    "blocked",
-    "complete",
-  ]),
+  status: zod.string(),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
@@ -590,13 +562,7 @@ export const StopTaskTimerResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.enum([
-    "backlog",
-    "in_progress",
-    "in_review",
-    "blocked",
-    "complete",
-  ]),
+  status: zod.string(),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
@@ -652,13 +618,7 @@ export const EditTaskTimerResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.enum([
-    "backlog",
-    "in_progress",
-    "in_review",
-    "blocked",
-    "complete",
-  ]),
+  status: zod.string(),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
@@ -710,13 +670,7 @@ export const FollowTaskResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.enum([
-    "backlog",
-    "in_progress",
-    "in_review",
-    "blocked",
-    "complete",
-  ]),
+  status: zod.string(),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
@@ -768,13 +722,7 @@ export const UnfollowTaskResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.enum([
-    "backlog",
-    "in_progress",
-    "in_review",
-    "blocked",
-    "complete",
-  ]),
+  status: zod.string(),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
@@ -826,13 +774,7 @@ export const GetTaskRelationsResponseItem = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.enum([
-    "backlog",
-    "in_progress",
-    "in_review",
-    "blocked",
-    "complete",
-  ]),
+  status: zod.string(),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
@@ -950,18 +892,14 @@ export const GetKanbanColumnsQueryParams = zod.object({
 export const GetKanbanColumnsResponseItem = zod.object({
   status: zod.string(),
   label: zod.string(),
+  hexColor: zod.string(),
+  sortOrder: zod.number(),
   tasks: zod.array(
     zod.object({
       id: zod.number(),
       title: zod.string(),
       description: zod.string().nullable(),
-      status: zod.enum([
-        "backlog",
-        "in_progress",
-        "in_review",
-        "blocked",
-        "complete",
-      ]),
+      status: zod.string(),
       priority: zod.enum(["low", "medium", "high", "urgent"]),
       projectId: zod.number(),
       departmentId: zod.number().nullable(),
@@ -1004,6 +942,26 @@ export const GetKanbanColumnsResponseItem = zod.object({
   ),
 });
 export const GetKanbanColumnsResponse = zod.array(GetKanbanColumnsResponseItem);
+
+export const KanbanColumnConfig = zod.object({
+  id: zod.number(),
+  statusKey: zod.string(),
+  label: zod.string(),
+  hexColor: zod.string(),
+  sortOrder: zod.number(),
+});
+export const GetKanbanColumnConfigsResponse = zod.array(KanbanColumnConfig);
+
+export const CreateKanbanColumnBody = zod.object({
+  label: zod.string(),
+  hexColor: zod.string(),
+});
+
+export const UpdateKanbanColumnBody = zod.object({
+  label: zod.string().optional(),
+  hexColor: zod.string().optional(),
+  sortOrder: zod.number().optional(),
+});
 
 /**
  * @summary Get calendar events (tasks with dates) for Gantt view

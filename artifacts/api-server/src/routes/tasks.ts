@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, tasksTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, notificationsTable, activityLogTable, projectsTable } from "@workspace/db";
-import { eq, and, inArray, or, isNull, desc, gte, lte, count } from "drizzle-orm";
+import { db, tasksTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, notificationsTable, activityLogTable, projectsTable, kanbanColumnsTable } from "@workspace/db";
+import { eq, and, inArray, or, isNull, desc, gte, lte, count, asc } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -22,6 +22,9 @@ import {
   ListTaskAttachmentsResponse,
   AddTaskAttachmentBody,
   GetKanbanColumnsResponse,
+  GetKanbanColumnConfigsResponse,
+  CreateKanbanColumnBody,
+  UpdateKanbanColumnBody,
   GetCalendarEventsResponse,
   GetDashboardSummaryResponse,
   GetActivityFeedResponse,
@@ -29,14 +32,26 @@ import {
 
 const router: IRouter = Router();
 
-const KANBAN_STATUSES = ["backlog", "in_progress", "in_review", "blocked", "complete"];
-const KANBAN_LABELS: Record<string, string> = {
-  backlog: "Backlog",
-  in_progress: "In Progress",
-  in_review: "In Review",
-  blocked: "Blocked",
-  complete: "Complete",
-};
+const DEFAULT_COLUMNS = [
+  { statusKey: "backlog",     label: "Backlog",      hexColor: "#94a3b8", sortOrder: 0 },
+  { statusKey: "in_progress", label: "In Progress",  hexColor: "#3b82f6", sortOrder: 1 },
+  { statusKey: "in_review",   label: "In Review",    hexColor: "#a855f7", sortOrder: 2 },
+  { statusKey: "blocked",     label: "Blocked",      hexColor: "#ef4444", sortOrder: 3 },
+  { statusKey: "complete",    label: "Complete",     hexColor: "#22c55e", sortOrder: 4 },
+];
+
+async function seedDefaultColumns() {
+  try {
+    const existing = await db.select().from(kanbanColumnsTable);
+    if (existing.length === 0) {
+      await db.insert(kanbanColumnsTable).values(DEFAULT_COLUMNS);
+    }
+  } catch {
+    // ignore — table may not exist yet during first boot before migration
+  }
+}
+
+seedDefaultColumns();
 
 async function buildTask(task: typeof tasksTable.$inferSelect) {
   let assignee = null;
@@ -606,6 +621,52 @@ router.delete("/tasks/:taskId/attachments/:attachmentId", requireAuth, async (re
   res.sendStatus(204);
 });
 
+// Kanban column CRUD
+router.get("/kanban/columns", requireAuth, async (_req, res): Promise<void> => {
+  const cols = await db.select().from(kanbanColumnsTable).orderBy(asc(kanbanColumnsTable.sortOrder));
+  res.json(GetKanbanColumnConfigsResponse.parse(cols.map(c => ({
+    id: c.id, statusKey: c.statusKey, label: c.label, hexColor: c.hexColor, sortOrder: c.sortOrder,
+  }))));
+});
+
+router.post("/kanban/columns", requireAuth, async (req, res): Promise<void> => {
+  const body = CreateKanbanColumnBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "Invalid body" }); return; }
+  const existing = await db.select().from(kanbanColumnsTable).orderBy(asc(kanbanColumnsTable.sortOrder));
+  const statusKey = `col_${Date.now()}`;
+  const sortOrder = existing.length > 0 ? existing[existing.length - 1].sortOrder + 1 : 0;
+  const [col] = await db.insert(kanbanColumnsTable)
+    .values({ statusKey, label: body.data.label, hexColor: body.data.hexColor, sortOrder })
+    .returning();
+  res.status(201).json({ id: col.id, statusKey: col.statusKey, label: col.label, hexColor: col.hexColor, sortOrder: col.sortOrder });
+});
+
+router.patch("/kanban/columns/:id", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const body = UpdateKanbanColumnBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "Invalid body" }); return; }
+  const updates: Partial<{ label: string; hexColor: string; sortOrder: number }> = {};
+  if (body.data.label !== undefined) updates.label = body.data.label;
+  if (body.data.hexColor !== undefined) updates.hexColor = body.data.hexColor;
+  if (body.data.sortOrder !== undefined) updates.sortOrder = body.data.sortOrder;
+  const [col] = await db.update(kanbanColumnsTable).set(updates).where(eq(kanbanColumnsTable.id, id)).returning();
+  if (!col) { res.status(404).json({ error: "Column not found" }); return; }
+  res.json({ id: col.id, statusKey: col.statusKey, label: col.label, hexColor: col.hexColor, sortOrder: col.sortOrder });
+});
+
+router.delete("/kanban/columns/:id", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const [col] = await db.select().from(kanbanColumnsTable).where(eq(kanbanColumnsTable.id, id));
+  if (!col) { res.status(404).json({ error: "Column not found" }); return; }
+  const taskCount = await db.select({ cnt: count() }).from(tasksTable).where(eq(tasksTable.status, col.statusKey));
+  if ((taskCount[0]?.cnt ?? 0) > 0) {
+    res.status(400).json({ error: "Cannot delete column that still has tasks. Move them first." });
+    return;
+  }
+  await db.delete(kanbanColumnsTable).where(eq(kanbanColumnsTable.id, id));
+  res.status(204).end();
+});
+
 // Kanban view
 router.get("/kanban", requireAuth, async (req, res): Promise<void> => {
   let query = db.select().from(tasksTable).$dynamic();
@@ -614,13 +675,18 @@ router.get("/kanban", requireAuth, async (req, res): Promise<void> => {
   if (req.query.departmentId) conditions.push(eq(tasksTable.departmentId, Number(req.query.departmentId)));
   if (conditions.length > 0) query = query.where(and(...conditions));
 
-  const tasks = await query.orderBy(tasksTable.createdAt);
+  const [dbCols, tasks] = await Promise.all([
+    db.select().from(kanbanColumnsTable).orderBy(asc(kanbanColumnsTable.sortOrder)),
+    query.orderBy(tasksTable.createdAt),
+  ]);
   const built = await Promise.all(tasks.map(buildTask));
 
-  const columns = KANBAN_STATUSES.map(status => ({
-    status,
-    label: KANBAN_LABELS[status],
-    tasks: built.filter(t => t.status === status),
+  const columns = dbCols.map(col => ({
+    status: col.statusKey,
+    label: col.label,
+    hexColor: col.hexColor,
+    sortOrder: col.sortOrder,
+    tasks: built.filter(t => t.status === col.statusKey),
   }));
 
   res.json(GetKanbanColumnsResponse.parse(columns));
