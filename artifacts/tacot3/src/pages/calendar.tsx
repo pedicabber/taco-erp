@@ -24,7 +24,6 @@ import {
   min as dateMin,
   max as dateMax,
   startOfDay,
-  parseISO,
 } from "date-fns";
 import { Link } from "wouter";
 import { useLiveTimer } from "@/hooks/useLiveTimer";
@@ -77,6 +76,12 @@ const PRIORITY_CONFIG: Record<
   medium: { icon: Minus,      color: "#eab308", label: "Medium" },
   low:    { icon: ChevronDown,color: "#3b82f6", label: "Low"    },
 };
+
+/** Parse a date-only string (YYYY-MM-DD) as a LOCAL date, not UTC midnight. */
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
 
 function PriorityIcon({ priority, size = 10 }: { priority: Priority; size?: number }) {
   const cfg = PRIORITY_CONFIG[priority];
@@ -205,8 +210,8 @@ function buildDayMap(events: CalendarEvent[], calDays: Date[]) {
   );
 
   for (const e of sorted) {
-    const eStart = e.startDate ? startOfDay(parseISO(e.startDate)) : null;
-    const eDue = e.dueDate ? startOfDay(parseISO(e.dueDate)) : null;
+    const eStart = e.startDate ? startOfDay(parseLocalDate(e.startDate)) : null;
+    const eDue = e.dueDate ? startOfDay(parseLocalDate(e.dueDate)) : null;
     const rangeStart = eStart ?? eDue!;
     const rangeEnd = eDue ?? eStart!;
 
@@ -378,8 +383,8 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
     }
     const allDates: Date[] = tasksWithDates
       .flatMap(ev => [
-        ev.startDate ? startOfDay(new Date(ev.startDate)) : null,
-        ev.dueDate ? startOfDay(new Date(ev.dueDate)) : null,
+        ev.startDate ? startOfDay(parseLocalDate(ev.startDate)) : null,
+        ev.dueDate ? startOfDay(parseLocalDate(ev.dueDate)) : null,
       ])
       .filter((d): d is Date => d !== null);
 
@@ -468,8 +473,8 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
             const color = task.departmentColor ?? DEPT_FALLBACK;
             const isOverTime = !!(task.expectedHours && elapsed > task.expectedHours * 3600);
 
-            const start = task.startDate ? startOfDay(new Date(task.startDate)) : null;
-            const due = task.dueDate ? startOfDay(new Date(task.dueDate)) : null;
+            const start = task.startDate ? startOfDay(parseLocalDate(task.startDate)) : null;
+            const due = task.dueDate ? startOfDay(parseLocalDate(task.dueDate)) : null;
             const barStart = start ?? due!;
             const barEnd = due ?? start!;
             const barLeft = differenceInCalendarDays(barStart, displayStart) * DAY_PX;

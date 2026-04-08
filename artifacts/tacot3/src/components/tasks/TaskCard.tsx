@@ -5,6 +5,12 @@ import { cn } from "@/lib/utils";
 import { formatDistanceToNow, isPast } from "date-fns";
 import { useLiveTimer } from "@/hooks/useLiveTimer";
 
+/** Parse a date-only string (YYYY-MM-DD) as LOCAL midnight, not UTC midnight. */
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 const STATUS_STYLES: Record<string, string> = {
   backlog:     "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   in_progress: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
@@ -71,7 +77,7 @@ export default function TaskCard({
   onDragStart?: (e: React.DragEvent) => void;
 }) {
   const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, task.timerStartedAt);
-  const isOverdue = !!(task.dueDate && isPast(new Date(task.dueDate)) && task.status !== "complete");
+  const isOverdue = !!(task.dueDate && isPast(parseLocalDate(task.dueDate)) && task.status !== "complete");
   const isOverTime = !!(task.expectedHours && elapsed > task.expectedHours * 3600);
 
   const deptColor = task.department?.color ?? null;
@@ -135,7 +141,7 @@ export default function TaskCard({
               {task.dueDate && !isOverdue && (
                 <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                   <Calendar className="w-2.5 h-2.5" />
-                  {formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}
+                  {formatDistanceToNow(parseLocalDate(task.dueDate), { addSuffix: true })}
                 </span>
               )}
               <span className={cn("text-[10px] flex items-center gap-0.5", isOverTime ? "text-orange-500" : "text-muted-foreground")}>

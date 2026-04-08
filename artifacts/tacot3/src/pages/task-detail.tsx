@@ -24,6 +24,12 @@ import { format, formatDistanceToNow, isPast } from "date-fns";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
+/** Parse a date-only string (YYYY-MM-DD) as LOCAL midnight, not UTC midnight. */
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 const STATUS_STYLES: Record<string, string> = {
   backlog: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   in_progress: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
@@ -117,7 +123,7 @@ export default function TaskDetailPage() {
   });
 
   const elapsed = useLiveTimer(task?.elapsedSeconds ?? 0, task?.timerRunning ?? false, task?.timerStartedAt ?? null);
-  const isOverdue = task?.dueDate && isPast(new Date(task.dueDate)) && task.status !== "complete";
+  const isOverdue = task?.dueDate && isPast(parseLocalDate(task.dueDate)) && task.status !== "complete";
   const isFollowing = task?.followerIds?.includes(currentUser?.id);
 
   const timerStartMutation = useMutation({
@@ -174,6 +180,16 @@ export default function TaskDetailPage() {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       history.back();
     },
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: (attachmentId: number) =>
+      apiClient.delete(`/tasks/${taskId}/attachments/${attachmentId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-attachments", taskId] });
+      toast({ title: "Attachment deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete attachment", variant: "destructive" }),
   });
 
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
@@ -592,6 +608,15 @@ export default function TaskDetailPage() {
                               <Download className="w-4 h-4" />
                             </Button>
                           </a>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => deleteAttachmentMutation.mutate(a.id)}
+                            disabled={deleteAttachmentMutation.isPending}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     );
@@ -633,7 +658,7 @@ export default function TaskDetailPage() {
                   <Calendar className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   <div>
                     <div className="text-xs text-muted-foreground">Start Date</div>
-                    <div className="text-sm font-medium">{format(new Date(task.startDate), "MMM d, yyyy")}</div>
+                    <div className="text-sm font-medium">{format(parseLocalDate(task.startDate), "MMM d, yyyy")}</div>
                   </div>
                 </div>
               )}
@@ -643,7 +668,7 @@ export default function TaskDetailPage() {
                   <div>
                     <div className="text-xs text-muted-foreground">Due Date</div>
                     <div className={cn("text-sm font-medium", isOverdue && "text-red-500")}>
-                      {format(new Date(task.dueDate), "MMM d, yyyy")}
+                      {format(parseLocalDate(task.dueDate), "MMM d, yyyy")}
                       {isOverdue && <span className="ml-1 text-xs">(overdue)</span>}
                     </div>
                   </div>
@@ -700,22 +725,24 @@ export default function TaskDetailPage() {
       {/* Attachment preview dialog */}
       <Dialog open={!!previewAttachment} onOpenChange={() => setPreviewAttachment(null)}>
         <DialogContent className="max-w-4xl w-full p-0 overflow-hidden">
-          <DialogHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between space-y-0">
-            <DialogTitle className="text-sm font-medium truncate pr-4">
-              {previewAttachment?.fileName}
-            </DialogTitle>
-            {previewAttachment && (
-              <a
-                href={getFileUrl(previewAttachment.objectPath)}
-                download={previewAttachment.fileName}
-                className="flex-shrink-0"
-              >
-                <Button variant="outline" size="sm">
-                  <Download className="w-4 h-4 mr-1" />
-                  Download
-                </Button>
-              </a>
-            )}
+          <DialogHeader className="px-4 pt-4 pb-2 pr-14">
+            <div className="flex items-center gap-3">
+              <DialogTitle className="text-sm font-medium truncate flex-1">
+                {previewAttachment?.fileName}
+              </DialogTitle>
+              {previewAttachment && (
+                <a
+                  href={getFileUrl(previewAttachment.objectPath)}
+                  download={previewAttachment.fileName}
+                  className="flex-shrink-0"
+                >
+                  <Button variant="outline" size="sm">
+                    <Download className="w-4 h-4 mr-1" />
+                    Download
+                  </Button>
+                </a>
+              )}
+            </div>
           </DialogHeader>
           {previewAttachment && getFileType(previewAttachment) === "image" && (
             <div className="flex items-center justify-center bg-muted/30 max-h-[80vh] overflow-auto p-4">
