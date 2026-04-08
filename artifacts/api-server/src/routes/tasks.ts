@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, tasksTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, notificationsTable, activityLogTable, projectsTable } from "@workspace/db";
-import { eq, and, inArray, or, isNull } from "drizzle-orm";
+import { eq, and, inArray, or, isNull, desc, gte, lte } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -634,6 +634,12 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
   if (req.query.status && typeof req.query.status === "string") {
     conditions.push(eq(tasksTable.status, req.query.status));
   }
+  if (req.query.startDate && typeof req.query.startDate === "string") {
+    conditions.push(gte(tasksTable.dueDate, req.query.startDate));
+  }
+  if (req.query.endDate && typeof req.query.endDate === "string") {
+    conditions.push(lte(tasksTable.dueDate, req.query.endDate));
+  }
   if (conditions.length > 0) query = query.where(and(...conditions));
 
   const tasks = await query;
@@ -718,7 +724,7 @@ router.get("/activity", requireAuth, async (req, res): Promise<void> => {
   const logs = await db
     .select()
     .from(activityLogTable)
-    .orderBy(activityLogTable.createdAt)
+    .orderBy(desc(activityLogTable.createdAt))
     .limit(isNaN(limit) ? 20 : limit);
 
   const taskIds = [...new Set(logs.map(l => l.taskId))];

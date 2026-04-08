@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, notificationsTable, usersTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { syncUserFromClerk } from "../lib/userSync";
 import {
@@ -34,7 +34,7 @@ router.get("/notifications", requireAuth, async (req: AuthenticatedRequest, res)
     .select()
     .from(notificationsTable)
     .where(eq(notificationsTable.userId, user.id))
-    .orderBy(notificationsTable.createdAt);
+    .orderBy(desc(notificationsTable.createdAt));
 
   res.json(ListNotificationsResponse.parse(notifications.map(buildNotification)));
 });
