@@ -79,19 +79,19 @@ router.post("/projects/parse-pdf", requireAuth, upload.single("file"), async (re
   try {
     const text = await parsePdfText(req.file.buffer);
 
-    const company = extractLabel(text, ["Company", "Customer", "Client", "Bill To"]) ?? "";
+    const company = extractCompany(text) ?? "";
     const projectId = extractQuoteNumber(text) ?? "";
     const address = extractAddress(text) ?? "";
-    const contactName = extractLabel(text, ["Contact", "Attention", "Attn", "Prepared For"]) ?? "";
+    const contactName = extractContact(text) ?? "";
     const contactPhone = extractPhone(text) ?? "";
     const contactEmail = extractEmail(text) ?? "";
     const totalPrice = extractTotalPrice(text) ?? "";
-    const description = extractDescription(text);
+    const { name: partNumber, description } = extractPartNumberAndDescription(text);
     const startDate = extractStartDate(text) ?? "";
 
     const result = {
       company,
-      name: company ? company : "New Project",
+      name: partNumber || company || "New Project",
       projectId,
       description,
       startDate,
@@ -109,93 +109,180 @@ router.post("/projects/parse-pdf", requireAuth, upload.single("file"), async (re
   }
 });
 
-function extractLabel(text: string, labels: string[]): string | null {
-  for (const label of labels) {
-    const regex = new RegExp(`${label}\\s*:?\\s*([^\\n\\r]{2,80})`, "i");
-    const match = text.match(regex);
-    if (match) {
-      const value = match[1].trim().replace(/\s{2,}/g, " ");
-      if (value.length > 1) return value;
-    }
+// Remove internal spaces from a spaced-out ID or number (e.g., "2 4 - 10 84 REV C" → "24-1084REVC")
+function collapseId(s: string): string {
+  return s.replace(/\s*-\s*/g, "-").replace(/\s+/g, "").trim();
+}
+
+// Collapse spaces within digits (multiple passes), e.g. "1, 213 ,808" → "1,213,808"
+function collapseDigits(s: string): string {
+  let prev = s;
+  for (let i = 0; i < 5; i++) {
+    const next = prev
+      .replace(/(\d)\s+(\d)/g, "$1$2")
+      .replace(/,\s+(\d)/g, ",$1")
+      .replace(/\$\s+/g, "$");
+    if (next === prev) break;
+    prev = next;
+  }
+  return prev.trim();
+}
+
+// Fix split words e.g. "De cember" → "December"
+function fixSplitWords(s: string): string {
+  return s.replace(/\b([A-Z][a-z]{1,3})\s+([a-z]{2,})\b/g, "$1$2");
+}
+
+function extractCompany(text: string): string | null {
+  // Row format: "Company : American Woodmark Contact : ..."
+  const between = text.match(/Company\s*:\s*(.+?)\s+Contact\s*:/i);
+  if (between) return between[1].trim();
+  // Fallback: value after Company label until end-of-line or next label
+  const plain = text.match(/Company\s*:\s*([^\n\r:]{2,60})/i);
+  if (plain) return plain[1].trim();
+  // Generic labels
+  for (const label of ["Customer", "Client", "Bill To"]) {
+    const m = text.match(new RegExp(`${label}\\s*:\\s*([^\\n\\r:]{2,60})`, "i"));
+    if (m) return m[1].trim();
+  }
+  return null;
+}
+
+function extractContact(text: string): string | null {
+  // Row format: "... Contact : Mr. Giancarlo Touzard"
+  const m = text.match(/Contact\s*:\s*(.+?)(?:\n|$)/im);
+  if (m) return m[1].trim();
+  for (const label of ["Attention", "Attn"]) {
+    const alt = text.match(new RegExp(`${label}\\s*:\\s*([^\\n\\r:]{2,60})`, "i"));
+    if (alt) return alt[1].trim();
   }
   return null;
 }
 
 function extractQuoteNumber(text: string): string | null {
-  // Match common quote/job number formats: "24-1084REVC", "24-1084", "Q-2024-001"
-  const patterns = [
-    /Quote\s*No\.?\s*:?\s*([A-Z0-9][A-Z0-9\-]{3,20})/i,
-    /Job\s*No\.?\s*:?\s*([A-Z0-9][A-Z0-9\-]{3,20})/i,
-    /Project\s*(?:No|ID|Number|#)\.?\s*:?\s*([A-Z0-9][A-Z0-9\-]{3,20})/i,
-    /Proposal\s*No\.?\s*:?\s*([A-Z0-9][A-Z0-9\-]{3,20})/i,
-    /RFQ\s*(?:No\.?)?\s*:?\s*([A-Z0-9][A-Z0-9\-]{3,20})/i,
-    // standalone pattern like "24-1084REVC" - year-number-revision
-    /\b(\d{2}-\d{4}[A-Z]*\d*)\b/,
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) return match[1].trim();
+  // Row format: "Quote No.: 2 4 - 10 84 REV C" (chars may be spaced out)
+  // Use [ \t] instead of \s to avoid matching across line breaks
+  const labeled = text.match(/(?:Quote|Job|Proposal|RFQ)\s*No\.?\s*:?\s*([A-Z0-9][A-Z0-9 \t\-]{3,30})/i);
+  if (labeled) {
+    const collapsed = collapseId(labeled[1]);
+    if (collapsed.length >= 3) return collapsed;
+  }
+  // Fallback: project/reference number pattern
+  for (const pat of [
+    /Project\s*(?:No|ID|Number|#)\.?\s*:?\s*([A-Z0-9][A-Z0-9\s\-]{3,20})/i,
+    /\b(\d{2}-\d{4}[A-Z]+\d*)\b/,
+  ]) {
+    const m = text.match(pat);
+    if (m) return collapseId(m[1]);
   }
   return null;
 }
 
 function extractAddress(text: string): string | null {
-  const match = text.match(/Address\s*:?\s*([^\n\r]{5,120}(?:[\n\r]+[^\n\r]{5,80})?)/i);
-  if (!match) return null;
-  // Collapse multi-line address into single line
-  const lines = match[1].split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 0);
-  return lines.join(", ").replace(/,\s*,/g, ",").trim();
+  // Row 1: "Address : 400 E Orangethorpe Ave . Phone : 714-578-3791"
+  const streetMatch = text.match(/Address\s*:\s*(.+?)\s+Phone\s*:/i);
+  let street = streetMatch ? streetMatch[1].trim().replace(/\s+\./g, ".") : null;
+
+  // Row 2 (continuation): text before "Email :"
+  const cityMatch = text.match(/([A-Za-z][\w\s,]+CA\s+[\d\s]+)\s+Email\s*:/i)
+    ?? text.match(/([A-Za-z][\w\s,]+\d{5})\s+Email\s*:/i);
+  let city = cityMatch ? collapseDigits(cityMatch[1].trim().replace(/\s*,\s*/g, ", ")) : null;
+
+  if (street && city) return `${street}, ${city}`;
+  if (street) return street;
+
+  // Generic fallback
+  const generic = text.match(/Address\s*:\s*([^\n\r]{5,120})/i);
+  return generic ? generic[1].trim() : null;
 }
 
 function extractPhone(text: string): string | null {
-  const match = text.match(/(?:Phone|Tel|Telephone|Ph)\s*\.?\s*:?\s*([0-9\-\(\)\+\. ]{7,20})/i);
-  if (match) return match[1].trim().replace(/\s+/g, " ");
-  // fallback: any standalone phone number pattern near the header
-  const fallback = text.slice(0, 1500).match(/\b(\(?\d{3}\)?[\s\-\.]\d{3}[\s\-\.]\d{4})\b/);
-  return fallback ? fallback[1].trim() : null;
+  // The address row is: "Address : 400 E Orangethorpe Ave . Phone : 714 - 578 - 3791"
+  // Match Phone that appears on the SAME line as "Address :" to avoid vendor header phones
+  const onAddressLine = text.match(/Address\s*:.+?Phone\s*:\s*([\d\s\-\(\)\+\.]{7,25})/i);
+  if (onAddressLine) return collapseId(onAddressLine[1]);
+  // Fallback: customer contact phone (not vendor header)
+  const m = text.match(/(?:Customer|Client|Contact)\s+Phone\s*:\s*([\d\s\-\(\)\+\.]{7,25})/i);
+  if (m) return collapseId(m[1]);
+  return null;
 }
 
 function extractEmail(text: string): string | null {
-  const labeled = text.match(/Email\s*:?\s*([^\s@]{1,40}@[^\s]{1,40})/i);
+  // "Email : gtouzard@Woodmark.com"
+  const labeled = text.match(/Email\s*:\s*([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})/i);
   if (labeled) return labeled[1].trim();
-  // fallback: first email in document
+  // Fallback: any email in doc
   const fallback = text.match(/\b([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})\b/);
   return fallback ? fallback[1].trim() : null;
 }
 
+function extractPartNumberAndDescription(text: string): { name: string; description: string } {
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Match line starting with qty number + all-caps word + "-"
+    const qtyMatch = line.match(/^\s*\d+\s+([A-Z][A-Z0-9]+)\s*-\s*/);
+    if (!qtyMatch) continue;
+
+    const partStart = qtyMatch[1];
+    const afterPartStart = line.slice(qtyMatch.index! + qtyMatch[0].length);
+
+    // Check if continuation of part number on same line (e.g., "CUSTOM - INTEGRATION Desc...")
+    const sameLineCont = afterPartStart.match(/^([A-Z][A-Z0-9]+)\s+[A-Z][a-z]/);
+    let partNumber: string;
+    let descText: string;
+
+    if (sameLineCont) {
+      partNumber = `${partStart}-${sameLineCont[1]}`;
+      descText = afterPartStart.slice(sameLineCont[0].length - 1);
+    } else {
+      // Part number wraps to next line
+      partNumber = partStart + "-";
+      const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : "";
+      const contMatch = nextLine.match(/^([A-Z][A-Z0-9]+)\s/);
+      if (contMatch) partNumber += contMatch[1];
+      descText = afterPartStart;
+    }
+
+    // Extract description: stop at "including"
+    const inclIdx = descText.toLowerCase().indexOf("including");
+    const rawDesc = inclIdx > 0 ? descText.slice(0, inclIdx) : descText;
+    // Strip trailing price ($...)
+    const description = rawDesc.replace(/\$[\s\d,]+$/, "").trim();
+
+    return { name: partNumber, description };
+  }
+  return { name: "", description: "" };
+}
+
 function extractTotalPrice(text: string): string | null {
-  // Match "TOTAL", "Grand Total", "Total Amount" followed by a dollar amount
-  const match = text.match(/(?:Grand\s*)?Total(?:\s*Amount)?\s*:?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i);
-  if (match) {
-    const amount = match[1].replace(/,/g, "");
-    return `$${parseFloat(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // "TOTAL: $ 1, 213 , 8 0 8" — TOTAL line (use exact "TOTAL:" not "Subtotal")
+  const m = text.match(/\bTOTAL\s*:\s*\$?\s*([\d\s,]+)/i);
+  if (m) {
+    const clean = collapseDigits(m[1].replace(/\s/g, ""));
+    const num = parseFloat(clean.replace(/,/g, ""));
+    if (!isNaN(num)) {
+      return `$${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
   }
   return null;
 }
 
-function extractDescription(text: string): string {
-  const match = text.match(/(?:Description|Scope|Subject)\s*:?\s*[\r\n]+([\s\S]+?)(?:Quote|Subtotal|Total|Terms|Payment|Page)/i);
-  if (match) {
-    const raw = match[1].trim();
-    const lines = raw.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 2).slice(0, 4);
-    return lines.join(" ").replace(/\s{2,}/g, " ").trim();
-  }
-  // fallback: grab a few meaningful lines after the header block
-  const fallbackMatch = text.match(/(?:Anaheim|Assembly|Fabricat|Install|Supply)[^\n]{5,120}/i);
-  return fallbackMatch ? fallbackMatch[0].trim() : "";
-}
-
 function extractStartDate(text: string): string | null {
+  // "Date Issued: De cember 11, 20 2 4"
+  // Use [ \t] (not \s) to avoid capturing across line breaks
   const patterns = [
-    /Date\s*Issued\s*:?\s*([^\n\r]+)/i,
-    /(?:Quote|Proposal|Bid)\s*Date\s*:?\s*([^\n\r]+)/i,
-    /Date\s*:?\s*([A-Za-z]+ \d{1,2},?\s*\d{4})/i,
-    /Date\s*:?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
+    /Date\s+Issued\s*:\s*([A-Za-z ,0-9]{8,30})/i,
+    /(?:Quote|Proposal|Bid)\s*Date\s*:\s*([A-Za-z ,0-9]{8,30})/i,
+    /Date\s*:\s*([A-Za-z ,0-9]{8,30})/i,
   ];
   for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (!match) continue;
-    const raw = match[1].trim();
+    const m = text.match(pattern);
+    if (!m) continue;
+    let raw = m[1].trim();
+    // Fix split words ("De cember" → "December") and split digits
+    raw = fixSplitWords(raw);
+    raw = collapseDigits(raw);
     const date = new Date(raw);
     if (!isNaN(date.getTime())) {
       return date.toISOString().split("T")[0];
