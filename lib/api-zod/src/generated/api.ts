@@ -1139,6 +1139,7 @@ export const RequestUploadUrlBody = zod.object({
   name: zod.string(),
   size: zod.number(),
   contentType: zod.string(),
+  taskId: zod.number().optional(),
 });
 
 export const RequestUploadUrlResponse = zod.object({

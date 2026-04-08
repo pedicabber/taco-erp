@@ -179,6 +179,7 @@ export default function TaskDetailPage() {
         name: file.name,
         size: file.size,
         contentType: file.type || "application/octet-stream",
+        taskId,
       });
       const { uploadURL, objectPath } = urlRes.data;
 

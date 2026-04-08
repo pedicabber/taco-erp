@@ -454,6 +454,7 @@ export interface RequestUploadUrlBody {
   name: string;
   size: number;
   contentType: string;
+  taskId?: number;
 }
 
 export interface RequestUploadUrlResponse {
