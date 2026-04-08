@@ -157,10 +157,15 @@ export default function DashboardPage() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="w-4 h-4" />
-                Recent Activity
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  Recent Activity
+                </CardTitle>
+                <Link href="/activity">
+                  <span className="text-sm text-primary hover:underline cursor-pointer">View all</span>
+                </Link>
+              </div>
             </CardHeader>
             <CardContent>
               {!activity || activity.length === 0 ? (

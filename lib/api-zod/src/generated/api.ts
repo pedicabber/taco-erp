@@ -1058,6 +1058,7 @@ export const GetDashboardSummaryResponse = zod.object({
  */
 export const GetActivityFeedQueryParams = zod.object({
   limit: zod.coerce.number().nullish(),
+  offset: zod.coerce.number().nullish(),
 });
 
 export const GetActivityFeedResponseItem = zod.object({
@@ -1068,9 +1069,14 @@ export const GetActivityFeedResponseItem = zod.object({
   action: zod.string(),
   actorId: zod.number(),
   actorName: zod.string(),
+  actorAvatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
 });
 export const GetActivityFeedResponse = zod.array(GetActivityFeedResponseItem);
+
+export const GetActivityFeedTotalResponse = zod.object({
+  total: zod.number(),
+});
 
 /**
  * @summary List notifications for current user

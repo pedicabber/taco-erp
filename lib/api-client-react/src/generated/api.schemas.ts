@@ -422,6 +422,8 @@ export interface ActivityItem {
   action: string;
   actorId: number;
   actorName: string;
+  /** @nullable */
+  actorAvatarUrl: string | null;
   createdAt: string;
 }
 

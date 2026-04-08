@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, tasksTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, notificationsTable, activityLogTable, projectsTable } from "@workspace/db";
-import { eq, and, inArray, or, isNull, desc, gte, lte } from "drizzle-orm";
+import { eq, and, inArray, or, isNull, desc, gte, lte, count } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -723,13 +723,19 @@ router.get("/dashboard/summary", requireAuth, async (req: AuthenticatedRequest, 
 
 // Activity feed
 router.get("/activity", requireAuth, async (req, res): Promise<void> => {
-  const limit = parseInt(req.query.limit as string ?? "20", 10);
+  const limit = Math.min(parseInt(req.query.limit as string ?? "20", 10), 100);
+  const offset = parseInt(req.query.offset as string ?? "0", 10);
+
+  const [{ count: totalCount }] = await db
+    .select({ count: count() })
+    .from(activityLogTable);
 
   const logs = await db
     .select()
     .from(activityLogTable)
     .orderBy(desc(activityLogTable.createdAt))
-    .limit(isNaN(limit) ? 20 : limit);
+    .limit(isNaN(limit) ? 20 : limit)
+    .offset(isNaN(offset) ? 0 : offset);
 
   const taskIds = [...new Set(logs.map(l => l.taskId))];
   const actorIds = [...new Set(logs.map(l => l.actorId))];
@@ -757,10 +763,12 @@ router.get("/activity", requireAuth, async (req, res): Promise<void> => {
       action: log.action,
       actorId: log.actorId,
       actorName: actor?.name ?? "Unknown User",
+      actorAvatarUrl: actor?.avatarUrl ?? null,
       createdAt: log.createdAt.toISOString(),
     };
   });
 
+  res.setHeader("X-Total-Count", String(totalCount));
   res.json(GetActivityFeedResponse.parse(feed));
 });
 

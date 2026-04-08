@@ -243,6 +243,22 @@
   }
 }
 
+/* Calendar month slide animations */
+@keyframes cal-slide-from-right {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes cal-slide-from-left {
+  from { transform: translateX(-40px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+.cal-enter-right {
+  animation: cal-slide-from-right 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.cal-enter-left {
+  animation: cal-slide-from-left 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 /* Hide scrollbar while keeping scroll functionality */
 .scrollbar-hide {
   scrollbar-width: none;

@@ -199,12 +199,14 @@ function MonthView({
   events,
   onPrev,
   onNext,
+  slideDir,
 }: {
   days: Date[];
   currentDate: Date;
   events: CalendarEvent[];
   onPrev: () => void;
   onNext: () => void;
+  slideDir: 1 | -1 | 0;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -250,10 +252,13 @@ function MonthView({
 
   const dayMap = useMemo(() => buildDayMap(events, days), [events, days]);
 
+  const animClass =
+    slideDir === 1 ? "cal-enter-right" : slideDir === -1 ? "cal-enter-left" : "";
+
   return (
     <div
       ref={containerRef}
-      className="flex-1 flex flex-col overflow-hidden select-none"
+      className={cn("flex-1 flex flex-col overflow-hidden select-none", animClass)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
@@ -552,9 +557,16 @@ export default function CalendarPage() {
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [slideDir, setSlideDir] = useState<1 | -1 | 0>(0);
 
-  const goPrev = useCallback(() => setCurrentDate(d => subMonths(d, 1)), []);
-  const goNext = useCallback(() => setCurrentDate(d => addMonths(d, 1)), []);
+  const goPrev = useCallback(() => {
+    setSlideDir(-1);
+    setCurrentDate(d => subMonths(d, 1));
+  }, []);
+  const goNext = useCallback(() => {
+    setSlideDir(1);
+    setCurrentDate(d => addMonths(d, 1));
+  }, []);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -705,11 +717,13 @@ export default function CalendarPage() {
         </div>
       ) : view === "month" ? (
         <MonthView
+          key={format(currentDate, "yyyy-MM")}
           days={days}
           currentDate={currentDate}
           events={events as CalendarEvent[]}
           onPrev={goPrev}
           onNext={goNext}
+          slideDir={slideDir}
         />
       ) : (
         <GanttView events={events as CalendarEvent[]} />

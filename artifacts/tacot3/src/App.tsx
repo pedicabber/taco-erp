@@ -40,6 +40,7 @@ const TaskDetailPage = lazy(() => import("@/pages/task-detail"));
 const BoardPage = lazy(() => import("@/pages/board"));
 const CalendarPage = lazy(() => import("@/pages/calendar"));
 const NotificationsPage = lazy(() => import("@/pages/notifications"));
+const ActivityFullPage = lazy(() => import("@/pages/activity"));
 
 function PageLoader() {
   return (
@@ -163,6 +164,9 @@ function ClerkProviderWithRoutes() {
           </Route>
           <Route path="/notifications">
             <ProtectedLayout><NotificationsPage /></ProtectedLayout>
+          </Route>
+          <Route path="/activity">
+            <ProtectedLayout><ActivityFullPage /></ProtectedLayout>
           </Route>
           <Route component={NotFound} />
         </Switch>
