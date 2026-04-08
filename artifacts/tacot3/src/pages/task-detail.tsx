@@ -202,7 +202,7 @@ export default function TaskDetailPage() {
       description: task.description ?? "",
       status: task.status,
       priority: task.priority,
-      assigneeId: task.assigneeId ? String(task.assigneeId) : "",
+      assigneeId: task.assigneeId ? String(task.assigneeId) : "none",
       expectedHours: task.expectedHours ? String(task.expectedHours) : "",
       dueDate: task.dueDate ?? "",
       startDate: task.startDate ?? "",
@@ -217,7 +217,7 @@ export default function TaskDetailPage() {
       description: editForm.description || undefined,
       status: editForm.status,
       priority: editForm.priority,
-      assigneeId: editForm.assigneeId ? Number(editForm.assigneeId) : undefined,
+      assigneeId: editForm.assigneeId !== "none" ? Number(editForm.assigneeId) : undefined,
       expectedHours: editForm.expectedHours ? Number(editForm.expectedHours) : undefined,
       dueDate: editForm.dueDate || undefined,
       startDate: editForm.startDate || undefined,
@@ -312,7 +312,7 @@ export default function TaskDetailPage() {
                         <Select value={editForm.assigneeId} onValueChange={v => setEditForm(p => p && ({ ...p, assigneeId: v }))}>
                           <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Unassigned</SelectItem>
+                            <SelectItem value="none">Unassigned</SelectItem>
                             {(users as UserProfileMini[]).map(u => (
                               <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
                             ))}

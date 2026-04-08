@@ -43,12 +43,13 @@ function NewTaskDialog({
     queryFn: () => apiClient.get("/users").then(r => r.data),
   });
 
+  const NONE = "none";
   const [form, setForm] = useState({
     title: "",
     description: "",
     projectId: defaultProjectId ? String(defaultProjectId) : "",
-    departmentId: "",
-    assigneeId: "",
+    departmentId: NONE,
+    assigneeId: NONE,
     status: "backlog",
     priority: "medium",
     expectedHours: "",
@@ -71,8 +72,8 @@ function NewTaskDialog({
         title: "",
         description: "",
         projectId: defaultProjectId ? String(defaultProjectId) : "",
-        departmentId: "",
-        assigneeId: "",
+        departmentId: NONE,
+        assigneeId: NONE,
         status: "backlog",
         priority: "medium",
         expectedHours: "",
@@ -89,8 +90,8 @@ function NewTaskDialog({
       title: form.title,
       description: form.description || undefined,
       projectId: Number(form.projectId),
-      departmentId: form.departmentId ? Number(form.departmentId) : undefined,
-      assigneeId: form.assigneeId ? Number(form.assigneeId) : undefined,
+      departmentId: form.departmentId !== NONE ? Number(form.departmentId) : undefined,
+      assigneeId: form.assigneeId !== NONE ? Number(form.assigneeId) : undefined,
       status: form.status,
       priority: form.priority,
       expectedHours: form.expectedHours ? Number(form.expectedHours) : undefined,
@@ -120,7 +121,7 @@ function NewTaskDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <Label>Project *</Label>
-              <Select value={form.projectId} onValueChange={v => setForm(p => ({ ...p, projectId: v, departmentId: "" }))}>
+              <Select value={form.projectId} onValueChange={v => setForm(p => ({ ...p, projectId: v, departmentId: NONE }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
@@ -138,7 +139,7 @@ function NewTaskDialog({
                   <SelectValue placeholder="None" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {filteredDepts.map((d: Department) => (
                     <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
                   ))}
@@ -152,7 +153,7 @@ function NewTaskDialog({
                   <SelectValue placeholder="Unassigned" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Unassigned</SelectItem>
+                  <SelectItem value="none">Unassigned</SelectItem>
                   {(users as UserProfileMini[]).map(u => (
                     <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
                   ))}
