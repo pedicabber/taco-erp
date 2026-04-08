@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, tasksTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, notificationsTable, activityLogTable, projectsTable } from "@workspace/db";
-import { eq, and, inArray, or } from "drizzle-orm";
+import { db, tasksTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, notificationsTable, activityLogTable, projectsTable } from "@workspace/db";
+import { eq, and, inArray, or, isNull } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { syncUserFromClerk } from "../lib/userSync";
 import { createNotification } from "./notifications";
@@ -275,13 +275,21 @@ router.post("/tasks/:taskId/timer/start", requireAuth, async (req: Authenticated
     return;
   }
 
+  const startedAt = new Date();
   const [updated] = await db.update(tasksTable).set({
     timerRunning: true,
-    timerStartedAt: new Date(),
+    timerStartedAt: startedAt,
     status: current.status === "backlog" ? "in_progress" : current.status,
   }).where(eq(tasksTable.id, id)).returning();
 
-  if (user) await logActivity(id, user.id, "started timer");
+  if (user) {
+    await db.insert(taskTimerSessionsTable).values({
+      taskId: id,
+      startedById: user.id,
+      startedAt,
+    });
+    await logActivity(id, user.id, "started timer");
+  }
 
   const built = await buildTask(updated);
   res.json(StartTaskTimerResponse.parse(built));
@@ -307,12 +315,23 @@ router.post("/tasks/:taskId/timer/stop", requireAuth, async (req: AuthenticatedR
     return;
   }
 
-  const extraSeconds = Math.floor((Date.now() - current.timerStartedAt.getTime()) / 1000);
+  const stoppedAt = new Date();
+  const extraSeconds = Math.floor((stoppedAt.getTime() - current.timerStartedAt.getTime()) / 1000);
   const [updated] = await db.update(tasksTable).set({
     timerRunning: false,
     timerStartedAt: null,
     elapsedSeconds: (current.elapsedSeconds ?? 0) + extraSeconds,
   }).where(eq(tasksTable.id, id)).returning();
+
+  await db
+    .update(taskTimerSessionsTable)
+    .set({ stoppedAt, durationSeconds: extraSeconds })
+    .where(
+      and(
+        eq(taskTimerSessionsTable.taskId, id),
+        isNull(taskTimerSessionsTable.stoppedAt)
+      )
+    );
 
   if (user) await logActivity(id, user.id, "stopped timer");
   await checkOverdueAndNotify(updated);

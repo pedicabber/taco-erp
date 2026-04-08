@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
+import { parsePdfText } from "../lib/pdfParseAdapter";
 import { db, projectsTable, departmentsTable, tasksTable } from "@workspace/db";
 import { eq, count, and } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
@@ -70,10 +71,7 @@ router.post("/projects/parse-pdf", requireAuth, upload.single("file"), async (re
   }
 
   try {
-    const pdfParseModule = await import("pdf-parse");
-    const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
-    const data = await pdfParse(req.file.buffer);
-    const text = data.text;
+    const text = await parsePdfText(req.file.buffer);
 
     const company = extractField(text, "Company:") ?? "";
     const projectIdRaw = extractField(text, "Quote No.:") ?? "";
