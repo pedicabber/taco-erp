@@ -6,8 +6,8 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
-import { db, taskAttachmentsTable, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, taskAttachmentsTable, tasksTable, usersTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -110,7 +110,7 @@ router.get("/storage/objects/*path", requireAuth, async (req: AuthenticatedReque
 
     if (dbUser.role !== "admin") {
       const [attachment] = await db
-        .select({ uploadedById: taskAttachmentsTable.uploadedById })
+        .select({ uploadedById: taskAttachmentsTable.uploadedById, taskId: taskAttachmentsTable.taskId })
         .from(taskAttachmentsTable)
         .where(eq(taskAttachmentsTable.objectPath, objectPath));
 
@@ -120,8 +120,18 @@ router.get("/storage/objects/*path", requireAuth, async (req: AuthenticatedReque
       }
 
       if (attachment.uploadedById !== dbUser.id) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
+        const [task] = await db
+          .select({ assigneeId: tasksTable.assigneeId, followerIds: tasksTable.followerIds })
+          .from(tasksTable)
+          .where(eq(tasksTable.id, attachment.taskId));
+
+        const isAssignee = task?.assigneeId === dbUser.id;
+        const isFollower = task?.followerIds?.includes(dbUser.id) ?? false;
+
+        if (!isAssignee && !isFollower) {
+          res.status(403).json({ error: "Forbidden" });
+          return;
+        }
       }
     }
 
