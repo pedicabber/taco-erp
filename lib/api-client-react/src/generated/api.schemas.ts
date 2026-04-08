@@ -400,6 +400,7 @@ export interface CalendarEvent {
   assigneeName: string | null;
   /** @nullable */
   assigneeAvatarUrl: string | null;
+  priority: "low" | "medium" | "high" | "urgent";
 }
 
 export interface DashboardSummary {

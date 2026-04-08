@@ -680,6 +680,7 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
       assigneeId: task.assigneeId,
       assigneeName,
       assigneeAvatarUrl,
+      priority: task.priority as "low" | "medium" | "high" | "urgent",
     };
   }));
 

@@ -1033,6 +1033,7 @@ export const GetCalendarEventsResponseItem = zod.object({
   assigneeId: zod.number().nullable(),
   assigneeName: zod.string().nullable(),
   assigneeAvatarUrl: zod.string().nullable(),
+  priority: zod.enum(["low", "medium", "high", "urgent"]),
 });
 export const GetCalendarEventsResponse = zod.array(
   GetCalendarEventsResponseItem,

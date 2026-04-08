@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
-import { ChevronLeft, ChevronRight, CalendarDays, Loader2, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Loader2, Clock, Zap, ChevronUp, Minus, ChevronDown } from "lucide-react";
 import type { Project, Department, UserProfileMini, CalendarEvent } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +32,32 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 const DEPT_FALLBACK = "#6B7280";
 const DAY_PX = 44;
+
+/* ─── Priority config ──────────────────────────────────────────── */
+type Priority = "urgent" | "high" | "medium" | "low";
+
+const PRIORITY_ORDER: Record<Priority, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+const PRIORITY_CONFIG: Record<
+  Priority,
+  { icon: React.ElementType; color: string; label: string }
+> = {
+  urgent: { icon: Zap,        color: "#ef4444", label: "Urgent" },
+  high:   { icon: ChevronUp,  color: "#f97316", label: "High"   },
+  medium: { icon: Minus,      color: "#eab308", label: "Medium" },
+  low:    { icon: ChevronDown,color: "#3b82f6", label: "Low"    },
+};
+
+function PriorityIcon({ priority, size = 10 }: { priority: Priority; size?: number }) {
+  const cfg = PRIORITY_CONFIG[priority];
+  const Icon = cfg.icon;
+  return <Icon style={{ color: cfg.color, width: size, height: size, flexShrink: 0 }} />;
+}
 
 /* ─── Assignee avatar ──────────────────────────────────────────── */
 function AssigneeAvatar({
@@ -74,6 +100,7 @@ function TaskChip({ task }: { task: CalendarEvent }) {
   const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, null);
   const color = task.departmentColor ?? DEPT_FALLBACK;
   const isOverTime = !!(task.expectedHours && elapsed > task.expectedHours * 3600);
+  const priority = (task.priority ?? "medium") as Priority;
 
   return (
     <Tooltip>
@@ -87,13 +114,15 @@ function TaskChip({ task }: { task: CalendarEvent }) {
               borderLeft: `2px solid ${color}`,
             }}
           >
+            {/* Priority icon — leftmost */}
+            <PriorityIcon priority={priority} size={10} />
             {task.timerRunning && <Clock className="w-2 h-2 flex-shrink-0" />}
             <span className="truncate flex-1 leading-none">{task.title}</span>
             {isOverTime && <span className="flex-shrink-0 text-orange-500 text-[9px]">!</span>}
             {task.assigneeId && (
               <AssigneeAvatar
                 name={task.assigneeName}
-                avatarUrl={(task as CalendarEvent & { assigneeAvatarUrl?: string | null }).assigneeAvatarUrl ?? null}
+                avatarUrl={task.assigneeAvatarUrl ?? null}
                 size={14}
               />
             )}
@@ -102,13 +131,18 @@ function TaskChip({ task }: { task: CalendarEvent }) {
       </TooltipTrigger>
       <TooltipContent side="top" className="max-w-[200px]">
         <div className="space-y-1">
-          <div className="font-medium text-sm">{task.title}</div>
+          <div className="flex items-center gap-1.5 font-medium text-sm">
+            <PriorityIcon priority={priority} size={12} />
+            <span style={{ color: PRIORITY_CONFIG[priority].color }}>{PRIORITY_CONFIG[priority].label}</span>
+            <span>·</span>
+            <span>{task.title}</span>
+          </div>
           <div className="text-xs text-muted-foreground">{task.projectName}</div>
           {task.assigneeName && (
             <div className="text-xs flex items-center gap-1">
               <AssigneeAvatar
                 name={task.assigneeName}
-                avatarUrl={(task as CalendarEvent & { assigneeAvatarUrl?: string | null }).assigneeAvatarUrl ?? null}
+                avatarUrl={task.assigneeAvatarUrl ?? null}
                 size={16}
               />
               {task.assigneeName}
@@ -125,15 +159,23 @@ function TaskChip({ task }: { task: CalendarEvent }) {
   );
 }
 
-/* ─── Build per-day event map ──────────────────────────────────── */
+/* ─── Build per-day event map (sorted urgent → high → medium → low) ─ */
 /**
  * For each CalendarEvent, add a copy to every day in [startDate, dueDate].
  * If only one date is set, it appears on just that day.
+ * Within each day the list is sorted by priority (urgent first).
  */
 function buildDayMap(events: CalendarEvent[], calDays: Date[]) {
   const map = new Map<string, CalendarEvent[]>();
 
-  for (const e of events) {
+  // Sort source events by priority so insertion order is correct
+  const sorted = [...events].sort(
+    (a, b) =>
+      PRIORITY_ORDER[(a.priority ?? "medium") as Priority] -
+      PRIORITY_ORDER[(b.priority ?? "medium") as Priority]
+  );
+
+  for (const e of sorted) {
     const eStart = e.startDate ? startOfDay(parseISO(e.startDate)) : null;
     const eDue = e.dueDate ? startOfDay(parseISO(e.dueDate)) : null;
     const rangeStart = eStart ?? eDue!;
