@@ -56,7 +56,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     refetchInterval: 30000,
   });
 
-  const unreadCount = notifications?.filter((n: any) => !n.isRead).length ?? 0;
+  const unreadCount = (notifications as Array<{ isRead: boolean }> | undefined)?.filter(n => !n.isRead).length ?? 0;
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">

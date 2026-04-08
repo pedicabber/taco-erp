@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
 import { Plus, Loader2, Trello } from "lucide-react";
+import type { Project, Department, KanbanColumn, Task } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -72,8 +73,8 @@ export default function BoardPage() {
     e.preventDefault();
     const taskId = Number(e.dataTransfer.getData("text/plain"));
     if (taskId && draggingTaskId === taskId) {
-      const allTasks = (columns as any[]).flatMap((c: any) => c.tasks);
-      const task = allTasks.find((t: any) => t.id === taskId);
+      const allTasks = (columns as KanbanColumn[]).flatMap(c => c.tasks as Task[]);
+      const task = allTasks.find(t => t.id === taskId);
       if (task && task.status !== status) {
         updateStatusMutation.mutate({ taskId, status });
       }
@@ -83,8 +84,8 @@ export default function BoardPage() {
   }
 
   const filteredDepts = filterProject !== "all"
-    ? (departments as any[]).filter((d: any) => d.projectId === Number(filterProject))
-    : departments;
+    ? (departments as Department[]).filter(d => d.projectId === Number(filterProject))
+    : departments as Department[];
 
   return (
     <div className="flex flex-col h-full">
@@ -99,7 +100,7 @@ export default function BoardPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All projects</SelectItem>
-            {(projects as any[]).map(p => (
+            {(projects as Project[]).map(p => (
               <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
             ))}
           </SelectContent>
@@ -110,7 +111,7 @@ export default function BoardPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All departments</SelectItem>
-            {(filteredDepts as any[]).map(d => (
+            {filteredDepts.map((d: Department) => (
               <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
             ))}
           </SelectContent>
@@ -132,7 +133,7 @@ export default function BoardPage() {
         <div className="flex-1 overflow-x-auto p-4">
           <div className="flex gap-3 h-full min-h-0" style={{ minWidth: `${COLUMNS.length * 260}px` }}>
             {COLUMNS.map(col => {
-              const colData = (columns as any[]).find(c => c.status === col.status);
+              const colData = (columns as KanbanColumn[]).find(c => c.status === col.status);
               const tasks = colData?.tasks ?? [];
               const isDragOver = dragOverStatus === col.status;
 
@@ -159,7 +160,7 @@ export default function BoardPage() {
                   {/* Tasks */}
                   <div className="flex-1 overflow-y-auto p-2 space-y-2">
                     <AnimatePresence>
-                      {tasks.map((task: any) => (
+                      {(tasks as Task[]).map(task => (
                         <motion.div
                           key={task.id}
                           layout

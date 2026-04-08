@@ -5,7 +5,9 @@ import {
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { db, taskAttachmentsTable, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -82,16 +84,48 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  * GET /storage/objects/*
  *
  * Serve private object entities. Requires authentication.
- * Any authenticated user with a valid object path may download the object.
- * (Task attachment access can be further restricted at the application layer.)
+ * Access is restricted to users who uploaded the attachment or who are admins.
+ * The object path is matched against task_attachments to verify authorization.
  */
-router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Response) => {
+router.get("/storage/objects/*path", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
-    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
+    const clerkId = req.userId;
+    if (!clerkId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const [dbUser] = await db.select({ id: usersTable.id, role: usersTable.role })
+      .from(usersTable)
+      .where(eq(usersTable.clerkId, clerkId));
+
+    if (!dbUser) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    if (dbUser.role !== "admin") {
+      const [attachment] = await db
+        .select({ uploadedById: taskAttachmentsTable.uploadedById })
+        .from(taskAttachmentsTable)
+        .where(eq(taskAttachmentsTable.objectPath, objectPath));
+
+      if (!attachment) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+
+      if (attachment.uploadedById !== dbUser.id) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+    }
+
+    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
     const response = await objectStorageService.downloadObject(objectFile);
 
     res.status(response.status);

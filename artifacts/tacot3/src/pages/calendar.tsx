@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
 import { ChevronLeft, ChevronRight, CalendarDays, Loader2, Clock } from "lucide-react";
+import type { Project, Department, UserProfileMini, CalendarEvent } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -24,8 +25,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 const DEPT_FALLBACK = "#6B7280";
 
-function TaskDot({ task }: { task: any }) {
-  const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, task.timerStartedAt);
+function TaskDot({ task }: { task: CalendarEvent }) {
+  const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, null);
   const color = task.departmentColor ?? DEPT_FALLBACK;
   const isOverTime = task.expectedHours && elapsed > task.expectedHours * 3600;
 
@@ -61,8 +62,8 @@ function TaskDot({ task }: { task: any }) {
   );
 }
 
-function GanttRow({ task }: { task: any }) {
-  const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, task.timerStartedAt);
+function GanttRow({ task }: { task: CalendarEvent }) {
+  const elapsed = useLiveTimer(task.elapsedSeconds, task.timerRunning, null);
   if (!task.startDate && !task.dueDate) return null;
 
   const color = task.departmentColor ?? DEPT_FALLBACK;
@@ -155,7 +156,7 @@ export default function CalendarPage() {
   const days = eachDayOfInterval({ start: calStart, end: calEnd });
 
   function getTasksForDay(date: Date) {
-    return (events as any[]).filter(e => {
+    return (events as CalendarEvent[]).filter(e => {
       const start = e.startDate ? new Date(e.startDate) : null;
       const due = e.dueDate ? new Date(e.dueDate) : null;
       if (!start && !due) return false;
@@ -179,7 +180,7 @@ export default function CalendarPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All projects</SelectItem>
-            {(projects as any[]).map(p => (
+            {(projects as Project[]).map(p => (
               <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
             ))}
           </SelectContent>
@@ -190,7 +191,7 @@ export default function CalendarPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All departments</SelectItem>
-            {(departments as any[]).map(d => (
+            {(departments as Department[]).map(d => (
               <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
             ))}
           </SelectContent>
@@ -201,7 +202,7 @@ export default function CalendarPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All assignees</SelectItem>
-            {(users as any[]).map(u => (
+            {(users as UserProfileMini[]).map(u => (
               <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
             ))}
           </SelectContent>
@@ -326,10 +327,10 @@ export default function CalendarPage() {
               <div className="flex-1">Timeline (expected vs actual)</div>
               <div className="w-20 text-right">Time</div>
             </div>
-            {(events as any[]).length === 0 ? (
+            {(events as CalendarEvent[]).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-10">No tasks with dates found</p>
             ) : (
-              (events as any[]).map(event => (
+              (events as CalendarEvent[]).map(event => (
                 <GanttRow key={event.taskId} task={event} />
               ))
             )}

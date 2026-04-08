@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
 import { Plus, Search, Loader2, CheckSquare, Filter } from "lucide-react";
+import type { Project, Department, UserProfileMini, Task } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -56,11 +57,11 @@ function NewTaskDialog({
   });
 
   const filteredDepts = form.projectId
-    ? departments.filter((d: any) => d.projectId === Number(form.projectId))
-    : departments;
+    ? (departments as Department[]).filter(d => d.projectId === Number(form.projectId))
+    : departments as Department[];
 
   const mutation = useMutation({
-    mutationFn: (data: any) => apiClient.post("/tasks", data).then(r => r.data),
+    mutationFn: (data: Record<string, unknown>) => apiClient.post("/tasks", data).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["kanban"] });
@@ -124,7 +125,7 @@ function NewTaskDialog({
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(projects as any[]).map(p => (
+                  {(projects as Project[]).map(p => (
                     <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -138,7 +139,7 @@ function NewTaskDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">None</SelectItem>
-                  {(filteredDepts as any[]).map(d => (
+                  {filteredDepts.map((d: Department) => (
                     <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -152,7 +153,7 @@ function NewTaskDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Unassigned</SelectItem>
-                  {(users as any[]).map(u => (
+                  {(users as UserProfileMini[]).map(u => (
                     <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -253,7 +254,7 @@ export default function TasksPage() {
     queryFn: () => apiClient.get(`/tasks?${queryParams.toString()}`).then(r => r.data),
   });
 
-  const filtered = tasks.filter((t: any) => {
+  const filtered = (tasks as Task[]).filter(t => {
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     if (filterPriority !== "all" && t.priority !== filterPriority) return false;
     return true;
@@ -289,7 +290,7 @@ export default function TasksPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All projects</SelectItem>
-            {(projects as any[]).map(p => (
+            {(projects as Project[]).map(p => (
               <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
             ))}
           </SelectContent>
@@ -336,7 +337,7 @@ export default function TasksPage() {
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {filtered.map((task: any, i: number) => (
+          {filtered.map((task: Task, i: number) => (
             <motion.div
               key={task.id}
               initial={{ opacity: 0, y: 12 }}

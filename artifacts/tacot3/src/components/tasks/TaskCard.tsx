@@ -48,7 +48,7 @@ interface Task {
   expectedHours: number | null;
   dueDate: string | null;
   assignee?: { name: string; avatarUrl: string | null } | null;
-  department?: { name: string; color: string } | null;
+  department?: { name: string; color: string | null } | null;
 }
 
 export default function TaskCard({
@@ -100,14 +100,17 @@ export default function TaskCard({
             <span className={cn("text-[10px] font-medium uppercase", PRIORITY_STYLES[task.priority])}>
               {PRIORITY_ICONS[task.priority]} {task.priority}
             </span>
-            {task.department && (
-              <span
-                className="text-[10px] font-medium px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: `${task.department.color}20`, color: task.department.color }}
-              >
-                {task.department.name}
-              </span>
-            )}
+            {task.department && (() => {
+              const c = task.department.color ?? "#6B7280";
+              return (
+                <span
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: `${c}20`, color: c }}
+                >
+                  {task.department.name}
+                </span>
+              );
+            })()}
           </div>
 
           <p className="text-sm font-medium line-clamp-2 mb-2">{task.title}</p>

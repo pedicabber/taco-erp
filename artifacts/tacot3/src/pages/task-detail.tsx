@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
+import type { UserProfileMini, TaskAttachment } from "@/lib/types";
 import {
   ArrowLeft, Play, Square, Clock, Edit2, Trash2, Save, X,
   Paperclip, Bell, BellOff, Loader2, AlertTriangle, CheckCircle2,
@@ -67,8 +68,18 @@ export default function TaskDetailPage() {
   const qc = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
+  type EditFormState = {
+    title: string;
+    description: string;
+    status: string;
+    priority: string;
+    assigneeId: string;
+    expectedHours: string;
+    startDate: string;
+    dueDate: string;
+  };
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState<any>(null);
+  const [editForm, setEditForm] = useState<EditFormState | null>(null);
   const [editingTimer, setEditingTimer] = useState(false);
   const [timerHours, setTimerHours] = useState("");
   const [timerMins, setTimerMins] = useState("");
@@ -113,7 +124,7 @@ export default function TaskDetailPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: any) => apiClient.patch(`/tasks/${taskId}`, data).then(r => r.data),
+    mutationFn: (data: Record<string, unknown>) => apiClient.patch(`/tasks/${taskId}`, data).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["task", taskId] });
       qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -261,19 +272,19 @@ export default function TaskDetailPage() {
                   <div className="space-y-3">
                     <Input
                       value={editForm.title}
-                      onChange={e => setEditForm((p: any) => ({ ...p, title: e.target.value }))}
+                      onChange={e => setEditForm(p => p && ({ ...p, title: e.target.value }))}
                       className="text-lg font-bold"
                     />
                     <Textarea
                       value={editForm.description}
-                      onChange={e => setEditForm((p: any) => ({ ...p, description: e.target.value }))}
+                      onChange={e => setEditForm(p => p && ({ ...p, description: e.target.value }))}
                       rows={4}
                       placeholder="Description..."
                     />
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label>Status</Label>
-                        <Select value={editForm.status} onValueChange={v => setEditForm((p: any) => ({ ...p, status: v }))}>
+                        <Select value={editForm.status} onValueChange={v => setEditForm(p => p && ({ ...p, status: v }))}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="backlog">Backlog</SelectItem>
@@ -286,7 +297,7 @@ export default function TaskDetailPage() {
                       </div>
                       <div>
                         <Label>Priority</Label>
-                        <Select value={editForm.priority} onValueChange={v => setEditForm((p: any) => ({ ...p, priority: v }))}>
+                        <Select value={editForm.priority} onValueChange={v => setEditForm(p => p && ({ ...p, priority: v }))}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="low">Low</SelectItem>
@@ -298,11 +309,11 @@ export default function TaskDetailPage() {
                       </div>
                       <div>
                         <Label>Assignee</Label>
-                        <Select value={editForm.assigneeId} onValueChange={v => setEditForm((p: any) => ({ ...p, assigneeId: v }))}>
+                        <Select value={editForm.assigneeId} onValueChange={v => setEditForm(p => p && ({ ...p, assigneeId: v }))}>
                           <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="">Unassigned</SelectItem>
-                            {(users as any[]).map(u => (
+                            {(users as UserProfileMini[]).map(u => (
                               <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
                             ))}
                           </SelectContent>
@@ -310,15 +321,15 @@ export default function TaskDetailPage() {
                       </div>
                       <div>
                         <Label>Expected Hours</Label>
-                        <Input type="number" value={editForm.expectedHours} onChange={e => setEditForm((p: any) => ({ ...p, expectedHours: e.target.value }))} />
+                        <Input type="number" value={editForm.expectedHours} onChange={e => setEditForm(p => p && ({ ...p, expectedHours: e.target.value }))} />
                       </div>
                       <div>
                         <Label>Start Date</Label>
-                        <Input type="date" value={editForm.startDate} onChange={e => setEditForm((p: any) => ({ ...p, startDate: e.target.value }))} />
+                        <Input type="date" value={editForm.startDate} onChange={e => setEditForm(p => p && ({ ...p, startDate: e.target.value }))} />
                       </div>
                       <div>
                         <Label>Due Date</Label>
-                        <Input type="date" value={editForm.dueDate} onChange={e => setEditForm((p: any) => ({ ...p, dueDate: e.target.value }))} />
+                        <Input type="date" value={editForm.dueDate} onChange={e => setEditForm(p => p && ({ ...p, dueDate: e.target.value }))} />
                       </div>
                     </div>
                     <div className="flex justify-end gap-2">
@@ -509,7 +520,7 @@ export default function TaskDetailPage() {
                 <p className="text-sm text-muted-foreground text-center py-4">No attachments</p>
               ) : (
                 <div className="space-y-2">
-                  {(attachments as any[]).map(a => (
+                  {(attachments as TaskAttachment[]).map(a => (
                     <a
                       key={a.id}
                       href={`/api/storage/objects${a.objectPath.replace(/^\/objects/, "")}`}

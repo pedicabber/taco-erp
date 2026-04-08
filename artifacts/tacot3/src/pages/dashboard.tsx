@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
+import type { Project, ActivityItem } from "@/lib/types";
 
 function StatCard({
   icon: Icon,
@@ -133,7 +134,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground text-center py-6">No projects yet</p>
               ) : (
                 <div className="space-y-3">
-                  {recentProjects.map((project: any) => (
+                  {recentProjects.map((project: Project) => (
                     <Link key={project.id} href={`/projects/${project.id}`}>
                       <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted cursor-pointer transition-colors">
                         <div className="min-w-0">
@@ -166,7 +167,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground text-center py-6">No activity yet</p>
               ) : (
                 <div className="space-y-3">
-                  {activity.map((log: any) => (
+                  {activity.map((log: ActivityItem) => (
                     <div key={log.id} className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0 text-xs font-medium">
                         {log.actorName?.[0]?.toUpperCase() ?? "?"}
