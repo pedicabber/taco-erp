@@ -59,6 +59,16 @@ export interface Project {
   /** @nullable */
   startDate: string | null;
   status: ProjectStatus;
+  /** @nullable */
+  address: string | null;
+  /** @nullable */
+  contactName: string | null;
+  /** @nullable */
+  contactPhone: string | null;
+  /** @nullable */
+  contactEmail: string | null;
+  /** @nullable */
+  totalPrice: string | null;
   createdById: number;
   createdAt: string;
   updatedAt: string;
@@ -83,6 +93,16 @@ export interface CreateProjectBody {
   /** @nullable */
   startDate?: string | null;
   status?: CreateProjectBodyStatus;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  totalPrice?: string | null;
 }
 
 export type UpdateProjectBodyStatus =
@@ -104,6 +124,16 @@ export interface UpdateProjectBody {
   /** @nullable */
   startDate?: string | null;
   status?: UpdateProjectBodyStatus;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  totalPrice?: string | null;
 }
 
 export interface ParsedPdfData {
@@ -112,6 +142,11 @@ export interface ParsedPdfData {
   projectId: string;
   description: string;
   startDate: string;
+  address: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  totalPrice: string;
 }
 
 export type ProjectSummaryTasksByStatusItem = {

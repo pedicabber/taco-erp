@@ -28,6 +28,11 @@ function buildProject(p: typeof projectsTable.$inferSelect) {
     description: p.description,
     startDate: p.startDate,
     status: p.status as "active" | "completed" | "on_hold" | "cancelled",
+    address: p.address,
+    contactName: p.contactName,
+    contactPhone: p.contactPhone,
+    contactEmail: p.contactEmail,
+    totalPrice: p.totalPrice,
     createdById: p.createdById,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -74,18 +79,27 @@ router.post("/projects/parse-pdf", requireAuth, upload.single("file"), async (re
   try {
     const text = await parsePdfText(req.file.buffer);
 
-    const company = extractField(text, "Company:") ?? "";
-    const projectIdRaw = extractField(text, "Quote No.:") ?? "";
-    const partNumber = extractPartNumber(text) ?? "";
+    const company = extractLabel(text, ["Company", "Customer", "Client", "Bill To"]) ?? "";
+    const projectId = extractQuoteNumber(text) ?? "";
+    const address = extractAddress(text) ?? "";
+    const contactName = extractLabel(text, ["Contact", "Attention", "Attn", "Prepared For"]) ?? "";
+    const contactPhone = extractPhone(text) ?? "";
+    const contactEmail = extractEmail(text) ?? "";
+    const totalPrice = extractTotalPrice(text) ?? "";
     const description = extractDescription(text);
     const startDate = extractStartDate(text) ?? "";
 
     const result = {
       company,
-      name: partNumber || "New Project",
-      projectId: projectIdRaw,
+      name: company ? company : "New Project",
+      projectId,
       description,
       startDate,
+      address,
+      contactName,
+      contactPhone,
+      contactEmail,
+      totalPrice,
     };
 
     res.json(ParsePdfResponse.parse(result));
@@ -95,44 +109,99 @@ router.post("/projects/parse-pdf", requireAuth, upload.single("file"), async (re
   }
 });
 
-function extractField(text: string, label: string): string | null {
-  const regex = new RegExp(`${label}\\s*([^\\n]+)`, "i");
-  const match = text.match(regex);
-  return match ? match[1].trim() : null;
-}
-
-function extractPartNumber(text: string): string | null {
-  const lines = text.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (/^\d+\s+\w+-\w+/.test(line) || /CUSTOM-/.test(line)) {
-      const parts = line.split(/\s+/);
-      if (parts[1]) return parts[1];
+function extractLabel(text: string, labels: string[]): string | null {
+  for (const label of labels) {
+    const regex = new RegExp(`${label}\\s*:?\\s*([^\\n\\r]{2,80})`, "i");
+    const match = text.match(regex);
+    if (match) {
+      const value = match[1].trim().replace(/\s{2,}/g, " ");
+      if (value.length > 1) return value;
     }
   }
-  const match = text.match(/(?:CUSTOM-\w+)/);
-  return match ? match[0] : null;
+  return null;
+}
+
+function extractQuoteNumber(text: string): string | null {
+  // Match common quote/job number formats: "24-1084REVC", "24-1084", "Q-2024-001"
+  const patterns = [
+    /Quote\s*No\.?\s*:?\s*([A-Z0-9][A-Z0-9\-]{3,20})/i,
+    /Job\s*No\.?\s*:?\s*([A-Z0-9][A-Z0-9\-]{3,20})/i,
+    /Project\s*(?:No|ID|Number|#)\.?\s*:?\s*([A-Z0-9][A-Z0-9\-]{3,20})/i,
+    /Proposal\s*No\.?\s*:?\s*([A-Z0-9][A-Z0-9\-]{3,20})/i,
+    /RFQ\s*(?:No\.?)?\s*:?\s*([A-Z0-9][A-Z0-9\-]{3,20})/i,
+    // standalone pattern like "24-1084REVC" - year-number-revision
+    /\b(\d{2}-\d{4}[A-Z]*\d*)\b/,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return match[1].trim();
+  }
+  return null;
+}
+
+function extractAddress(text: string): string | null {
+  const match = text.match(/Address\s*:?\s*([^\n\r]{5,120}(?:[\n\r]+[^\n\r]{5,80})?)/i);
+  if (!match) return null;
+  // Collapse multi-line address into single line
+  const lines = match[1].split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 0);
+  return lines.join(", ").replace(/,\s*,/g, ",").trim();
+}
+
+function extractPhone(text: string): string | null {
+  const match = text.match(/(?:Phone|Tel|Telephone|Ph)\s*\.?\s*:?\s*([0-9\-\(\)\+\. ]{7,20})/i);
+  if (match) return match[1].trim().replace(/\s+/g, " ");
+  // fallback: any standalone phone number pattern near the header
+  const fallback = text.slice(0, 1500).match(/\b(\(?\d{3}\)?[\s\-\.]\d{3}[\s\-\.]\d{4})\b/);
+  return fallback ? fallback[1].trim() : null;
+}
+
+function extractEmail(text: string): string | null {
+  const labeled = text.match(/Email\s*:?\s*([^\s@]{1,40}@[^\s]{1,40})/i);
+  if (labeled) return labeled[1].trim();
+  // fallback: first email in document
+  const fallback = text.match(/\b([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})\b/);
+  return fallback ? fallback[1].trim() : null;
+}
+
+function extractTotalPrice(text: string): string | null {
+  // Match "TOTAL", "Grand Total", "Total Amount" followed by a dollar amount
+  const match = text.match(/(?:Grand\s*)?Total(?:\s*Amount)?\s*:?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i);
+  if (match) {
+    const amount = match[1].replace(/,/g, "");
+    return `$${parseFloat(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return null;
 }
 
 function extractDescription(text: string): string {
-  const match = text.match(/(?:Description\s*[\r\n]+)?([\s\S]+?)(?:including the following options|Subtotal)/i);
+  const match = text.match(/(?:Description|Scope|Subject)\s*:?\s*[\r\n]+([\s\S]+?)(?:Quote|Subtotal|Total|Terms|Payment|Page)/i);
   if (match) {
-    const raw = match[1].replace(/\d+\s+[\w-]+\s+/g, "").trim();
-    const lines = raw.split("\n").filter(l => l.trim()).slice(0, 3);
-    return lines.join(" ").trim();
+    const raw = match[1].trim();
+    const lines = raw.split(/[\r\n]+/).map(l => l.trim()).filter(l => l.length > 2).slice(0, 4);
+    return lines.join(" ").replace(/\s{2,}/g, " ").trim();
   }
-  return "";
+  // fallback: grab a few meaningful lines after the header block
+  const fallbackMatch = text.match(/(?:Anaheim|Assembly|Fabricat|Install|Supply)[^\n]{5,120}/i);
+  return fallbackMatch ? fallbackMatch[0].trim() : "";
 }
 
 function extractStartDate(text: string): string | null {
-  const match = text.match(/Date Issued:\s*([^\n]+)/i);
-  if (!match) return null;
-  const raw = match[1].trim();
-  const date = new Date(raw);
-  if (!isNaN(date.getTime())) {
-    return date.toISOString().split("T")[0];
+  const patterns = [
+    /Date\s*Issued\s*:?\s*([^\n\r]+)/i,
+    /(?:Quote|Proposal|Bid)\s*Date\s*:?\s*([^\n\r]+)/i,
+    /Date\s*:?\s*([A-Za-z]+ \d{1,2},?\s*\d{4})/i,
+    /Date\s*:?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const raw = match[1].trim();
+    const date = new Date(raw);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split("T")[0];
+    }
   }
-  return raw;
+  return null;
 }
 
 router.get("/projects/:projectId", requireAuth, async (req, res): Promise<void> => {

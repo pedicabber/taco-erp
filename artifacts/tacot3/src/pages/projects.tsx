@@ -31,7 +31,7 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
 function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name: "", company: "", projectId: "", description: "", startDate: "", status: "active" });
+  const [form, setForm] = useState({ name: "", company: "", projectId: "", description: "", startDate: "", status: "active", address: "", contactName: "", contactPhone: "", contactEmail: "", totalPrice: "" });
   const [file, setFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
 
@@ -41,7 +41,7 @@ function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast({ title: "Project created" });
       onOpenChange(false);
-      setForm({ name: "", company: "", projectId: "", description: "", startDate: "", status: "active" });
+      setForm({ name: "", company: "", projectId: "", description: "", startDate: "", status: "active", address: "", contactName: "", contactPhone: "", contactEmail: "", totalPrice: "" });
     },
     onError: () => toast({ title: "Failed to create project", variant: "destructive" }),
   });
@@ -98,8 +98,28 @@ function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
               <Input value={form.company} onChange={e => setForm(p => ({ ...p, company: e.target.value }))} placeholder="Customer name" />
             </div>
             <div>
-              <Label>Project / Quote ID</Label>
-              <Input value={form.projectId} onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))} placeholder="Q-2024-001" />
+              <Label>Quote / Project ID</Label>
+              <Input value={form.projectId} onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))} placeholder="24-1084REVC" />
+            </div>
+            <div className="col-span-2">
+              <Label>Address</Label>
+              <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="123 Main St, City, CA 90001" />
+            </div>
+            <div>
+              <Label>Contact Name</Label>
+              <Input value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} placeholder="Mr. John Smith" />
+            </div>
+            <div>
+              <Label>Contact Phone</Label>
+              <Input value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} placeholder="714-555-1234" />
+            </div>
+            <div>
+              <Label>Contact Email</Label>
+              <Input value={form.contactEmail} onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))} placeholder="contact@company.com" />
+            </div>
+            <div>
+              <Label>Total Price</Label>
+              <Input value={form.totalPrice} onChange={e => setForm(p => ({ ...p, totalPrice: e.target.value }))} placeholder="$1,213,808.00" />
             </div>
             <div>
               <Label>Start Date</Label>
