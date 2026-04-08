@@ -7,6 +7,7 @@ import {
   ArrowLeft, Play, Square, Clock, Edit2, Trash2, Save, X,
   Paperclip, Bell, BellOff, Loader2, AlertTriangle, CheckCircle2,
   Calendar, User, Building2, Upload, FileText, Tag,
+  Eye, Download, File,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useLiveTimer } from "@/hooks/useLiveTimer";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -84,6 +86,19 @@ export default function TaskDetailPage() {
   const [timerHours, setTimerHours] = useState("");
   const [timerMins, setTimerMins] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<TaskAttachment | null>(null);
+
+  function getFileUrl(objectPath: string) {
+    return `/api/storage/objects${objectPath.replace(/^\/objects/, "")}`;
+  }
+
+  function getFileType(a: TaskAttachment): "image" | "pdf" | "other" {
+    const mime = a.mimeType ?? "";
+    const name = a.fileName.toLowerCase();
+    if (mime.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg|bmp)$/.test(name)) return "image";
+    if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+    return "other";
+  }
 
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId],
@@ -532,25 +547,55 @@ export default function TaskDetailPage() {
                 <p className="text-sm text-muted-foreground text-center py-4">No attachments</p>
               ) : (
                 <div className="space-y-2">
-                  {(attachments as TaskAttachment[]).map(a => (
-                    <a
-                      key={a.id}
-                      href={`/api/storage/objects${a.objectPath.replace(/^\/objects/, "")}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors"
-                    >
-                      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm truncate">{a.fileName}</div>
-                        {a.fileSize && (
-                          <div className="text-xs text-muted-foreground">
-                            {(a.fileSize / 1024).toFixed(1)} KB
-                          </div>
+                  {(attachments as TaskAttachment[]).map(a => {
+                    const type = getFileType(a);
+                    const fileUrl = getFileUrl(a.objectPath);
+                    return (
+                      <div
+                        key={a.id}
+                        className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
+                      >
+                        {type === "image" ? (
+                          <img
+                            src={fileUrl}
+                            alt={a.fileName}
+                            className="w-10 h-10 object-cover rounded flex-shrink-0 bg-muted"
+                          />
+                        ) : type === "pdf" ? (
+                          <FileText className="w-8 h-8 text-red-500 flex-shrink-0" />
+                        ) : (
+                          <File className="w-8 h-8 text-muted-foreground flex-shrink-0" />
                         )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm truncate">{a.fileName}</div>
+                          {a.fileSize && (
+                            <div className="text-xs text-muted-foreground">
+                              {a.fileSize >= 1024 * 1024
+                                ? `${(a.fileSize / 1024 / 1024).toFixed(1)} MB`
+                                : `${(a.fileSize / 1024).toFixed(1)} KB`}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {(type === "image" || type === "pdf") && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => setPreviewAttachment(a)}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          )}
+                          <a href={fileUrl} download={a.fileName}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          </a>
+                        </div>
                       </div>
-                    </a>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -651,6 +696,46 @@ export default function TaskDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Attachment preview dialog */}
+      <Dialog open={!!previewAttachment} onOpenChange={() => setPreviewAttachment(null)}>
+        <DialogContent className="max-w-4xl w-full p-0 overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-2 flex flex-row items-center justify-between space-y-0">
+            <DialogTitle className="text-sm font-medium truncate pr-4">
+              {previewAttachment?.fileName}
+            </DialogTitle>
+            {previewAttachment && (
+              <a
+                href={getFileUrl(previewAttachment.objectPath)}
+                download={previewAttachment.fileName}
+                className="flex-shrink-0"
+              >
+                <Button variant="outline" size="sm">
+                  <Download className="w-4 h-4 mr-1" />
+                  Download
+                </Button>
+              </a>
+            )}
+          </DialogHeader>
+          {previewAttachment && getFileType(previewAttachment) === "image" && (
+            <div className="flex items-center justify-center bg-muted/30 max-h-[80vh] overflow-auto p-4">
+              <img
+                src={getFileUrl(previewAttachment.objectPath)}
+                alt={previewAttachment.fileName}
+                className="max-w-full max-h-[76vh] object-contain rounded"
+              />
+            </div>
+          )}
+          {previewAttachment && getFileType(previewAttachment) === "pdf" && (
+            <iframe
+              src={getFileUrl(previewAttachment.objectPath)}
+              title={previewAttachment.fileName}
+              className="w-full border-0"
+              style={{ height: "80vh" }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
