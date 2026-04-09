@@ -271,9 +271,16 @@ function MonthView({
   };
 
   // Mouse-wheel to navigate months (vertical scroll)
+  // — but yield to scrollable day cells when the cursor is over one with overflow
   const wheelTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleWheel = useCallback(
     (e: WheelEvent) => {
+      // If the pointer is inside a scrollable day-task container, let native
+      // scroll handle it so the user can see all tasks in that cell.
+      const scrollable = (e.target as Element).closest("[data-day-scroll]") as HTMLElement | null;
+      if (scrollable && scrollable.scrollHeight > scrollable.clientHeight) {
+        return; // let the browser scroll the task list natively
+      }
       e.preventDefault();
       if (wheelTimeout.current) return; // debounce
       if (e.deltaY > 0) onNext();
@@ -363,7 +370,7 @@ function MonthView({
                     </div>
 
                     {/* Task chips — one per task per day, scrollable */}
-                    <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-1 space-y-0.5 scrollbar-hide">
+                    <div data-day-scroll className="flex-1 min-h-0 overflow-y-auto px-1 pb-1 space-y-0.5 scrollbar-hide">
                       {dayEvents.map((task, i) => (
                         <TaskChip key={`${task.taskId}-${i}`} task={task} taskSize={taskSize} />
                       ))}
