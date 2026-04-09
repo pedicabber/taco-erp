@@ -235,6 +235,9 @@ function TaskStagingDialog({
   const [localTasks, setLocalTasks] = useState<StagingTask[]>([]);
   const [initialised, setInitialised] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
 
   if (!initialised && rawTasks.length > 0) {
     setLocalTasks(rawTasks);
@@ -267,6 +270,17 @@ function TaskStagingDialog({
     }
   }
 
+  async function handleDiscardAll() {
+    setDiscarding(true);
+    const all = localTasks.length > 0 ? localTasks : rawTasks;
+    await Promise.allSettled(all.map(t => apiClient.delete(`/tasks/${t.id}`)));
+    setDiscarding(false);
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+    qc.invalidateQueries({ queryKey: ["kanban"] });
+    toast({ title: "Tasks discarded", description: "No tasks were imported." });
+    onClose();
+  }
+
   function handleDone() {
     qc.invalidateQueries({ queryKey: ["tasks"] });
     qc.invalidateQueries({ queryKey: ["kanban-tasks"] });
@@ -278,17 +292,29 @@ function TaskStagingDialog({
 
   return (
     <>
-      <Dialog open onOpenChange={open => { if (!open) handleDone(); }}>
+      {/* Main staging dialog — onOpenChange intercepts X / Escape / click-outside */}
+      <Dialog open onOpenChange={open => { if (!open) setConfirmCancel(true); }}>
         <DialogContent className="max-w-lg max-h-[90vh] flex flex-col gap-0 p-0">
-          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
-            <div className="pr-6">
-              <DialogTitle className="flex items-center gap-2">
-                <FolderKanban className="w-5 h-5 text-amber-500" />
-                Stage Imported Tasks
-              </DialogTitle>
-              <p className="text-xs text-muted-foreground mt-1">
-                {tasks.length} task{tasks.length !== 1 ? "s" : ""} imported — set departments and priorities, then continue.
-              </p>
+          <DialogHeader className="px-6 pt-5 pb-4 flex-shrink-0">
+            {/* Title row — "Don't make tasks" button sits left of the dialog's own X */}
+            <div className="flex items-start gap-2 pr-8">
+              <div className="flex-1 min-w-0">
+                <DialogTitle className="flex items-center gap-2">
+                  <FolderKanban className="w-5 h-5 text-amber-500" />
+                  Stage Imported Tasks
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {tasks.length} task{tasks.length !== 1 ? "s" : ""} imported — set departments and priorities, then continue.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex-shrink-0 h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2"
+                onClick={() => setConfirmSkip(true)}
+              >
+                Don't make tasks
+              </Button>
             </div>
           </DialogHeader>
 
@@ -324,6 +350,51 @@ function TaskStagingDialog({
         </DialogContent>
       </Dialog>
 
+      {/* Confirmation: X / click-outside / Escape */}
+      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel task creation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              All imported tasks will be discarded and not added to the project. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continue Staging</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDiscardAll}
+              disabled={discarding}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {discarding ? <Loader2 className="w-4 h-4 animate-spin" /> : "Cancel Import"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmation: "Don't make tasks" button */}
+      <AlertDialog open={confirmSkip} onOpenChange={setConfirmSkip}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Skip imported tasks?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to continue without importing extracted tasks from PDF? The project will be created but no tasks will be added.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Go Back</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDiscardAll}
+              disabled={discarding}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {discarding ? <Loader2 className="w-4 h-4 animate-spin" /> : "Yes, Skip Tasks"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmation: delete individual task */}
       <AlertDialog open={confirmDeleteId !== null} onOpenChange={open => { if (!open) setConfirmDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
