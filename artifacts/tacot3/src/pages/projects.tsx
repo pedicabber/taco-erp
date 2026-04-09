@@ -2,30 +2,28 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
-import type { Project, ParsedTaskItem } from "@/lib/types";
+import type { Project, Department, ParsedTaskItem } from "@/lib/types";
 import {
   Plus, FolderKanban, FileText, Search, Loader2, ChevronRight,
-  Building2, Calendar, Eraser, Info, Phone, Mail, MapPin,
-  DollarSign, Save, X, User, Hash,
+  Building2, Calendar, Eraser, Info, DollarSign,
+  ChevronUp, ChevronDown, Edit2, Check, Minus, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   active: "default",
@@ -34,240 +32,261 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   cancelled: "destructive",
 };
 
+const PRIORITY_ORDER = ["low", "medium", "high", "urgent"] as const;
+type Priority = (typeof PRIORITY_ORDER)[number];
+const PRIORITY_LABELS: Record<Priority, string> = {
+  low: "Low", medium: "Medium", high: "High", urgent: "Urgent",
+};
+const PRIORITY_COLORS: Record<Priority, string> = {
+  low: "#3b82f6", medium: "#eab308", high: "#f97316", urgent: "#ef4444",
+};
+const PRIORITY_ICONS: Record<Priority, React.ElementType> = {
+  low: ChevronDown, medium: Minus, high: ChevronUp, urgent: Zap,
+};
+
 const EMPTY_FORM = {
   name: "", company: "", projectId: "", description: "", fullDescription: "",
   startDate: "", status: "active", address: "", contactName: "",
   contactPhone: "", contactEmail: "", totalPrice: "",
 };
 
-// ── Project Info Popup ──────────────────────────────────────────────────────
-function ProjectInfoDialog({ project, onClose }: { project: Project; onClose: () => void }) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({
-    name: project.name,
-    company: project.company,
-    projectId: project.projectId,
-    description: project.description ?? "",
-    fullDescription: project.fullDescription ?? "",
-    startDate: project.startDate ?? "",
-    status: project.status,
-    address: project.address ?? "",
-    contactName: project.contactName ?? "",
-    contactPhone: project.contactPhone ?? "",
-    contactEmail: project.contactEmail ?? "",
-    totalPrice: project.totalPrice ?? "",
-  });
+// ── Task Staging Dialog ─────────────────────────────────────────────────────
+interface StagingTask {
+  id: number;
+  title: string;
+  description: string | null;
+  priority: string;
+  status: string;
+  departmentId: number | null;
+  startDate: string | null;
+}
 
-  const updateMutation = useMutation({
-    mutationFn: (data: typeof form) =>
-      apiClient.patch(`/projects/${project.id}`, data).then(r => r.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      toast({ title: "Project updated" });
-      setEditing(false);
-    },
-    onError: () => toast({ title: "Failed to update project", variant: "destructive" }),
-  });
+function TaskStagingCard({
+  task,
+  departments,
+  onChange,
+}: {
+  task: StagingTask;
+  departments: Department[];
+  onChange: (id: number, patch: Partial<StagingTask>) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
 
-  function field(v: string) {
-    return v?.trim() || "—";
+  const priority = task.priority as Priority;
+  const PIcon = PRIORITY_ICONS[priority] ?? Minus;
+  const pColor = PRIORITY_COLORS[priority] ?? "#eab308";
+
+  function bumpPriority(dir: 1 | -1) {
+    const idx = PRIORITY_ORDER.indexOf(priority);
+    const next = PRIORITY_ORDER[Math.max(0, Math.min(PRIORITY_ORDER.length - 1, idx + dir))];
+    onChange(task.id, { priority: next });
   }
 
   return (
-    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Info className="w-5 h-5 text-primary" />
-            Project Info
-            {!editing && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="ml-auto"
-                onClick={() => setEditing(true)}
-              >
-                Edit
-              </Button>
+    <Card className="overflow-hidden">
+      <CardContent className="p-3">
+        {/* Title row */}
+        <div className="flex items-start gap-2">
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="flex-1 text-left min-w-0"
+          >
+            <p className={cn("text-sm font-medium line-clamp-2", expanded && "line-clamp-none")}>
+              {task.title}
+            </p>
+            {task.description && !expanded && (
+              <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{task.description}</p>
             )}
-          </DialogTitle>
-        </DialogHeader>
+          </button>
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+            title={expanded ? "Collapse" : "Expand to edit"}
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
-        <ScrollArea className="flex-1 -mx-1 px-1">
-          <div className="space-y-5 pb-2">
-            {/* ─── Core identity ─── */}
-            <section>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Project Details</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <Label className="text-xs text-muted-foreground">Project Name</Label>
-                  {editing ? (
-                    <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-                  ) : (
-                    <p className="font-semibold mt-0.5">{field(form.name)}</p>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3" /> Company</Label>
-                  {editing ? (
-                    <Input value={form.company} onChange={e => setForm(p => ({ ...p, company: e.target.value }))} />
-                  ) : (
-                    <p className="mt-0.5">{field(form.company)}</p>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><Hash className="w-3 h-3" /> Quote / Project ID</Label>
-                  {editing ? (
-                    <Input value={form.projectId} onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))} />
-                  ) : (
-                    <p className="mt-0.5 font-mono text-sm">{field(form.projectId)}</p>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" /> Start Date</Label>
-                  {editing ? (
-                    <Input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} />
-                  ) : (
-                    <p className="mt-0.5">{form.startDate ? format(new Date(form.startDate), "MMM d, yyyy") : "—"}</p>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><DollarSign className="w-3 h-3" /> Total Price</Label>
-                  {editing ? (
-                    <Input value={form.totalPrice} onChange={e => setForm(p => ({ ...p, totalPrice: e.target.value }))} placeholder="$0.00" />
-                  ) : (
-                    <p className="mt-0.5 font-semibold text-green-600 dark:text-green-400">{field(form.totalPrice)}</p>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Status</Label>
-                  {editing ? (
-                    <Select value={form.status} onValueChange={v => setForm(p => ({ ...p, status: v as typeof form.status }))}>
-                      <SelectTrigger className="mt-0.5"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="on_hold">On Hold</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="mt-0.5">
-                      <Badge variant={STATUS_VARIANTS[form.status] ?? "secondary"} className="capitalize">
-                        {form.status.replace("_", " ")}
-                      </Badge>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <Separator />
-
-            {/* ─── Contact ─── */}
-            <section>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Contact Info</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" /> Contact Name</Label>
-                  {editing ? (
-                    <Input value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} />
-                  ) : (
-                    <p className="mt-0.5">{field(form.contactName)}</p>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3" /> Phone</Label>
-                  {editing ? (
-                    <Input value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} />
-                  ) : (
-                    <p className="mt-0.5">{field(form.contactPhone)}</p>
-                  )}
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="w-3 h-3" /> Email</Label>
-                  {editing ? (
-                    <Input value={form.contactEmail} onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))} />
-                  ) : (
-                    <p className="mt-0.5">{field(form.contactEmail)}</p>
-                  )}
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" /> Address</Label>
-                  {editing ? (
-                    <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
-                  ) : (
-                    <p className="mt-0.5">{field(form.address)}</p>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <Separator />
-
-            {/* ─── Brief description ─── */}
-            <section>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Brief Description</p>
-              {editing ? (
-                <Textarea
-                  value={form.description}
-                  onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                  rows={3}
-                  placeholder="High-level description shown on project card..."
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                  {form.description?.trim() || "No brief description."}
-                </p>
-              )}
-            </section>
-
-            <Separator />
-
-            {/* ─── Full description / scope of work ─── */}
-            <section>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Scope of Work</p>
-              <p className="text-xs text-muted-foreground mb-2">
-                Full project scope including all line items. Edit to keep notes as the project progresses.
-              </p>
-              {editing ? (
-                <Textarea
-                  value={form.fullDescription}
-                  onChange={e => setForm(p => ({ ...p, fullDescription: e.target.value }))}
-                  rows={10}
-                  className="font-mono text-sm"
-                  placeholder="Full scope / bullet point list from quote..."
-                />
-              ) : (
-                <div className="rounded-md bg-muted/40 border p-3 text-sm leading-relaxed whitespace-pre-wrap font-mono max-h-64 overflow-y-auto">
-                  {form.fullDescription?.trim() || "No scope of work recorded."}
-                </div>
-              )}
-            </section>
-          </div>
-        </ScrollArea>
-
-        {editing && (
-          <div className="flex items-center justify-end gap-2 pt-3 border-t">
-            <Button variant="outline" onClick={() => { setEditing(false); setForm({ name: project.name, company: project.company, projectId: project.projectId, description: project.description ?? "", fullDescription: project.fullDescription ?? "", startDate: project.startDate ?? "", status: project.status, address: project.address ?? "", contactName: project.contactName ?? "", contactPhone: project.contactPhone ?? "", contactEmail: project.contactEmail ?? "", totalPrice: project.totalPrice ?? "" }); }}>
-              <X className="w-4 h-4 mr-1.5" />
-              Discard
-            </Button>
-            <Button onClick={() => updateMutation.mutate(form)} disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-1.5" />}
-              Save Changes
-            </Button>
+        {/* Expanded edit mode */}
+        {expanded && (
+          <div className="mt-3 space-y-2 pt-3 border-t">
+            <div>
+              <Label className="text-xs text-muted-foreground">Title</Label>
+              <Input
+                value={task.title}
+                onChange={e => onChange(task.id, { title: e.target.value })}
+                className="h-7 text-sm mt-0.5"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Description</Label>
+              <Textarea
+                value={task.description ?? ""}
+                onChange={e => onChange(task.id, { description: e.target.value })}
+                rows={3}
+                className="text-sm mt-0.5"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Start Date</Label>
+              <Input
+                type="date"
+                value={task.startDate ?? ""}
+                onChange={e => onChange(task.id, { startDate: e.target.value })}
+                className="h-7 text-sm mt-0.5"
+              />
+            </div>
           </div>
         )}
+
+        {/* Controls row */}
+        <div className="flex items-center gap-2 mt-3">
+          {/* Priority control */}
+          <div className="flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5">
+            <button onClick={() => bumpPriority(-1)} className="text-muted-foreground hover:text-foreground p-0.5">
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            <span className="text-[10px] font-medium w-12 text-center" style={{ color: pColor }}>
+              {PRIORITY_LABELS[priority]}
+            </span>
+            <button onClick={() => bumpPriority(1)} className="text-muted-foreground hover:text-foreground p-0.5">
+              <ChevronUp className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Department */}
+          <Select
+            value={task.departmentId?.toString() ?? "none"}
+            onValueChange={v => onChange(task.id, { departmentId: v === "none" ? null : parseInt(v, 10) })}
+          >
+            <SelectTrigger className="h-7 text-xs flex-1">
+              <SelectValue placeholder="Department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No department</SelectItem>
+              {departments.map(d => (
+                <SelectItem key={d.id} value={d.id.toString()}>
+                  {d.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TaskStagingDialog({
+  projectId,
+  onClose,
+}: {
+  projectId: number;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: rawTasks = [], isLoading } = useQuery<StagingTask[]>({
+    queryKey: ["staging-tasks", projectId],
+    queryFn: () =>
+      apiClient
+        .get(`/tasks?projectId=${projectId}&status=new_tasks`)
+        .then(r => r.data),
+  });
+
+  const { data: departments = [] } = useQuery<Department[]>({
+    queryKey: ["departments", projectId],
+    queryFn: () =>
+      apiClient
+        .get(`/departments?projectId=${projectId}`)
+        .then(r => (r.data as Department[]).filter(d => d.projectId === projectId)),
+  });
+
+  const [localTasks, setLocalTasks] = useState<StagingTask[]>([]);
+  const [initialised, setInitialised] = useState(false);
+  if (!initialised && rawTasks.length > 0) {
+    setLocalTasks(rawTasks);
+    setInitialised(true);
+  }
+
+  const patchMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: number; patch: Partial<StagingTask> }) =>
+      apiClient.patch(`/tasks/${id}`, patch).then(r => r.data),
+  });
+
+  function handleChange(id: number, patch: Partial<StagingTask>) {
+    setLocalTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+    patchMutation.mutate({ id, patch });
+  }
+
+  function handleDone() {
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+    qc.invalidateQueries({ queryKey: ["kanban-tasks"] });
+    toast({ title: "Tasks staged", description: `${localTasks.length} tasks ready in New Tasks` });
+    onClose();
+  }
+
+  const tasks = localTasks.length > 0 ? localTasks : rawTasks;
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) handleDone(); }}>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <div className="pr-10">
+            <DialogTitle className="flex items-center gap-2">
+              <FolderKanban className="w-5 h-5 text-amber-500" />
+              Stage Imported Tasks
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              {tasks.length} task{tasks.length !== 1 ? "s" : ""} imported — set departments and priorities, then continue.
+            </p>
+          </div>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <ScrollArea className="flex-1 -mx-1 px-1">
+            <div className="space-y-2 pb-2">
+              {tasks.map(task => (
+                <TaskStagingCard
+                  key={task.id}
+                  task={task}
+                  departments={departments}
+                  onChange={handleChange}
+                />
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+
+        <div className="flex items-center justify-between pt-3 border-t">
+          <p className="text-xs text-muted-foreground">
+            You can always edit tasks later from the board.
+          </p>
+          <Button onClick={handleDone} className="gap-1.5">
+            <Check className="w-4 h-4" />
+            Done Staging
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
 
 // ── New Project Dialog ──────────────────────────────────────────────────────
-function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+function NewProjectDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onCreated?: (projectId: number, hasTasks: boolean) => void;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [form, setForm] = useState(EMPTY_FORM);
@@ -289,11 +308,12 @@ function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   const mutation = useMutation({
     mutationFn: (data: typeof form & { parsedTasks: ParsedTaskItem[] }) =>
       apiClient.post("/projects", data).then(r => r.data),
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast({ title: "Project created" });
       clearForm();
       onOpenChange(false);
+      onCreated?.(data.id, parsedTasks.length > 0);
     },
     onError: () => toast({ title: "Failed to create project", variant: "destructive" }),
   });
@@ -406,9 +426,7 @@ function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
               <div>
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={v => setForm(p => ({ ...p, status: v }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="on_hold">On Hold</SelectItem>
@@ -456,6 +474,7 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [infoProject, setInfoProject] = useState<Project | null>(null);
+  const [stagingProjectId, setStagingProjectId] = useState<number | null>(null);
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
@@ -465,6 +484,10 @@ export default function ProjectsPage() {
   const filtered = (projects as Project[]).filter(p =>
     [p.name, p.company, p.projectId].some(v => v?.toLowerCase().includes(search.toLowerCase()))
   );
+
+  function handleProjectCreated(projectId: number, hasTasks: boolean) {
+    if (hasTasks) setStagingProjectId(projectId);
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -575,12 +598,23 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      <NewProjectDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <NewProjectDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onCreated={handleProjectCreated}
+      />
 
       {infoProject && (
         <ProjectInfoDialog
           project={infoProject}
           onClose={() => setInfoProject(null)}
+        />
+      )}
+
+      {stagingProjectId !== null && (
+        <TaskStagingDialog
+          projectId={stagingProjectId}
+          onClose={() => setStagingProjectId(null)}
         />
       )}
     </div>

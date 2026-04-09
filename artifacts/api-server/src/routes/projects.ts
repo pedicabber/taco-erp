@@ -68,7 +68,7 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
 
   // Auto-create tasks from parsed bullet points with "new_tasks" status
   if (parsedTasks && parsedTasks.length > 0) {
-    const now = new Date().toISOString();
+    const todayIso = new Date().toISOString().split("T")[0];
     for (const task of parsedTasks) {
       await db.insert(tasksTable).values({
         title: task.title,
@@ -77,6 +77,7 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
         priority: "medium",
         projectId: project.id,
         assignerId: user.id,
+        startDate: todayIso,
         elapsedSeconds: 0,
         timerRunning: false,
       });

@@ -13,11 +13,14 @@ function parseLocalDate(dateStr: string): Date {
 
 const STATUS_STYLES: Record<string, string> = {
   backlog:     "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  new_tasks:   "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
   in_progress: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
   in_review:   "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
   blocked:     "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
   complete:    "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
 };
+
+const STATUS_FALLBACK = "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
 
 type Priority = "urgent" | "high" | "medium" | "low";
 
@@ -49,6 +52,21 @@ function formatSeconds(seconds: number): string {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+/** Compact relative time: "in 24h", "2d ago", etc. */
+function compactDueDate(date: Date): string {
+  const diff = date.getTime() - Date.now();
+  const abs = Math.abs(diff);
+  const past = diff < 0;
+  const mins = Math.round(abs / 60000);
+  const hrs = Math.round(abs / 3600000);
+  const days = Math.round(abs / 86400000);
+  let label: string;
+  if (mins < 60) label = `${mins}m`;
+  else if (hrs < 24) label = `${hrs}h`;
+  else label = `${days}d`;
+  return past ? `${label} ago` : `in ${label}`;
 }
 
 interface Task {
@@ -116,7 +134,6 @@ export default function TaskCard({
           {/* Priority + Department */}
           <div className="flex items-start justify-between gap-2 mb-2">
             <PriorityBadge priority={task.priority} />
-
             {deptColor && task.department && (
               <span
                 className="text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0"
@@ -130,26 +147,30 @@ export default function TaskCard({
           {/* Title */}
           <p className="text-sm font-medium line-clamp-2 mb-2">{task.title}</p>
 
-          {/* Status + metadata row */}
-          <div className="flex items-center justify-between gap-2">
-            <span className={cn("text-[10px] px-1.5 py-0.5 rounded-md font-medium capitalize", STATUS_STYLES[task.status])}>
-              {task.status.replace("_", " ")}
+          {/* Status badge row — flex with overflow guard */}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded-md font-medium capitalize flex-shrink-0",
+              STATUS_STYLES[task.status] ?? STATUS_FALLBACK,
+            )}>
+              {task.status.replace(/_/g, " ")}
             </span>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
               {isOverdue && <AlertTriangle className="w-3 h-3 text-red-500" />}
               {task.dueDate && !isOverdue && (
-                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 whitespace-nowrap">
                   <Calendar className="w-2.5 h-2.5" />
-                  {formatDistanceToNow(parseLocalDate(task.dueDate), { addSuffix: true })}
+                  {compactDueDate(parseLocalDate(task.dueDate))}
                 </span>
               )}
-              <span className={cn("text-[10px] flex items-center gap-0.5", isOverTime ? "text-orange-500" : "text-muted-foreground")}>
-                {task.timerRunning ? (
-                  <Play className="w-2.5 h-2.5 text-green-500" />
-                ) : (
-                  <Clock className="w-2.5 h-2.5" />
-                )}
+              <span className={cn(
+                "text-[10px] flex items-center gap-0.5 whitespace-nowrap",
+                isOverTime ? "text-orange-500" : "text-muted-foreground",
+              )}>
+                {task.timerRunning
+                  ? <Play className="w-2.5 h-2.5 text-green-500" />
+                  : <Clock className="w-2.5 h-2.5" />}
                 {formatSeconds(elapsed)}
                 {task.expectedHours && <span>/{task.expectedHours}h</span>}
               </span>

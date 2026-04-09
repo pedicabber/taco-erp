@@ -2,12 +2,13 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
-import type { Department, Task } from "@/lib/types";
+import type { Department, Task, Project } from "@/lib/types";
 import {
   ArrowLeft, Plus, Settings, Loader2, Building2, FileText,
   Calendar, CheckSquare, MoreHorizontal, Trash2, Edit2,
-  FolderKanban
+  FolderKanban, Info,
 } from "lucide-react";
+import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,6 +110,7 @@ export default function ProjectDetailPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [deptDialogOpen, setDeptDialogOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const { data: project, isLoading } = useQuery({
     queryKey: ["project", projectId],
@@ -209,6 +211,13 @@ export default function ProjectDetailPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setInfoOpen(true)}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+              title="View project info"
+            >
+              <Info className="w-4 h-4" />
+            </button>
             <Badge variant={STATUS_VARIANTS[project.status] ?? "secondary"} className="capitalize">
               {project.status.replace("_", " ")}
             </Badge>
@@ -350,6 +359,13 @@ export default function ProjectDetailPage() {
       </div>
 
       <DeptDialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen} projectId={projectId} />
+
+      {infoOpen && project && (
+        <ProjectInfoDialog
+          project={project as Project}
+          onClose={() => setInfoOpen(false)}
+        />
+      )}
     </div>
   );
 }
