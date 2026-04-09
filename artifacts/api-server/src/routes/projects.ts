@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { parsePdfText } from "../lib/pdfParseAdapter";
-import { db, projectsTable, departmentsTable, tasksTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -420,6 +420,24 @@ router.delete("/projects/:projectId", requireAdmin, async (req, res): Promise<vo
     return;
   }
 
+  // Get all task IDs under this project for child-record cleanup
+  const projectTasks = await db
+    .select({ id: tasksTable.id })
+    .from(tasksTable)
+    .where(eq(tasksTable.projectId, id));
+
+  if (projectTasks.length > 0) {
+    const taskIds = projectTasks.map(t => t.id);
+    // Delete task attachments and relations that reference these tasks
+    await db.delete(taskAttachmentsTable).where(inArray(taskAttachmentsTable.taskId, taskIds));
+    await db.delete(taskRelationsTable).where(inArray(taskRelationsTable.taskId, taskIds));
+  }
+
+  // Delete all tasks for the project
+  await db.delete(tasksTable).where(eq(tasksTable.projectId, id));
+  // Delete all departments for the project
+  await db.delete(departmentsTable).where(eq(departmentsTable.projectId, id));
+  // Delete the project itself
   await db.delete(projectsTable).where(eq(projectsTable.id, id));
   res.sendStatus(204);
 });
