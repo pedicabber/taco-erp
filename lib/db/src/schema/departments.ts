@@ -6,7 +6,7 @@ export const departmentsTable = pgTable("departments", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   color: text("color"),
-  projectId: integer("project_id").notNull(),
+  projectId: integer("project_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

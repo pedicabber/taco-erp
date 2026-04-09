@@ -225,11 +225,11 @@ function TaskStagingDialog({
   });
 
   const { data: departments = [] } = useQuery<Department[]>({
-    queryKey: ["departments", projectId],
+    queryKey: ["departments", "global"],
     queryFn: () =>
       apiClient
-        .get(`/departments?projectId=${projectId}`)
-        .then(r => (r.data as Department[]).filter(d => d.projectId === projectId)),
+        .get("/departments?global=true")
+        .then(r => r.data as Department[]),
   });
 
   const [localTasks, setLocalTasks] = useState<StagingTask[]>([]);

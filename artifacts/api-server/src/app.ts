@@ -5,13 +5,14 @@ import { clerkMiddleware } from "@clerk/express";
 import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import { bootstrapAdmins } from "./bootstrapAdmins";
+import { bootstrapAdmins, bootstrapDepartments } from "./bootstrapAdmins";
 import { existsSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 
 bootstrapAdmins();
+bootstrapDepartments();
 
 const app: Express = express();
 

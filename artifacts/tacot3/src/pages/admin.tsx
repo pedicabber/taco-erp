@@ -7,7 +7,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   Settings, Users, FolderKanban, Shield, Trash2,
   Loader2, AlertTriangle, ArrowLeft, Search, ChevronUp, ChevronDown,
-  Building2, Calendar, FileText, DollarSign, Check, X,
+  Building2, Calendar, FileText, DollarSign, Check, X, Plus, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -367,12 +367,214 @@ function ProjectsTab() {
   );
 }
 
+// ── Departments Tab ───────────────────────────────────────────────────────────
+const DEPT_COLORS = ["#3B82F6", "#F59E0B", "#8B5CF6", "#10B981", "#EF4444", "#06B6D4", "#EC4899", "#F97316", "#84CC16", "#A78BFA"];
+
+function DepartmentsTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [addName, setAddName] = useState("");
+  const [addColor, setAddColor] = useState(DEPT_COLORS[0]);
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const { data: departments = [], isLoading } = useQuery<Department[]>({
+    queryKey: ["departments", "global"],
+    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; color: string }) =>
+      apiClient.post("/departments", data).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      toast({ title: "Department created" });
+      setAdding(false);
+      setAddName("");
+      setAddColor(DEPT_COLORS[0]);
+    },
+    onError: () => toast({ title: "Failed to create department", variant: "destructive" }),
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: ({ id, name }: { id: number; name: string }) =>
+      apiClient.patch(`/departments/${id}`, { name }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      toast({ title: "Department updated" });
+      setEditingId(null);
+    },
+    onError: () => toast({ title: "Failed to update department", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/departments/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      toast({ title: "Department deleted" });
+      setDeleteId(null);
+    },
+    onError: () => toast({ title: "Failed to delete department", variant: "destructive" }),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Company-wide departments assigned to users. Involved departments on a project are derived from task assignments.
+        </p>
+        <Button size="sm" onClick={() => setAdding(v => !v)}>
+          <Plus className="w-3 h-3 mr-1" />
+          Add Department
+        </Button>
+      </div>
+
+      {adding && (
+        <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
+          <p className="text-sm font-medium">New Department</p>
+          <div className="flex gap-2 items-center">
+            <Input
+              placeholder="Department name"
+              value={addName}
+              onChange={e => setAddName(e.target.value)}
+              className="flex-1 h-8 text-sm"
+              onKeyDown={e => {
+                if (e.key === "Enter" && addName.trim()) createMutation.mutate({ name: addName.trim(), color: addColor });
+                if (e.key === "Escape") { setAdding(false); setAddName(""); }
+              }}
+            />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5">Color</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {DEPT_COLORS.map(c => (
+                <button
+                  key={c}
+                  className="w-6 h-6 rounded-full border-2 transition-all"
+                  style={{ backgroundColor: c, borderColor: addColor === c ? "hsl(var(--foreground))" : "transparent" }}
+                  onClick={() => setAddColor(c)}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => { if (addName.trim()) createMutation.mutate({ name: addName.trim(), color: addColor }); }}
+              disabled={!addName.trim() || createMutation.isPending}
+            >
+              {createMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3 mr-1" />}
+              Save
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setAdding(false); setAddName(""); }}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-lg border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Department</th>
+              <th className="px-4 py-3 w-24" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {departments.map(dept => (
+              <tr key={dept.id} className="hover:bg-muted/30 transition-colors">
+                <td className="px-4 py-3">
+                  {editingId === dept.id ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: dept.color ?? "#6B7280" }} />
+                      <Input
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                        className="h-7 text-sm flex-1"
+                        autoFocus
+                        onKeyDown={e => {
+                          if (e.key === "Enter" && editName.trim()) renameMutation.mutate({ id: dept.id, name: editName.trim() });
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                      />
+                      <Button size="icon" className="h-7 w-7" onClick={() => { if (editName.trim()) renameMutation.mutate({ id: dept.id, name: editName.trim() }); }}>
+                        {renameMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingId(null)}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: dept.color ?? "#6B7280" }} />
+                      <span className="font-medium">{dept.name}</span>
+                    </div>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1 justify-end">
+                    <Button
+                      size="icon" variant="ghost" className="h-7 w-7"
+                      onClick={() => { setEditingId(dept.id); setEditName(dept.name); }}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                    <AlertDialog open={deleteId === dept.id} onOpenChange={open => !open && setDeleteId(null)}>
+                      <AlertDialogTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(dept.id)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete "{dept.name}"?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will remove the department. Users assigned to this department will lose their department association.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={() => deleteMutation.mutate(dept.id)}
+                          >
+                            {deleteMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {departments.length === 0 && (
+          <div className="py-12 text-center text-muted-foreground text-sm">No departments yet. Add one above.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Admin Page ───────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const { data: currentUser, isLoading } = useCurrentUser();
   const { data: departments = [] } = useQuery<Department[]>({
-    queryKey: ["departments"],
-    queryFn: () => apiClient.get("/departments").then(r => r.data),
+    queryKey: ["departments", "global"],
+    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data),
     enabled: currentUser?.role === "admin",
   });
 
@@ -419,6 +621,10 @@ export default function AdminPage() {
             <Users className="w-4 h-4" />
             Users
           </TabsTrigger>
+          <TabsTrigger value="departments" className="gap-2">
+            <Building2 className="w-4 h-4" />
+            Departments
+          </TabsTrigger>
           <TabsTrigger value="projects" className="gap-2">
             <FolderKanban className="w-4 h-4" />
             Projects
@@ -427,6 +633,10 @@ export default function AdminPage() {
 
         <TabsContent value="users">
           <UsersTab departments={departments} />
+        </TabsContent>
+
+        <TabsContent value="departments">
+          <DepartmentsTab />
         </TabsContent>
 
         <TabsContent value="projects">

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, departmentsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, isNull, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import {
@@ -23,19 +23,38 @@ function buildDept(d: typeof departmentsTable.$inferSelect) {
   };
 }
 
-router.get("/departments", requireAuth, async (_req, res): Promise<void> => {
-  const depts = await db.select().from(departmentsTable).orderBy(departmentsTable.projectId, departmentsTable.name);
+router.get("/departments", requireAuth, async (req, res): Promise<void> => {
+  const { global: globalParam, projectId: projectIdParam } = req.query as Record<string, string | undefined>;
+
+  let depts;
+  if (globalParam === "true") {
+    depts = await db.select().from(departmentsTable).where(isNull(departmentsTable.projectId)).orderBy(departmentsTable.name);
+  } else if (projectIdParam !== undefined) {
+    const pid = parseInt(projectIdParam, 10);
+    if (isNaN(pid)) {
+      res.status(400).json({ error: "Invalid projectId" });
+      return;
+    }
+    depts = await db.select().from(departmentsTable).where(eq(departmentsTable.projectId, pid)).orderBy(departmentsTable.name);
+  } else {
+    depts = await db.select().from(departmentsTable).orderBy(departmentsTable.name);
+  }
+
   res.json(ListDepartmentsResponse.parse(depts.map(buildDept)));
 });
 
-router.post("/departments", requireAuth, async (req, res): Promise<void> => {
+router.post("/departments", requireAdmin, async (req, res): Promise<void> => {
   const parsed = CreateDepartmentBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const [dept] = await db.insert(departmentsTable).values(parsed.data).returning();
+  const [dept] = await db.insert(departmentsTable).values({
+    name: parsed.data.name,
+    color: parsed.data.color ?? null,
+    projectId: parsed.data.projectId ?? null,
+  }).returning();
   res.status(201).json(GetDepartmentResponse.parse(buildDept(dept)));
 });
 
@@ -55,7 +74,7 @@ router.get("/departments/:departmentId", requireAuth, async (req, res): Promise<
   res.json(GetDepartmentResponse.parse(buildDept(dept)));
 });
 
-router.patch("/departments/:departmentId", requireAuth, async (req, res): Promise<void> => {
+router.patch("/departments/:departmentId", requireAdmin, async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.departmentId) ? req.params.departmentId[0] : req.params.departmentId, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid department ID" });

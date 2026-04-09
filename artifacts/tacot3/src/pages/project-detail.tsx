@@ -1,29 +1,17 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
 import type { Department, Task, Project } from "@/lib/types";
 import {
-  ArrowLeft, Plus, Settings, Loader2, Building2, FileText,
-  Calendar, CheckSquare, MoreHorizontal, Trash2, Edit2,
-  FolderKanban, Info,
+  ArrowLeft, Loader2, Building2, FileText,
+  Calendar, CheckSquare, FolderKanban, Info, Users,
 } from "lucide-react";
 import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent } from "@/components/ui/card";
+import { useState } from "react";
 import { format } from "date-fns";
-import { Separator } from "@/components/ui/separator";
 import TaskCard from "@/components/tasks/TaskCard";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -33,83 +21,9 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   cancelled: "destructive",
 };
 
-function DeptDialog({
-  open,
-  onOpenChange,
-  projectId,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  projectId: number;
-}) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const COLORS = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4"];
-  const [form, setForm] = useState({ name: "", color: COLORS[0] });
-
-  const mutation = useMutation({
-    mutationFn: (data: { name: string; color: string; projectId: number }) =>
-      apiClient.post("/departments", data).then(r => r.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["departments"] });
-      qc.invalidateQueries({ queryKey: ["departments", projectId] });
-      toast({ title: "Department created" });
-      onOpenChange(false);
-      setForm({ name: "", color: COLORS[0] });
-    },
-    onError: () => toast({ title: "Failed to create department", variant: "destructive" }),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New Department</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 pt-2">
-          <div>
-            <Label>Name *</Label>
-            <Input
-              value={form.name}
-              onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-              placeholder="e.g. Engineering, Welding"
-            />
-          </div>
-          <div>
-            <Label>Color</Label>
-            <div className="flex gap-2 mt-1">
-              {COLORS.map(c => (
-                <button
-                  key={c}
-                  className={`w-7 h-7 rounded-full transition-all ${form.color === c ? "ring-2 ring-offset-2 ring-foreground scale-110" : "hover:scale-105"}`}
-                  style={{ backgroundColor: c }}
-                  onClick={() => setForm(p => ({ ...p, color: c }))}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button
-              onClick={() => mutation.mutate({ ...form, projectId })}
-              disabled={!form.name || mutation.isPending}
-            >
-              {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Create Department
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = parseInt(params.projectId, 10);
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [deptDialogOpen, setDeptDialogOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
 
   const { data: project, isLoading } = useQuery({
@@ -117,10 +31,9 @@ export default function ProjectDetailPage() {
     queryFn: () => apiClient.get(`/projects/${projectId}`).then(r => r.data),
   });
 
-  const { data: departments = [] } = useQuery({
-    queryKey: ["departments", projectId],
-    queryFn: () => apiClient.get(`/departments?projectId=${projectId}`).then(r => (r.data as Department[]))
-      .then(depts => depts.filter(d => d.projectId === projectId)),
+  const { data: allDepartments = [] } = useQuery<Department[]>({
+    queryKey: ["departments", "global"],
+    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data),
   });
 
   const { data: tasks = [] } = useQuery({
@@ -131,14 +44,6 @@ export default function ProjectDetailPage() {
   const { data: summary } = useQuery({
     queryKey: ["project-summary", projectId],
     queryFn: () => apiClient.get(`/projects/${projectId}/summary`).then(r => r.data),
-  });
-
-  const deleteDept = useMutation({
-    mutationFn: (id: number) => apiClient.delete(`/departments/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["departments", projectId] });
-      toast({ title: "Department deleted" });
-    },
   });
 
   if (isLoading) {
@@ -164,6 +69,10 @@ export default function ProjectDetailPage() {
   }
 
   const completedTasks = (tasks as Task[]).filter(t => t.status === "complete").length;
+
+  // Derive "Involved Departments" from task departmentIds
+  const involvedDeptIds = new Set((tasks as Task[]).map(t => t.departmentId).filter(Boolean));
+  const involvedDepartments = (allDepartments as Department[]).filter(d => involvedDeptIds.has(d.id));
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -247,9 +156,9 @@ export default function ProjectDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <FolderKanban className="w-5 h-5 text-orange-500" />
+            <Users className="w-5 h-5 text-orange-500" />
             <div>
-              <div className="text-lg font-bold">{departments.length}</div>
+              <div className="text-lg font-bold">{involvedDepartments.length}</div>
               <div className="text-xs text-muted-foreground">Departments</div>
             </div>
           </CardContent>
@@ -266,53 +175,36 @@ export default function ProjectDetailPage() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
-        {/* Departments */}
+        {/* Involved Departments */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold">Departments</h2>
-            <Button size="sm" variant="outline" onClick={() => setDeptDialogOpen(true)}>
-              <Plus className="w-3 h-3 mr-1" />
-              Add
-            </Button>
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="font-semibold">Involved Departments</h2>
           </div>
-          {departments.length === 0 ? (
+          {involvedDepartments.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-center">
-                <p className="text-sm text-muted-foreground">No departments yet</p>
-                <Button size="sm" className="mt-3" onClick={() => setDeptDialogOpen(true)}>
-                  <Plus className="w-3 h-3 mr-1" />
-                  Add Department
-                </Button>
+                <p className="text-sm text-muted-foreground">
+                  {tasks.length === 0
+                    ? "No tasks yet — departments appear here once tasks are assigned."
+                    : "No departments assigned to tasks in this project."}
+                </p>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-2">
-              {(departments as Department[]).map(dept => {
+              {involvedDepartments.map(dept => {
                 const deptTasks = (tasks as Task[]).filter(t => t.departmentId === dept.id);
                 return (
                   <Card key={dept.id}>
                     <CardContent className="p-3 flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: dept.color ?? "#6B7280" }} />
+                      <div
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: dept.color ?? "#6B7280" }}
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{dept.name}</div>
-                        <div className="text-xs text-muted-foreground">{deptTasks.length} tasks</div>
+                        <div className="text-xs text-muted-foreground">{deptTasks.length} task{deptTasks.length !== 1 ? "s" : ""}</div>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
-                            <MoreHorizontal className="w-3.5 h-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => deleteDept.mutate(dept.id)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </CardContent>
                   </Card>
                 );
@@ -335,7 +227,6 @@ export default function ProjectDetailPage() {
                 <p className="text-sm text-muted-foreground">No tasks yet</p>
                 <Link href={`/tasks?projectId=${projectId}`}>
                   <Button size="sm" className="mt-3">
-                    <Plus className="w-3 h-3 mr-1" />
                     Create Task
                   </Button>
                 </Link>
@@ -357,8 +248,6 @@ export default function ProjectDetailPage() {
           )}
         </div>
       </div>
-
-      <DeptDialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen} projectId={projectId} />
 
       {infoOpen && project && (
         <ProjectInfoDialog

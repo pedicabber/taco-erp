@@ -261,7 +261,7 @@ export const ListDepartmentsResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
   color: zod.string().nullable(),
-  projectId: zod.number(),
+  projectId: zod.number().nullable(),
   createdAt: zod.string(),
 });
 export const ListDepartmentsResponse = zod.array(ListDepartmentsResponseItem);
@@ -272,7 +272,7 @@ export const ListDepartmentsResponse = zod.array(ListDepartmentsResponseItem);
 export const CreateDepartmentBody = zod.object({
   name: zod.string(),
   color: zod.string().nullish(),
-  projectId: zod.number(),
+  projectId: zod.number().nullish(),
 });
 
 /**
@@ -286,7 +286,7 @@ export const GetDepartmentResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   color: zod.string().nullable(),
-  projectId: zod.number(),
+  projectId: zod.number().nullable(),
   createdAt: zod.string(),
 });
 
@@ -306,7 +306,7 @@ export const UpdateDepartmentResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   color: zod.string().nullable(),
-  projectId: zod.number(),
+  projectId: zod.number().nullable(),
   createdAt: zod.string(),
 });
 
