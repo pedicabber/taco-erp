@@ -41,6 +41,7 @@ const BoardPage = lazy(() => import("@/pages/board"));
 const CalendarPage = lazy(() => import("@/pages/calendar"));
 const NotificationsPage = lazy(() => import("@/pages/notifications"));
 const ActivityFullPage = lazy(() => import("@/pages/activity"));
+const AdminPage = lazy(() => import("@/pages/admin"));
 
 function PageLoader() {
   return (
@@ -167,6 +168,9 @@ function ClerkProviderWithRoutes() {
           </Route>
           <Route path="/activity">
             <ProtectedLayout><ActivityFullPage /></ProtectedLayout>
+          </Route>
+          <Route path="/admin">
+            <ProtectedLayout><AdminPage /></ProtectedLayout>
           </Route>
           <Route component={NotFound} />
         </Switch>

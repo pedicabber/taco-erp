@@ -14,6 +14,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -171,6 +172,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
 
           <div className="flex-1" />
+
+          {/* Admin cog — only visible to admins */}
+          {currentUser?.role === "admin" && (
+            <Link href="/admin">
+              <div
+                className={cn(
+                  "flex items-center justify-center w-9 h-9 rounded-lg hover:bg-muted transition-colors cursor-pointer",
+                  location.startsWith("/admin") && "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                )}
+                title="Admin Panel"
+              >
+                <Settings className="w-5 h-5" />
+              </div>
+            </Link>
+          )}
 
           {/* Notification bell */}
           <Link href="/notifications">

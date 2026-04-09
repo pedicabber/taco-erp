@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, usersTable, departmentsTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk, getOrCreateUser } from "../lib/userSync";
 import { UpdateMeBody, UpdateMeResponse, ListUsersResponse, GetUserResponse } from "@workspace/api-zod";
 
@@ -77,6 +78,29 @@ router.get("/users", requireAuth, async (_req, res): Promise<void> => {
   const deptMap = new Map(depts.map(d => [d.id, d.name]));
 
   res.json(ListUsersResponse.parse(users.map(u => buildUserProfile(u, u.departmentId ? deptMap.get(u.departmentId) ?? null : null))));
+});
+
+// Admin-only: update any user's role or department
+router.patch("/users/:userId", requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid user ID" }); return; }
+
+  const { role, departmentId } = req.body as { role?: string; departmentId?: number | null };
+  const updates: Partial<typeof usersTable.$inferInsert> = {};
+  if (role !== undefined) updates.role = role;
+  if (departmentId !== undefined) updates.departmentId = departmentId;
+
+  if (Object.keys(updates).length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
+
+  const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning();
+  if (!updated) { res.status(404).json({ error: "User not found" }); return; }
+
+  let departmentName: string | null = null;
+  if (updated.departmentId) {
+    const [dept] = await db.select().from(departmentsTable).where(eq(departmentsTable.id, updated.departmentId));
+    departmentName = dept?.name ?? null;
+  }
+  res.json(buildUserProfile(updated, departmentName));
 });
 
 router.get("/users/:userId", requireAuth, async (req, res): Promise<void> => {
