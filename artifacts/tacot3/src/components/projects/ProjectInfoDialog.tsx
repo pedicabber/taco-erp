@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
+import { formatQuoteNum } from "@/lib/utils";
 import type { Project } from "@/lib/types";
 import {
   Info, Building2, Calendar, DollarSign, Save, X,
@@ -135,7 +136,7 @@ export default function ProjectInfoDialog({
                   {editing ? (
                     <Input value={form.projectId} onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))} />
                   ) : (
-                    <p className="mt-0.5 font-mono text-sm">{field(form.projectId)}</p>
+                    <p className="mt-0.5 font-mono text-sm">{form.projectId ? formatQuoteNum(form.projectId) : "—"}</p>
                   )}
                 </div>
                 <div>

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
+import { formatQuoteNum } from "@/lib/utils";
 import type { Task, Project } from "@/lib/types";
 import {
   ArrowLeft, Loader2, Building2, FileText,
@@ -108,7 +109,7 @@ export default function ProjectDetailPage() {
                   {project.projectId && (
                     <span className="flex items-center gap-1 text-sm text-muted-foreground">
                       <FileText className="w-3.5 h-3.5" />
-                      {project.projectId}
+                      {formatQuoteNum(project.projectId)}
                     </span>
                   )}
                   {project.startDate && (

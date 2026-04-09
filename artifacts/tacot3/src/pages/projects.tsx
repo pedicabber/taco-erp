@@ -26,7 +26,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { cn, formatQuoteNum } from "@/lib/utils";
 import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -709,7 +709,7 @@ export default function ProjectsPage() {
                       {project.projectId && (
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <FileText className="w-3 h-3" />
-                          <span>{project.projectId}</span>
+                          <span>{formatQuoteNum(project.projectId)}</span>
                         </div>
                       )}
                       {project.startDate && (

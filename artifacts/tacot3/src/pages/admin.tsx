@@ -23,7 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, formatQuoteNum } from "@/lib/utils";
 import { Redirect } from "wouter";
 
 interface UserRow {
@@ -302,7 +302,7 @@ function ProjectsTab() {
                         <span className="font-medium truncate hover:underline cursor-pointer">{p.name}</span>
                       </Link>
                       {p.projectId && (
-                        <div className="text-xs text-muted-foreground">{p.projectId}</div>
+                        <div className="text-xs text-muted-foreground">{formatQuoteNum(p.projectId)}</div>
                       )}
                     </div>
                   </div>
