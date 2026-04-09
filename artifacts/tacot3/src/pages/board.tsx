@@ -123,8 +123,8 @@ export default function BoardPage() {
   });
 
   const { data: departments = [] } = useQuery({
-    queryKey: ["departments"],
-    queryFn: () => apiClient.get("/departments").then(r => r.data),
+    queryKey: ["departments", "global"],
+    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data),
   });
 
   const { data: columnConfigs = [], isLoading: loadingConfigs } = useQuery<ColumnConfig[]>({
@@ -231,9 +231,7 @@ export default function BoardPage() {
     updateColMutation.mutate({ id: b.id, sortOrder: a.sortOrder });
   }
 
-  const filteredDepts = filterProject !== "all"
-    ? (departments as Department[]).filter(d => d.projectId === Number(filterProject))
-    : departments as Department[];
+  const filteredDepts = departments as Department[];
 
   const sortedConfigs = [...(columnConfigs as ColumnConfig[])].sort((a, b) => a.sortOrder - b.sortOrder);
 

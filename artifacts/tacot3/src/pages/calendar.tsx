@@ -651,8 +651,8 @@ export default function CalendarPage() {
     queryFn: () => apiClient.get("/projects").then(r => r.data),
   });
   const { data: departments = [] } = useQuery({
-    queryKey: ["departments"],
-    queryFn: () => apiClient.get("/departments").then(r => r.data),
+    queryKey: ["departments", "global"],
+    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data),
   });
   const { data: users = [] } = useQuery({
     queryKey: ["users"],

@@ -378,6 +378,7 @@ function DepartmentsTab() {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
+  const [editColor, setEditColor] = useState(DEPT_COLORS[0]);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const { data: departments = [], isLoading } = useQuery<Department[]>({
@@ -399,8 +400,8 @@ function DepartmentsTab() {
   });
 
   const renameMutation = useMutation({
-    mutationFn: ({ id, name }: { id: number; name: string }) =>
-      apiClient.patch(`/departments/${id}`, { name }).then(r => r.data),
+    mutationFn: ({ id, name, color }: { id: number; name: string; color: string }) =>
+      apiClient.patch(`/departments/${id}`, { name, color }).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["departments"] });
       toast({ title: "Department updated" });
@@ -496,24 +497,36 @@ function DepartmentsTab() {
               <tr key={dept.id} className="hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3">
                   {editingId === dept.id ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: dept.color ?? "#6B7280" }} />
-                      <Input
-                        value={editName}
-                        onChange={e => setEditName(e.target.value)}
-                        className="h-7 text-sm flex-1"
-                        autoFocus
-                        onKeyDown={e => {
-                          if (e.key === "Enter" && editName.trim()) renameMutation.mutate({ id: dept.id, name: editName.trim() });
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                      />
-                      <Button size="icon" className="h-7 w-7" onClick={() => { if (editName.trim()) renameMutation.mutate({ id: dept.id, name: editName.trim() }); }}>
-                        {renameMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingId(null)}>
-                        <X className="w-3 h-3" />
-                      </Button>
+                    <div className="flex flex-col gap-2 py-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: editColor }} />
+                        <Input
+                          value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          className="h-7 text-sm flex-1"
+                          autoFocus
+                          onKeyDown={e => {
+                            if (e.key === "Enter" && editName.trim()) renameMutation.mutate({ id: dept.id, name: editName.trim(), color: editColor });
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                        />
+                        <Button size="icon" className="h-7 w-7" onClick={() => { if (editName.trim()) renameMutation.mutate({ id: dept.id, name: editName.trim(), color: editColor }); }}>
+                          {renameMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingId(null)}>
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap pl-5">
+                        {DEPT_COLORS.map(c => (
+                          <button
+                            key={c}
+                            className="w-5 h-5 rounded-full border-2 transition-all"
+                            style={{ backgroundColor: c, borderColor: editColor === c ? "hsl(var(--foreground))" : "transparent" }}
+                            onClick={() => setEditColor(c)}
+                          />
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2.5">
@@ -526,7 +539,7 @@ function DepartmentsTab() {
                   <div className="flex items-center gap-1 justify-end">
                     <Button
                       size="icon" variant="ghost" className="h-7 w-7"
-                      onClick={() => { setEditingId(dept.id); setEditName(dept.name); }}
+                      onClick={() => { setEditingId(dept.id); setEditName(dept.name); setEditColor(dept.color ?? DEPT_COLORS[0]); }}
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
