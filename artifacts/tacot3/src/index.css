@@ -282,3 +282,38 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
   opacity: 0.65;
 }
+
+/* ── Kanban column scrollbar ─────────────────────────────────────────────────
+   Invisible by default; a thin styled thumb fades in when the column is hovered.
+   Firefox: scrollbar-color drives thumb/track colour.
+   WebKit:  ::-webkit-scrollbar-* pseudo-elements drive layout and colour.
+   The thumb uses CSS opacity so it transitions smoothly.
+   ──────────────────────────────────────────────────────────────────────────── */
+.col-scroll {
+  /* Firefox — thin rail, invisible until hover */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.col-scroll:hover {
+  scrollbar-color: hsl(var(--border) / 0.7) transparent;
+}
+
+/* WebKit (Chrome / Safari / Edge) */
+.col-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.col-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+.col-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+  transition: background 0.25s ease;
+}
+.col-scroll:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--border) / 0.7);
+}
+.col-scroll:hover::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.55);
+}

@@ -329,8 +329,8 @@ export default function BoardPage() {
 
                   {/* Tasks — internal vertical scroll */}
                   <div
-                    data-col-tasks
-                    className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 min-h-0"
+                    data-col-tasks="true"
+                    className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 min-h-0 col-scroll"
                     style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
                   >
                     <AnimatePresence>
