@@ -77,6 +77,7 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
   let assignee = null;
   let assigner = null;
   let department = null;
+  let assigneeDept: { id: number; name: string; color: string | null } | null = null;
 
   if (task.assigneeId) {
     const [u] = await db.select().from(usersTable).where(eq(usersTable.id, task.assigneeId));
@@ -84,7 +85,10 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
       let deptName = null;
       if (u.departmentId) {
         const [d] = await db.select().from(departmentsTable).where(eq(departmentsTable.id, u.departmentId));
-        deptName = d?.name ?? null;
+        if (d) {
+          deptName = d.name;
+          assigneeDept = { id: d.id, name: d.name, color: d.color };
+        }
       }
       assignee = { id: u.id, name: u.name, avatarUrl: u.avatarUrl, departmentName: deptName };
     }
@@ -102,6 +106,11 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
     if (d) {
       department = { id: d.id, name: d.name, color: d.color };
     }
+  }
+
+  // Fallback: if no direct department set on task, use the assignee's department
+  if (!department && assigneeDept) {
+    department = assigneeDept;
   }
 
   return {
@@ -732,7 +741,18 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
 
   const tasks = await query;
   const projectIds = [...new Set(tasks.map(t => t.projectId))];
-  const deptIds = [...new Set(tasks.map(t => t.departmentId).filter(Boolean))] as number[];
+  const assigneeIds = [...new Set(tasks.map(t => t.assigneeId).filter(Boolean))] as number[];
+
+  // Load assignee users in batch so we can fall back to their department color
+  const assigneeUsers = assigneeIds.length > 0
+    ? await db.select().from(usersTable).where(inArray(usersTable.id, assigneeIds))
+    : [];
+  const userMap = new Map(assigneeUsers.map(u => [u.id, u]));
+
+  // Collect dept IDs from both task.departmentId and assignee user.departmentId
+  const taskDeptIds = tasks.map(t => t.departmentId).filter(Boolean) as number[];
+  const userDeptIds = assigneeUsers.map(u => u.departmentId).filter(Boolean) as number[];
+  const deptIds = [...new Set([...taskDeptIds, ...userDeptIds])];
 
   const projects = projectIds.length > 0 ? await db.select().from(projectsTable).where(inArray(projectsTable.id, projectIds)) : [];
   const depts = deptIds.length > 0 ? await db.select().from(departmentsTable).where(inArray(departmentsTable.id, deptIds)) : [];
@@ -740,16 +760,14 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
   const projectMap = new Map(projects.map(p => [p.id, p]));
   const deptMap = new Map(depts.map(d => [d.id, d]));
 
-  const events = await Promise.all(tasks.map(async task => {
+  const events = tasks.map(task => {
     const project = projectMap.get(task.projectId);
-    const dept = task.departmentId ? deptMap.get(task.departmentId) : null;
-    let assigneeName: string | null = null;
-    let assigneeAvatarUrl: string | null = null;
-    if (task.assigneeId) {
-      const [u] = await db.select().from(usersTable).where(eq(usersTable.id, task.assigneeId));
-      assigneeName = u?.name ?? null;
-      assigneeAvatarUrl = u?.avatarUrl ?? null;
-    }
+    const assigneeUser = task.assigneeId ? userMap.get(task.assigneeId) : null;
+
+    // Resolve department: task's own dept first, then fall back to assignee's dept
+    const dept = (task.departmentId ? deptMap.get(task.departmentId) : null)
+      ?? (assigneeUser?.departmentId ? deptMap.get(assigneeUser.departmentId) : null)
+      ?? null;
 
     return {
       taskId: task.id,
@@ -767,11 +785,11 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
       departmentName: dept?.name ?? null,
       departmentColor: dept?.color ?? null,
       assigneeId: task.assigneeId,
-      assigneeName,
-      assigneeAvatarUrl,
+      assigneeName: assigneeUser?.name ?? null,
+      assigneeAvatarUrl: assigneeUser?.avatarUrl ?? null,
       priority: task.priority as "low" | "medium" | "high" | "urgent",
     };
-  }));
+  });
 
   res.json(GetCalendarEventsResponse.parse(events));
 });
