@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
-import type { Department, Task, Project } from "@/lib/types";
+import type { Task, Project } from "@/lib/types";
 import {
   ArrowLeft, Loader2, Building2, FileText,
   Calendar, CheckSquare, FolderKanban, Info, Users,
@@ -29,11 +29,6 @@ export default function ProjectDetailPage() {
   const { data: project, isLoading } = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => apiClient.get(`/projects/${projectId}`).then(r => r.data),
-  });
-
-  const { data: allDepartments = [] } = useQuery<Department[]>({
-    queryKey: ["departments", "global"],
-    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data),
   });
 
   const { data: tasks = [] } = useQuery({
@@ -70,9 +65,19 @@ export default function ProjectDetailPage() {
 
   const completedTasks = (tasks as Task[]).filter(t => t.status === "complete").length;
 
-  // Derive "Involved Departments" from task departmentIds
-  const involvedDeptIds = new Set((tasks as Task[]).map(t => t.departmentId).filter(Boolean));
-  const involvedDepartments = (allDepartments as Department[]).filter(d => involvedDeptIds.has(d.id));
+  // Derive "Involved Departments" from task.department (resolved: task's own OR assignee's dept)
+  const involvedDeptMap = new Map<number, { id: number; name: string; color: string | null; count: number }>();
+  for (const task of tasks as Task[]) {
+    const d = task.department;
+    if (!d) continue;
+    const existing = involvedDeptMap.get(d.id);
+    if (existing) {
+      existing.count++;
+    } else {
+      involvedDeptMap.set(d.id, { id: d.id, name: d.name, color: d.color, count: 1 });
+    }
+  }
+  const involvedDepartments = [...involvedDeptMap.values()].sort((a, b) => b.count - a.count);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -192,23 +197,20 @@ export default function ProjectDetailPage() {
             </Card>
           ) : (
             <div className="space-y-2">
-              {involvedDepartments.map(dept => {
-                const deptTasks = (tasks as Task[]).filter(t => t.departmentId === dept.id);
-                return (
-                  <Card key={dept.id}>
-                    <CardContent className="p-3 flex items-center gap-3">
-                      <div
-                        className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: dept.color ?? "#6B7280" }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{dept.name}</div>
-                        <div className="text-xs text-muted-foreground">{deptTasks.length} task{deptTasks.length !== 1 ? "s" : ""}</div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+              {involvedDepartments.map(dept => (
+                <Card key={dept.id}>
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <div
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: dept.color ?? "#6B7280" }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{dept.name}</div>
+                      <div className="text-xs text-muted-foreground">{dept.count} task{dept.count !== 1 ? "s" : ""}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </div>
