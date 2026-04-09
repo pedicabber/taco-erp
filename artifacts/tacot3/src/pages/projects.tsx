@@ -6,7 +6,7 @@ import type { Project, Department, ParsedTaskItem } from "@/lib/types";
 import {
   Plus, FolderKanban, FileText, Search, Loader2, ChevronRight,
   Building2, Calendar, Eraser, Info, DollarSign,
-  ChevronUp, ChevronDown, Edit2, Check, Minus, Zap,
+  ChevronUp, ChevronDown, Edit2, Check, Minus, Zap, X, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,13 +15,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
 
@@ -65,15 +69,16 @@ function TaskStagingCard({
   task,
   departments,
   onChange,
+  onDeleteRequest,
 }: {
   task: StagingTask;
   departments: Department[];
   onChange: (id: number, patch: Partial<StagingTask>) => void;
+  onDeleteRequest: (id: number) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   const priority = task.priority as Priority;
-  const PIcon = PRIORITY_ICONS[priority] ?? Minus;
   const pColor = PRIORITY_COLORS[priority] ?? "#eab308";
 
   function bumpPriority(dir: 1 | -1) {
@@ -83,7 +88,7 @@ function TaskStagingCard({
   }
 
   return (
-    <Card className="overflow-hidden">
+    <Card>
       <CardContent className="p-3">
         {/* Title row */}
         <div className="flex items-start gap-2">
@@ -98,46 +103,70 @@ function TaskStagingCard({
               <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{task.description}</p>
             )}
           </button>
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
-            title={expanded ? "Collapse" : "Expand to edit"}
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
+
+          {/* Action icons */}
+          <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+            <button
+              onClick={() => onDeleteRequest(task.id)}
+              className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
+              title="Delete task"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+              title={expanded ? "Close" : "Edit"}
+            >
+              {expanded
+                ? <X className="w-3.5 h-3.5" />
+                : <Edit2 className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
 
-        {/* Expanded edit mode */}
-        {expanded && (
-          <div className="mt-3 space-y-2 pt-3 border-t">
-            <div>
-              <Label className="text-xs text-muted-foreground">Title</Label>
-              <Input
-                value={task.title}
-                onChange={e => onChange(task.id, { title: e.target.value })}
-                className="h-7 text-sm mt-0.5"
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Description</Label>
-              <Textarea
-                value={task.description ?? ""}
-                onChange={e => onChange(task.id, { description: e.target.value })}
-                rows={3}
-                className="text-sm mt-0.5"
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Start Date</Label>
-              <Input
-                type="date"
-                value={task.startDate ?? ""}
-                onChange={e => onChange(task.id, { startDate: e.target.value })}
-                className="h-7 text-sm mt-0.5"
-              />
-            </div>
-          </div>
-        )}
+        {/* Expanded edit mode — smooth height animation */}
+        <AnimatePresence initial={false}>
+          {expanded && (
+            <motion.div
+              key="edit-fields"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: "easeInOut" }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3 space-y-2 pt-3 border-t">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Title</Label>
+                  <Input
+                    value={task.title}
+                    onChange={e => onChange(task.id, { title: e.target.value })}
+                    className="h-7 text-sm mt-0.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Description</Label>
+                  <Textarea
+                    value={task.description ?? ""}
+                    onChange={e => onChange(task.id, { description: e.target.value })}
+                    rows={3}
+                    className="text-sm mt-0.5"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Start Date</Label>
+                  <Input
+                    type="date"
+                    value={task.startDate ?? ""}
+                    onChange={e => onChange(task.id, { startDate: e.target.value })}
+                    className="h-7 text-sm mt-0.5"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Controls row */}
         <div className="flex items-center gap-2 mt-3">
@@ -205,6 +234,8 @@ function TaskStagingDialog({
 
   const [localTasks, setLocalTasks] = useState<StagingTask[]>([]);
   const [initialised, setInitialised] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
   if (!initialised && rawTasks.length > 0) {
     setLocalTasks(rawTasks);
     setInitialised(true);
@@ -215,9 +246,25 @@ function TaskStagingDialog({
       apiClient.patch(`/tasks/${id}`, patch).then(r => r.data),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/tasks/${id}`).then(r => r.data),
+    onSuccess: (_data, id) => {
+      setLocalTasks(prev => prev.filter(t => t.id !== id));
+      toast({ title: "Task deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete task", variant: "destructive" }),
+  });
+
   function handleChange(id: number, patch: Partial<StagingTask>) {
     setLocalTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
     patchMutation.mutate({ id, patch });
+  }
+
+  function handleConfirmDelete() {
+    if (confirmDeleteId !== null) {
+      deleteMutation.mutate(confirmDeleteId);
+      setConfirmDeleteId(null);
+    }
   }
 
   function handleDone() {
@@ -230,50 +277,73 @@ function TaskStagingDialog({
   const tasks = localTasks.length > 0 ? localTasks : rawTasks;
 
   return (
-    <Dialog open onOpenChange={open => { if (!open) handleDone(); }}>
-      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <div className="pr-10">
-            <DialogTitle className="flex items-center gap-2">
-              <FolderKanban className="w-5 h-5 text-amber-500" />
-              Stage Imported Tasks
-            </DialogTitle>
-            <p className="text-xs text-muted-foreground mt-1">
-              {tasks.length} task{tasks.length !== 1 ? "s" : ""} imported — set departments and priorities, then continue.
-            </p>
-          </div>
-        </DialogHeader>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <ScrollArea className="flex-1 -mx-1 px-1">
-            <div className="space-y-2 pb-2">
-              {tasks.map(task => (
-                <TaskStagingCard
-                  key={task.id}
-                  task={task}
-                  departments={departments}
-                  onChange={handleChange}
-                />
-              ))}
+    <>
+      <Dialog open onOpenChange={open => { if (!open) handleDone(); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col gap-0 p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
+            <div className="pr-6">
+              <DialogTitle className="flex items-center gap-2">
+                <FolderKanban className="w-5 h-5 text-amber-500" />
+                Stage Imported Tasks
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                {tasks.length} task{tasks.length !== 1 ? "s" : ""} imported — set departments and priorities, then continue.
+              </p>
             </div>
-          </ScrollArea>
-        )}
+          </DialogHeader>
 
-        <div className="flex items-center justify-between pt-3 border-t">
-          <p className="text-xs text-muted-foreground">
-            You can always edit tasks later from the board.
-          </p>
-          <Button onClick={handleDone} className="gap-1.5">
-            <Check className="w-4 h-4" />
-            Done Staging
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12 flex-1">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 overflow-y-auto col-scroll px-6">
+              <div className="space-y-2 py-2">
+                {tasks.map(task => (
+                  <TaskStagingCard
+                    key={task.id}
+                    task={task}
+                    departments={departments}
+                    onChange={handleChange}
+                    onDeleteRequest={setConfirmDeleteId}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between px-6 py-4 border-t flex-shrink-0">
+            <p className="text-xs text-muted-foreground">
+              You can always edit tasks later from the board.
+            </p>
+            <Button onClick={handleDone} className="gap-1.5">
+              <Check className="w-4 h-4" />
+              Done Staging
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirmDeleteId !== null} onOpenChange={open => { if (!open) setConfirmDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this task?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the task. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
