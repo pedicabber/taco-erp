@@ -101,9 +101,17 @@ export default function TaskCard({
   const deptColor = task.department?.color ?? null;
 
   if (compact) {
+    const compactBorder: React.CSSProperties = isOverdue
+      ? { borderLeftColor: "#f87171", borderLeftWidth: 3 }
+      : deptColor
+      ? { borderLeftColor: deptColor, borderLeftWidth: 3 }
+      : {};
     return (
       <Link href={`/tasks/${task.id}`}>
-        <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted cursor-pointer transition-colors">
+        <div
+          className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted cursor-pointer transition-colors"
+          style={compactBorder}
+        >
           <div className={cn("w-2 h-2 rounded-full flex-shrink-0", STATUS_STYLES[task.status] || "bg-gray-400")} />
           <span className="text-sm flex-1 truncate">{task.title}</span>
           {task.timerRunning && <Play className="w-3 h-3 text-green-500 animate-pulse flex-shrink-0" />}

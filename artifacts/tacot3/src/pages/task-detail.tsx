@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
-import type { UserProfileMini, TaskAttachment } from "@/lib/types";
+import type { UserProfileMini, TaskAttachment, Department } from "@/lib/types";
 import {
   ArrowLeft, Play, Square, Clock, Edit2, Trash2, Save, X,
   Paperclip, Bell, BellOff, Loader2, AlertTriangle, CheckCircle2,
@@ -82,6 +82,7 @@ export default function TaskDetailPage() {
     status: string;
     priority: string;
     assigneeId: string;
+    departmentId: string;
     expectedHours: string;
     startDate: string;
     dueDate: string;
@@ -120,6 +121,11 @@ export default function TaskDetailPage() {
   const { data: users = [] } = useQuery({
     queryKey: ["users"],
     queryFn: () => apiClient.get("/users").then(r => r.data),
+  });
+
+  const { data: departments = [] } = useQuery<Department[]>({
+    queryKey: ["departments", "global"],
+    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data),
   });
 
   const elapsed = useLiveTimer(task?.elapsedSeconds ?? 0, task?.timerRunning ?? false, task?.timerStartedAt ?? null);
@@ -246,6 +252,7 @@ export default function TaskDetailPage() {
       status: task.status,
       priority: task.priority,
       assigneeId: task.assigneeId ? String(task.assigneeId) : "none",
+      departmentId: task.departmentId ? String(task.departmentId) : "none",
       expectedHours: task.expectedHours ? String(task.expectedHours) : "",
       dueDate: task.dueDate ?? "",
       startDate: task.startDate ?? "",
@@ -260,7 +267,8 @@ export default function TaskDetailPage() {
       description: editForm.description || undefined,
       status: editForm.status,
       priority: editForm.priority,
-      assigneeId: editForm.assigneeId !== "none" ? Number(editForm.assigneeId) : undefined,
+      assigneeId: editForm.assigneeId !== "none" ? Number(editForm.assigneeId) : null,
+      departmentId: editForm.departmentId !== "none" ? Number(editForm.departmentId) : null,
       expectedHours: editForm.expectedHours ? Number(editForm.expectedHours) : undefined,
       dueDate: editForm.dueDate || undefined,
       startDate: editForm.startDate || undefined,
@@ -358,6 +366,23 @@ export default function TaskDetailPage() {
                             <SelectItem value="none">Unassigned</SelectItem>
                             {(users as UserProfileMini[]).map(u => (
                               <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Department</Label>
+                        <Select value={editForm.departmentId} onValueChange={v => setEditForm(p => p && ({ ...p, departmentId: v }))}>
+                          <SelectTrigger><SelectValue placeholder="No department" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No department</SelectItem>
+                            {departments.map(d => (
+                              <SelectItem key={d.id} value={String(d.id)}>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color ?? "#6B7280" }} />
+                                  {d.name}
+                                </div>
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>

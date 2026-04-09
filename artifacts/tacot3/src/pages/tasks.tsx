@@ -34,8 +34,8 @@ function NewTaskDialog({
   });
 
   const { data: departments = [] } = useQuery({
-    queryKey: ["departments"],
-    queryFn: () => apiClient.get("/departments").then(r => r.data),
+    queryKey: ["departments", "global"],
+    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data),
   });
 
   const { data: users = [] } = useQuery({
@@ -57,9 +57,7 @@ function NewTaskDialog({
     startDate: "",
   });
 
-  const filteredDepts = form.projectId
-    ? (departments as Department[]).filter(d => d.projectId === Number(form.projectId))
-    : departments as Department[];
+  const filteredDepts = departments as Department[];
 
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => apiClient.post("/tasks", data).then(r => r.data),
