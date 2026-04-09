@@ -11,4 +11,5 @@ export type {
   Notification,
   KanbanColumn,
   ProjectSummary,
+  ParsedTaskItem,
 } from "@workspace/api-client-react";

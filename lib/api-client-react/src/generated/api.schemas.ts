@@ -57,6 +57,8 @@ export interface Project {
   /** @nullable */
   description: string | null;
   /** @nullable */
+  fullDescription: string | null;
+  /** @nullable */
   startDate: string | null;
   status: ProjectStatus;
   /** @nullable */
@@ -84,12 +86,19 @@ export const CreateProjectBodyStatus = {
   cancelled: "cancelled",
 } as const;
 
+export interface ParsedTaskItem {
+  title: string;
+  description?: string;
+}
+
 export interface CreateProjectBody {
   name: string;
   company: string;
   projectId: string;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  fullDescription?: string | null;
   /** @nullable */
   startDate?: string | null;
   status?: CreateProjectBodyStatus;
@@ -103,6 +112,7 @@ export interface CreateProjectBody {
   contactEmail?: string | null;
   /** @nullable */
   totalPrice?: string | null;
+  parsedTasks?: ParsedTaskItem[];
 }
 
 export type UpdateProjectBodyStatus =
@@ -121,6 +131,8 @@ export interface UpdateProjectBody {
   projectId?: string;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  fullDescription?: string | null;
   /** @nullable */
   startDate?: string | null;
   status?: UpdateProjectBodyStatus;
@@ -141,12 +153,14 @@ export interface ParsedPdfData {
   name: string;
   projectId: string;
   description: string;
+  fullDescription: string;
   startDate: string;
   address: string;
   contactName: string;
   contactPhone: string;
   contactEmail: string;
   totalPrice: string;
+  parsedTasks: ParsedTaskItem[];
 }
 
 export type ProjectSummaryTasksByStatusItem = {

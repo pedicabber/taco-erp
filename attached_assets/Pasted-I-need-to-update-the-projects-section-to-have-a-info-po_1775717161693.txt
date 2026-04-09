@@ -1,0 +1,21 @@
+I need to update the projects section to have a info popup page that will list all of the info we have in the databse currently from the scrape we did from the PDF (total, contact info, ext..) + a description that will need to have the ability to be updated along with all the other fields but mainly the description will be udptaed throughout the project. Currently the description that is scrapped from the pdf stops at "including the following options:" i would like to grab all of it after this and make sure it gets scraped now and added to the description info/inspect view for the project where you can see it all while keep the old brief description being everything before "including the following options:"
+
+Once we scrape this new descrioption/whole description instead of just the begining of it we want to AUTO break the description into each of these line items into auto created tasks that are set and made from the line items, below is an example of how it will look and what you will need to scrape from,
+
+"Automated Robotic Assembly Production Cell including the
+following options:
+• (1) Rizon 10 Robotic Arm
+o Custom Dual EOAT (Glue Applicator and
+stapler)
+• (2) Kuka KR 22 R1610-2
+o Vacuum Enabled Gripper
+o Kuka KL 250-3 (7th Axis)
+• Machine Guarding
+• Machine Vision – Raw Material Pallet Monitoring
+• Machine Vision – Raw Material Inspection"
+
+As you can see we have points and sub points. These main pionts will become tasks that will need to be filled in with all the information besides the title, and creation date which we set but have the title, start date will be automade and we just have to go in and fill the rest when we upload and parse a PDF.
+
+
+
+for the project ID that is scraped from the site example, we have 24-1084REVC that was extracted needs to turn into T3-24-1084 adding T3- to the start of every scrapped quote number, also if we can remove everything after the numbers, example, removing REVC from this quotenumber when it scans it. So 24-1084REVC -> T3-24-1084 for formatting. Update and convert the current projects in the database (production to have this formatting by updating these project id (scraped ID not db ID))

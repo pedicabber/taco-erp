@@ -34,10 +34,11 @@ const router: IRouter = Router();
 
 const DEFAULT_COLUMNS = [
   { statusKey: "backlog",     label: "Backlog",      hexColor: "#94a3b8", sortOrder: 0 },
-  { statusKey: "in_progress", label: "In Progress",  hexColor: "#3b82f6", sortOrder: 1 },
-  { statusKey: "in_review",   label: "In Review",    hexColor: "#a855f7", sortOrder: 2 },
-  { statusKey: "blocked",     label: "Blocked",      hexColor: "#ef4444", sortOrder: 3 },
-  { statusKey: "complete",    label: "Complete",     hexColor: "#22c55e", sortOrder: 4 },
+  { statusKey: "new_tasks",   label: "New Tasks",    hexColor: "#f59e0b", sortOrder: 1 },
+  { statusKey: "in_progress", label: "In Progress",  hexColor: "#3b82f6", sortOrder: 2 },
+  { statusKey: "in_review",   label: "In Review",    hexColor: "#a855f7", sortOrder: 3 },
+  { statusKey: "blocked",     label: "Blocked",      hexColor: "#ef4444", sortOrder: 4 },
+  { statusKey: "complete",    label: "Complete",     hexColor: "#22c55e", sortOrder: 5 },
 ];
 
 async function seedDefaultColumns() {
@@ -45,6 +46,25 @@ async function seedDefaultColumns() {
     const existing = await db.select().from(kanbanColumnsTable);
     if (existing.length === 0) {
       await db.insert(kanbanColumnsTable).values(DEFAULT_COLUMNS);
+      return;
+    }
+    // Ensure new_tasks column exists (for already-seeded databases)
+    const hasNewTasks = existing.some(c => c.statusKey === "new_tasks");
+    if (!hasNewTasks) {
+      // Shift all columns with sortOrder >= 1 up by 1 to make room
+      for (const col of existing) {
+        if (col.sortOrder >= 1) {
+          await db.update(kanbanColumnsTable)
+            .set({ sortOrder: col.sortOrder + 1 })
+            .where(eq(kanbanColumnsTable.id, col.id));
+        }
+      }
+      await db.insert(kanbanColumnsTable).values({
+        statusKey: "new_tasks",
+        label: "New Tasks",
+        hexColor: "#f59e0b",
+        sortOrder: 1,
+      });
     }
   } catch {
     // ignore — table may not exist yet during first boot before migration

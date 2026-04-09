@@ -94,6 +94,7 @@ export const ListProjectsResponseItem = zod.object({
   company: zod.string(),
   projectId: zod.string(),
   description: zod.string().nullable(),
+  fullDescription: zod.string().nullable(),
   startDate: zod.string().nullable(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]),
   address: zod.string().nullable(),
@@ -110,11 +111,17 @@ export const ListProjectsResponse = zod.array(ListProjectsResponseItem);
 /**
  * @summary Create a new project
  */
+export const ParsedTaskItem = zod.object({
+  title: zod.string(),
+  description: zod.string().optional(),
+});
+
 export const CreateProjectBody = zod.object({
   name: zod.string(),
   company: zod.string(),
   projectId: zod.string(),
   description: zod.string().nullish(),
+  fullDescription: zod.string().nullish(),
   startDate: zod.string().nullish(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]).optional(),
   address: zod.string().nullish(),
@@ -122,6 +129,7 @@ export const CreateProjectBody = zod.object({
   contactPhone: zod.string().nullish(),
   contactEmail: zod.string().nullish(),
   totalPrice: zod.string().nullish(),
+  parsedTasks: zod.array(ParsedTaskItem).optional(),
 });
 
 /**
@@ -137,6 +145,7 @@ export const GetProjectResponse = zod.object({
   company: zod.string(),
   projectId: zod.string(),
   description: zod.string().nullable(),
+  fullDescription: zod.string().nullable(),
   startDate: zod.string().nullable(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]),
   address: zod.string().nullable(),
@@ -161,6 +170,7 @@ export const UpdateProjectBody = zod.object({
   company: zod.string().optional(),
   projectId: zod.string().optional(),
   description: zod.string().nullish(),
+  fullDescription: zod.string().nullish(),
   startDate: zod.string().nullish(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]).optional(),
   address: zod.string().nullish(),
@@ -176,6 +186,7 @@ export const UpdateProjectResponse = zod.object({
   company: zod.string(),
   projectId: zod.string(),
   description: zod.string().nullable(),
+  fullDescription: zod.string().nullable(),
   startDate: zod.string().nullable(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]),
   address: zod.string().nullable(),
@@ -233,12 +244,14 @@ export const ParsePdfResponse = zod.object({
   name: zod.string(),
   projectId: zod.string(),
   description: zod.string(),
+  fullDescription: zod.string(),
   startDate: zod.string(),
   address: zod.string(),
   contactName: zod.string(),
   contactPhone: zod.string(),
   contactEmail: zod.string(),
   totalPrice: zod.string(),
+  parsedTasks: zod.array(ParsedTaskItem),
 });
 
 /**
