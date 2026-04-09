@@ -56,13 +56,20 @@ export default function BoardPage() {
 
   const boardRef = useRef<HTMLDivElement>(null);
 
-  // Redirect vertical wheel → horizontal scroll on the board track
+  // Redirect vertical wheel → horizontal scroll on the board track.
+  // Exception: if the cursor is over a column task list that can scroll vertically,
+  // let the browser handle it natively (column scrolls down).
   useEffect(() => {
     const el = boardRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // already horizontal
       if (e.deltaY === 0) return;
+
+      // If cursor is over a scrollable column task list, let it scroll vertically
+      const colTaskList = (e.target as HTMLElement).closest("[data-col-tasks]") as HTMLElement | null;
+      if (colTaskList && colTaskList.scrollHeight > colTaskList.clientHeight) return;
+
       e.preventDefault();
       el.scrollLeft += e.deltaY;
     };
@@ -70,7 +77,8 @@ export default function BoardPage() {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  // Mouse drag-to-scroll on the board track
+  // Mouse drag-to-scroll on the board track.
+  // Exception: don't initiate board drag when clicking inside a scrollable column.
   useEffect(() => {
     const el = boardRef.current;
     if (!el) return;
@@ -80,6 +88,9 @@ export default function BoardPage() {
     const onMouseDown = (e: MouseEvent) => {
       if ((e.target as HTMLElement).closest("[draggable]")) return;
       if ((e.target as HTMLElement).closest("button, input, select, a, [role='button']")) return;
+      // Don't hijack drag inside a scrollable column task list
+      const colTaskList = (e.target as HTMLElement).closest("[data-col-tasks]") as HTMLElement | null;
+      if (colTaskList && colTaskList.scrollHeight > colTaskList.clientHeight) return;
       isDown = true;
       startX = e.pageX - el.offsetLeft;
       scrollLeft = el.scrollLeft;
@@ -317,7 +328,11 @@ export default function BoardPage() {
                   </div>
 
                   {/* Tasks — internal vertical scroll */}
-                  <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 min-h-0 scrollbar-hide">
+                  <div
+                    data-col-tasks
+                    className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-2 min-h-0"
+                    style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+                  >
                     <AnimatePresence>
                       {tasks.map(task => (
                         <motion.div
