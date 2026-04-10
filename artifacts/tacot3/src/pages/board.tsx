@@ -5,6 +5,7 @@ import {
   Plus, Loader2, Trello, Settings2, Trash2,
   ChevronUp, ChevronDown, Check, X,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Project, Department, KanbanColumn } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -455,16 +456,22 @@ export default function BoardPage() {
                 </div>
 
                 {/* Delete */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-destructive hover:text-destructive flex-shrink-0"
-                  onClick={() => deleteColMutation.mutate(col.id)}
-                  disabled={deleteColMutation.isPending}
-                  title="Delete column (must be empty)"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
+                <ConfirmDialog
+                  trigger={
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive flex-shrink-0"
+                      title="Delete column (must be empty)"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  }
+                  title={`Delete column "${col.name}"?`}
+                  description="The column must be empty before it can be deleted. This action cannot be undone."
+                  onConfirm={() => deleteColMutation.mutate(col.id)}
+                  isPending={deleteColMutation.isPending}
+                />
               </div>
             ))}
           </div>

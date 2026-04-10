@@ -13,6 +13,7 @@ import {
   Eye, Download, Trash2, ChevronDown, ChevronRight, Pin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 function getFileUrl(objectPath: string) {
   return `/api/storage/objects${objectPath.replace(/^\/objects/, "")}`;
@@ -95,14 +96,16 @@ function AttachmentRow({
           </a>
         </Button>
         {onDelete && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive hover:text-destructive"
-            onClick={onDelete}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          <ConfirmDialog
+            trigger={
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive">
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            }
+            title="Delete attachment?"
+            description="This will permanently remove the file. This action cannot be undone."
+            onConfirm={onDelete}
+          />
         )}
       </div>
     </div>

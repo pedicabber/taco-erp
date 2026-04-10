@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -648,17 +649,17 @@ export default function TaskDetailPage() {
                         >
                           {isFollowing ? <Bell className="w-4 h-4 text-primary" /> : <BellOff className="w-4 h-4" />}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => {
-                            if (confirm("Delete this task?")) deleteMutation.mutate();
-                          }}
-                          title="Delete task"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <ConfirmDialog
+                          trigger={
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title="Delete task">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          }
+                          title="Delete this task?"
+                          description="This will permanently delete the task and all its subtasks and attachments. This action cannot be undone."
+                          onConfirm={() => deleteMutation.mutate()}
+                          isPending={deleteMutation.isPending}
+                        />
                       </div>
                     </div>
                   </>
@@ -892,7 +893,17 @@ export default function TaskDetailPage() {
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPreviewAttachment(a)}><Eye className="w-4 h-4" /></Button>
                           )}
                           <a href={fileUrl} download={a.fileName}><Button variant="ghost" size="icon" className="h-7 w-7"><Download className="w-4 h-4" /></Button></a>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteAttachmentMutation.mutate(a.id)} disabled={deleteAttachmentMutation.isPending}><Trash2 className="w-4 h-4" /></Button>
+                          <ConfirmDialog
+                            trigger={
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            }
+                            title="Delete attachment?"
+                            description="This will permanently remove the file. This action cannot be undone."
+                            onConfirm={() => deleteAttachmentMutation.mutate(a.id)}
+                            isPending={deleteAttachmentMutation.isPending}
+                          />
                         </div>
                       </div>
                     );
