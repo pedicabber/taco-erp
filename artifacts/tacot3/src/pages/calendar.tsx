@@ -563,7 +563,7 @@ function GanttView({ events }: { events: CalendarEvent[] }) {
             {weekGroups.map(wg => (
               <div
                 key={wg.label}
-                className="text-xs font-semibold text-muted-foreground border-r border-border px-2 py-1 flex-shrink-0"
+                className="text-xs font-semibold text-muted-foreground border-r border-border px-2 py-1 flex-shrink-0 whitespace-nowrap overflow-hidden"
                 style={{ width: wg.days.length * DAY_PX }}
               >
                 {wg.label}
