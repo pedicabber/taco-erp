@@ -34,7 +34,7 @@ export default function ProjectDetailPage() {
 
   const { data: tasks = [] } = useQuery({
     queryKey: ["tasks", { projectId }],
-    queryFn: () => apiClient.get(`/tasks?projectId=${projectId}`).then(r => r.data),
+    queryFn: () => apiClient.get(`/tasks?projectId=${projectId}&topLevelOnly=true`).then(r => r.data),
   });
 
   const { data: summary } = useQuery({
@@ -236,17 +236,10 @@ export default function ProjectDetailPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-              {(tasks as Task[]).slice(0, 10).map(task => (
+            <div className="space-y-2">
+              {(tasks as Task[]).map(task => (
                 <TaskCard key={task.id} task={task} compact />
               ))}
-              {tasks.length > 10 && (
-                <Link href={`/tasks?projectId=${projectId}`}>
-                  <p className="text-sm text-muted-foreground text-center py-2 hover:text-foreground cursor-pointer">
-                    View {tasks.length - 10} more tasks
-                  </p>
-                </Link>
-              )}
             </div>
           )}
         </div>
