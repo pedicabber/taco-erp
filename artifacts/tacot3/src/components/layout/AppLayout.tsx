@@ -102,13 +102,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </button>
             </>
           ) : (
-            <button
-              className="hidden md:flex items-center justify-center w-8 h-8 rounded hover:bg-muted transition-colors"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              title="Expand sidebar"
-            >
-              <ChevronLeft className="w-4 h-4 rotate-180" />
-            </button>
+            <div className="flex flex-col items-center gap-1">
+              <img
+                src={`${import.meta.env.BASE_URL}taco-64.png`}
+                alt="TacoT3"
+                className="w-8 h-8 object-contain"
+              />
+              <button
+                className="hidden md:flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                title="Expand sidebar"
+              >
+                <ChevronLeft className="w-3 h-3 rotate-180" />
+              </button>
+            </div>
           )}
         </div>
 
