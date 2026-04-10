@@ -189,13 +189,19 @@ function SubtasksPanel({ taskId, projectId }: { taskId: number; projectId: numbe
               {sub.title}
             </Link>
             <div className={cn("w-2 h-2 rounded-full flex-shrink-0", STATUS_DOT[sub.status] ?? "bg-muted")} title={sub.status.replace("_", " ")} />
-            <button
-              onClick={() => deleteMutation.mutate(sub.id)}
-              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-0.5 flex-shrink-0"
-              title="Delete subtask"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
+            <ConfirmDialog
+              trigger={
+                <button
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-0.5 flex-shrink-0"
+                  title="Delete subtask"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              }
+              title="Delete subtask?"
+              description="This will permanently delete this subtask. This action cannot be undone."
+              onConfirm={() => deleteMutation.mutate(sub.id)}
+            />
           </div>
         ))}
         {adding && (
