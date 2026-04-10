@@ -182,7 +182,7 @@ async function logActivity(taskId: number, actorId: number, action: string): Pro
 router.get("/tasks", requireAuth, async (req, res): Promise<void> => {
   let query = db.select().from(tasksTable).$dynamic();
 
-  const { projectId, departmentId, assigneeId, status, parentTaskId } = req.query;
+  const { projectId, departmentId, assigneeId, status, parentTaskId, topLevelOnly } = req.query;
 
   const conditions = [];
   if (projectId) conditions.push(eq(tasksTable.projectId, Number(projectId)));
@@ -190,6 +190,7 @@ router.get("/tasks", requireAuth, async (req, res): Promise<void> => {
   if (assigneeId) conditions.push(eq(tasksTable.assigneeId, Number(assigneeId)));
   if (status) conditions.push(eq(tasksTable.status, String(status)));
   if (parentTaskId) conditions.push(eq(tasksTable.parentTaskId, Number(parentTaskId)));
+  if (topLevelOnly === "true") conditions.push(isNull(tasksTable.parentTaskId));
 
   if (conditions.length > 0) {
     query = query.where(and(...conditions));

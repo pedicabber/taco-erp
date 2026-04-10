@@ -247,6 +247,7 @@ export default function TasksPage() {
   const queryParams = new URLSearchParams();
   if (filterProject !== "all") queryParams.set("projectId", filterProject);
   if (filterStatus !== "all") queryParams.set("status", filterStatus);
+  queryParams.set("topLevelOnly", "true");
 
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["tasks", filterProject, filterStatus],
