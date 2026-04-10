@@ -706,7 +706,7 @@ router.delete("/kanban/columns/:id", requireAuth, async (req, res): Promise<void
 // Kanban view
 router.get("/kanban", requireAuth, async (req, res): Promise<void> => {
   let query = db.select().from(tasksTable).$dynamic();
-  const conditions = [];
+  const conditions = [isNull(tasksTable.parentTaskId)];
   if (req.query.projectId) conditions.push(eq(tasksTable.projectId, Number(req.query.projectId)));
   if (req.query.departmentId) conditions.push(eq(tasksTable.departmentId, Number(req.query.departmentId)));
   if (conditions.length > 0) query = query.where(and(...conditions));
@@ -731,7 +731,7 @@ router.get("/kanban", requireAuth, async (req, res): Promise<void> => {
 // Calendar events
 router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
   let query = db.select().from(tasksTable).$dynamic();
-  const conditions = [];
+  const conditions = [isNull(tasksTable.parentTaskId)];
   if (req.query.projectId) conditions.push(eq(tasksTable.projectId, Number(req.query.projectId)));
   if (req.query.departmentId) conditions.push(eq(tasksTable.departmentId, Number(req.query.departmentId)));
   if (req.query.assigneeId) conditions.push(eq(tasksTable.assigneeId, Number(req.query.assigneeId)));
