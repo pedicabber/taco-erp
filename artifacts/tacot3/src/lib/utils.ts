@@ -11,6 +11,7 @@ export function cn(...inputs: ClassValue[]) {
  * Example: "24-1084REVC" → "T3-24-1084"
  */
 export function formatQuoteNum(raw: string): string {
+  if (raw.startsWith("T3-")) return raw;
   const stripped = raw.replace(/[A-Za-z]+$/, "").replace(/-$/, "");
   return `T3-${stripped}`;
 }

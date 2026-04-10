@@ -507,7 +507,11 @@ function NewProjectDialog({
     try {
       const r = await apiClient.post("/projects/parse-pdf", fd, { headers: { "Content-Type": "multipart/form-data" } });
       const data = r.data;
-      setForm(prev => ({ ...prev, ...data }));
+      setForm(prev => ({
+        ...prev,
+        ...data,
+        projectId: data.projectId ? formatQuoteNum(data.projectId) : prev.projectId,
+      }));
       toast({ title: "PDF parsed", description: "Project details filled in from document." });
     } catch {
       toast({ title: "Failed to parse PDF", variant: "destructive" });
