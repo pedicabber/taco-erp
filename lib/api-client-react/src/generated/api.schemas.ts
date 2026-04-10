@@ -378,6 +378,36 @@ export interface TaskAttachment {
   createdAt: string;
 }
 
+export interface ProjectAttachment {
+  id: number;
+  projectId: number;
+  fileName: string;
+  objectPath: string;
+  /** @nullable */
+  fileSize: number | null;
+  /** @nullable */
+  mimeType: string | null;
+  isPinned: boolean;
+  uploadedById: number;
+  createdAt: string;
+}
+
+export interface ProjectAllAttachmentsTaskGroup {
+  taskId: number;
+  taskTitle: string;
+  isSubtask: boolean;
+  /** @nullable */
+  parentTaskId: number | null;
+  /** @nullable */
+  parentTaskTitle: string | null;
+  attachments: TaskAttachment[];
+}
+
+export interface ProjectAllAttachments {
+  projectAttachments: ProjectAttachment[];
+  taskGroups: ProjectAllAttachmentsTaskGroup[];
+}
+
 export interface AddAttachmentBody {
   fileName: string;
   objectPath: string;

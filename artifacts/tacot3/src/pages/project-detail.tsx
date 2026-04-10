@@ -17,6 +17,7 @@ import TaskCard from "@/components/tasks/TaskCard";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import ProjectAttachmentsPanel from "@/components/projects/ProjectAttachmentsPanel";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   active: "default",
@@ -285,6 +286,11 @@ export default function ProjectDetailPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Attachment dump */}
+      <div className="mt-6">
+        <ProjectAttachmentsPanel projectId={projectId} />
       </div>
 
       {infoOpen && project && (

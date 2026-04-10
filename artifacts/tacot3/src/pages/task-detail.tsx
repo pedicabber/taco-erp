@@ -2,12 +2,12 @@ import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
-import type { UserProfileMini, TaskAttachment, Department } from "@/lib/types";
+import type { UserProfileMini, TaskAttachment, ProjectAttachment, Department } from "@/lib/types";
 import {
   ArrowLeft, Play, Square, Clock, Edit2, Trash2, Save, X,
   Paperclip, Bell, BellOff, Loader2, AlertTriangle, CheckCircle2,
   Calendar, User, Building2, Upload, FileText, Tag,
-  Eye, Download, File, Plus, ChevronRight, Check, Circle,
+  Eye, Download, File, Plus, ChevronRight, ChevronDown, Check, Circle, Pin, Image,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -221,6 +221,39 @@ function SubtasksPanel({ taskId, projectId }: { taskId: number; projectId: numbe
   );
 }
 
+function AttachmentSection({
+  title,
+  count,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  count: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen ?? true);
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-3 py-2 bg-muted/30 hover:bg-muted/60 transition-colors text-left"
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="text-sm font-medium flex items-center gap-2">
+          {open ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+          {title}
+          <Badge variant="secondary" className="text-xs py-0 px-1.5">{count}</Badge>
+        </span>
+      </button>
+      {open && (
+        <div className="p-2 space-y-1.5">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TaskDetailPage() {
   const params = useParams<{ taskId: string }>();
   const taskId = parseInt(params.taskId, 10);
@@ -245,13 +278,13 @@ export default function TaskDetailPage() {
   const [timerHours, setTimerHours] = useState("");
   const [timerMins, setTimerMins] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [previewAttachment, setPreviewAttachment] = useState<TaskAttachment | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<{ fileName: string; objectPath: string; mimeType?: string | null } | null>(null);
 
   function getFileUrl(objectPath: string) {
     return `/api/storage/objects${objectPath.replace(/^\/objects/, "")}`;
   }
 
-  function getFileType(a: TaskAttachment): "image" | "pdf" | "other" {
+  function getFileType(a: { fileName: string; mimeType?: string | null }): "image" | "pdf" | "other" {
     const mime = a.mimeType ?? "";
     const name = a.fileName.toLowerCase();
     if (mime.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg|bmp)$/.test(name)) return "image";
@@ -268,6 +301,20 @@ export default function TaskDetailPage() {
   const { data: attachments = [] } = useQuery({
     queryKey: ["task-attachments", taskId],
     queryFn: () => apiClient.get(`/tasks/${taskId}/attachments`).then(r => r.data),
+  });
+
+  const projectId: number | null = task?.projectId ?? null;
+
+  const { data: projectAttachments = [] } = useQuery<ProjectAttachment[]>({
+    queryKey: ["project-attachments", projectId],
+    queryFn: () => apiClient.get(`/projects/${projectId}/attachments`).then(r => r.data),
+    enabled: !!projectId,
+  });
+
+  type SubtaskGroup = { taskId: number; taskTitle: string; attachments: TaskAttachment[] };
+  const { data: subtaskGroups = [] } = useQuery<SubtaskGroup[]>({
+    queryKey: ["subtask-attachments", taskId],
+    queryFn: () => apiClient.get(`/tasks/${taskId}/subtask-attachments`).then(r => r.data),
   });
 
   const { data: users = [] } = useQuery({
@@ -730,7 +777,12 @@ export default function TaskDetailPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Paperclip className="w-4 h-4" />
-                  Attachments ({attachments.length})
+                  Attachments
+                  {(attachments.length + projectAttachments.length + subtaskGroups.reduce((s, g) => s + g.attachments.length, 0)) > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {attachments.length + projectAttachments.length + subtaskGroups.reduce((s, g) => s + g.attachments.length, 0)}
+                    </Badge>
+                  )}
                 </CardTitle>
                 <Label htmlFor="file-upload" className="cursor-pointer">
                   <Button variant="outline" size="sm" asChild>
@@ -753,25 +805,47 @@ export default function TaskDetailPage() {
                 />
               </div>
             </CardHeader>
-            <CardContent>
-              {attachments.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No attachments</p>
-              ) : (
-                <div className="space-y-2">
-                  {(attachments as TaskAttachment[]).map(a => {
+            <CardContent className="space-y-2">
+              {/* Project Assets */}
+              {projectAttachments.length > 0 && (
+                <AttachmentSection title="Project Assets" count={projectAttachments.length} defaultOpen={false}>
+                  {[...(projectAttachments as ProjectAttachment[])].sort((a, b) => Number(b.isPinned) - Number(a.isPinned)).map(a => {
                     const type = getFileType(a);
                     const fileUrl = getFileUrl(a.objectPath);
                     return (
-                      <div
-                        key={a.id}
-                        className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
-                      >
+                      <div key={a.id} className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors">
+                        {type === "image" ? <Image className="w-8 h-8 text-blue-500 flex-shrink-0" /> : type === "pdf" ? <FileText className="w-8 h-8 text-red-500 flex-shrink-0" /> : <File className="w-8 h-8 text-muted-foreground flex-shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-sm truncate">{a.fileName}</span>
+                            {a.isPinned && <Badge variant="outline" className="text-xs py-0 px-1.5 gap-0.5 flex-shrink-0"><Pin className="w-2.5 h-2.5" />pinned</Badge>}
+                          </div>
+                          {a.fileSize && <div className="text-xs text-muted-foreground">{a.fileSize >= 1024*1024 ? `${(a.fileSize/1024/1024).toFixed(1)} MB` : `${(a.fileSize/1024).toFixed(1)} KB`}</div>}
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {(type === "image" || type === "pdf") && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPreviewAttachment(a)}><Eye className="w-4 h-4" /></Button>
+                          )}
+                          <a href={fileUrl} download={a.fileName}><Button variant="ghost" size="icon" className="h-7 w-7"><Download className="w-4 h-4" /></Button></a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </AttachmentSection>
+              )}
+
+              {/* This Task */}
+              <AttachmentSection title="This Task" count={attachments.length} defaultOpen>
+                {attachments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No attachments — use Upload above</p>
+                ) : (
+                  (attachments as TaskAttachment[]).map(a => {
+                    const type = getFileType(a);
+                    const fileUrl = getFileUrl(a.objectPath);
+                    return (
+                      <div key={a.id} className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors">
                         {type === "image" ? (
-                          <img
-                            src={fileUrl}
-                            alt={a.fileName}
-                            className="w-10 h-10 object-cover rounded flex-shrink-0 bg-muted"
-                          />
+                          <img src={fileUrl} alt={a.fileName} className="w-10 h-10 object-cover rounded flex-shrink-0 bg-muted" />
                         ) : type === "pdf" ? (
                           <FileText className="w-8 h-8 text-red-500 flex-shrink-0" />
                         ) : (
@@ -779,45 +853,45 @@ export default function TaskDetailPage() {
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="text-sm truncate">{a.fileName}</div>
-                          {a.fileSize && (
-                            <div className="text-xs text-muted-foreground">
-                              {a.fileSize >= 1024 * 1024
-                                ? `${(a.fileSize / 1024 / 1024).toFixed(1)} MB`
-                                : `${(a.fileSize / 1024).toFixed(1)} KB`}
-                            </div>
-                          )}
+                          {a.fileSize && <div className="text-xs text-muted-foreground">{a.fileSize >= 1024*1024 ? `${(a.fileSize/1024/1024).toFixed(1)} MB` : `${(a.fileSize/1024).toFixed(1)} KB`}</div>}
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
                           {(type === "image" || type === "pdf") && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => setPreviewAttachment(a)}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPreviewAttachment(a)}><Eye className="w-4 h-4" /></Button>
                           )}
-                          <a href={fileUrl} download={a.fileName}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <Download className="w-4 h-4" />
-                            </Button>
-                          </a>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => deleteAttachmentMutation.mutate(a.id)}
-                            disabled={deleteAttachmentMutation.isPending}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <a href={fileUrl} download={a.fileName}><Button variant="ghost" size="icon" className="h-7 w-7"><Download className="w-4 h-4" /></Button></a>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteAttachmentMutation.mutate(a.id)} disabled={deleteAttachmentMutation.isPending}><Trash2 className="w-4 h-4" /></Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </AttachmentSection>
+
+              {/* Subtask Assets */}
+              {subtaskGroups.map(group => (
+                <AttachmentSection key={group.taskId} title={`Subtask: ${group.taskTitle}`} count={group.attachments.length} defaultOpen={false}>
+                  {group.attachments.map((a: TaskAttachment) => {
+                    const type = getFileType(a);
+                    const fileUrl = getFileUrl(a.objectPath);
+                    return (
+                      <div key={a.id} className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors">
+                        {type === "image" ? <img src={fileUrl} alt={a.fileName} className="w-10 h-10 object-cover rounded flex-shrink-0 bg-muted" /> : type === "pdf" ? <FileText className="w-8 h-8 text-red-500 flex-shrink-0" /> : <File className="w-8 h-8 text-muted-foreground flex-shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm truncate">{a.fileName}</div>
+                          {a.fileSize && <div className="text-xs text-muted-foreground">{a.fileSize >= 1024*1024 ? `${(a.fileSize/1024/1024).toFixed(1)} MB` : `${(a.fileSize/1024).toFixed(1)} KB`}</div>}
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {(type === "image" || type === "pdf") && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPreviewAttachment(a)}><Eye className="w-4 h-4" /></Button>
+                          )}
+                          <a href={fileUrl} download={a.fileName}><Button variant="ghost" size="icon" className="h-7 w-7"><Download className="w-4 h-4" /></Button></a>
                         </div>
                       </div>
                     );
                   })}
-                </div>
-              )}
+                </AttachmentSection>
+              ))}
             </CardContent>
           </Card>
         </div>

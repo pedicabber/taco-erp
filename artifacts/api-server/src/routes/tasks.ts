@@ -886,4 +886,44 @@ router.get("/activity", requireAuth, async (req, res): Promise<void> => {
   res.json(GetActivityFeedResponse.parse(feed));
 });
 
+router.get("/tasks/:taskId/subtask-attachments", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid task ID" }); return; }
+
+  const subtasks = await db.select({ id: tasksTable.id, title: tasksTable.title })
+    .from(tasksTable).where(eq(tasksTable.parentTaskId, id));
+
+  if (subtasks.length === 0) { res.json([]); return; }
+
+  const subtaskIds = subtasks.map(s => s.id);
+  const allAttachments = await db.select().from(taskAttachmentsTable)
+    .where(inArray(taskAttachmentsTable.taskId, subtaskIds))
+    .orderBy(taskAttachmentsTable.createdAt);
+
+  const attachmentsByTask = new Map<number, typeof allAttachments>();
+  for (const a of allAttachments) {
+    if (!attachmentsByTask.has(a.taskId)) attachmentsByTask.set(a.taskId, []);
+    attachmentsByTask.get(a.taskId)!.push(a);
+  }
+
+  const result = subtasks
+    .filter(s => attachmentsByTask.has(s.id))
+    .map(s => ({
+      taskId: s.id,
+      taskTitle: s.title,
+      attachments: (attachmentsByTask.get(s.id) ?? []).map(a => ({
+        id: a.id,
+        taskId: a.taskId,
+        fileName: a.fileName,
+        objectPath: a.objectPath,
+        fileSize: a.fileSize,
+        mimeType: a.mimeType,
+        uploadedById: a.uploadedById,
+        createdAt: a.createdAt.toISOString(),
+      })),
+    }));
+
+  res.json(result);
+});
+
 export default router;

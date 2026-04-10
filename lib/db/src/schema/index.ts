@@ -4,6 +4,7 @@ export * from "./departments";
 export * from "./tasks";
 export * from "./task_relations";
 export * from "./task_attachments";
+export * from "./project_attachments";
 export * from "./task_timer_sessions";
 export * from "./notifications";
 export * from "./activity_log";

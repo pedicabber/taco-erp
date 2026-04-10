@@ -1,9 +1,9 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { parsePdfText } from "../lib/pdfParseAdapter";
-import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable } from "@workspace/db";
+import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable, projectAttachmentsTable, usersTable } from "@workspace/db";
 import { TEMPLATE_TASKS } from "../templateTasks";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -15,6 +15,9 @@ import {
   UpdateProjectResponse,
   GetProjectSummaryResponse,
   ParsePdfResponse,
+  ListProjectAttachmentsResponse,
+  AddProjectAttachmentBody,
+  GetProjectAllAttachmentsResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -490,6 +493,148 @@ router.get("/projects/:projectId/summary", requireAuth, async (req, res): Promis
   };
 
   res.json(GetProjectSummaryResponse.parse(summary));
+});
+
+// ── Project Attachments ──────────────────────────────────────────────────────
+
+function buildProjectAttachment(a: typeof projectAttachmentsTable.$inferSelect) {
+  return {
+    id: a.id,
+    projectId: a.projectId,
+    fileName: a.fileName,
+    objectPath: a.objectPath,
+    fileSize: a.fileSize,
+    mimeType: a.mimeType,
+    isPinned: a.isPinned,
+    uploadedById: a.uploadedById,
+    createdAt: a.createdAt.toISOString(),
+  };
+}
+
+router.get("/projects/:projectId/attachments", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.projectId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid project ID" }); return; }
+
+  const attachments = await db.select().from(projectAttachmentsTable)
+    .where(eq(projectAttachmentsTable.projectId, id))
+    .orderBy(projectAttachmentsTable.isPinned, projectAttachmentsTable.createdAt);
+
+  res.json(ListProjectAttachmentsResponse.parse(attachments.map(buildProjectAttachment)));
+});
+
+router.post("/projects/:projectId/attachments", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const user = await syncUserFromClerk(req);
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const id = parseInt(req.params.projectId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid project ID" }); return; }
+
+  const parsed = AddProjectAttachmentBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const OBJECT_PATH_RE = /^\/objects\/[a-z0-9/_-]+$/i;
+  if (!OBJECT_PATH_RE.test(parsed.data.objectPath)) {
+    res.status(400).json({ error: "Invalid object path" }); return;
+  }
+
+  const existing = await db.select({ id: projectAttachmentsTable.id })
+    .from(projectAttachmentsTable)
+    .where(eq(projectAttachmentsTable.objectPath, parsed.data.objectPath));
+
+  if (existing.length > 0) { res.status(409).json({ error: "Object already attached" }); return; }
+
+  const [attachment] = await db.insert(projectAttachmentsTable).values({
+    projectId: id,
+    fileName: parsed.data.fileName,
+    objectPath: parsed.data.objectPath,
+    fileSize: parsed.data.fileSize ?? null,
+    mimeType: parsed.data.mimeType ?? null,
+    isPinned: parsed.data.isPinned ?? false,
+    uploadedById: user.id,
+  }).returning();
+
+  res.status(201).json(buildProjectAttachment(attachment));
+});
+
+router.delete("/projects/:projectId/attachments/:attachmentId", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const projectId = parseInt(req.params.projectId, 10);
+  const attachmentId = parseInt(req.params.attachmentId, 10);
+  const clerkId = req.userId;
+
+  if (!clerkId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [dbUser] = await db.select({ id: usersTable.id, role: usersTable.role })
+    .from(usersTable).where(eq(usersTable.clerkId, clerkId));
+
+  if (!dbUser) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const [attachment] = await db.select({ uploadedById: projectAttachmentsTable.uploadedById })
+    .from(projectAttachmentsTable)
+    .where(and(eq(projectAttachmentsTable.id, attachmentId), eq(projectAttachmentsTable.projectId, projectId)));
+
+  if (!attachment) { res.status(404).json({ error: "Attachment not found" }); return; }
+
+  if (dbUser.role !== "admin" && attachment.uploadedById !== dbUser.id) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+
+  await db.delete(projectAttachmentsTable).where(
+    and(eq(projectAttachmentsTable.id, attachmentId), eq(projectAttachmentsTable.projectId, projectId))
+  );
+  res.sendStatus(204);
+});
+
+router.get("/projects/:projectId/all-attachments", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.projectId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid project ID" }); return; }
+
+  const [projectAttachments, projectTasks] = await Promise.all([
+    db.select().from(projectAttachmentsTable)
+      .where(eq(projectAttachmentsTable.projectId, id))
+      .orderBy(projectAttachmentsTable.isPinned, projectAttachmentsTable.createdAt),
+    db.select({ id: tasksTable.id, title: tasksTable.title, parentTaskId: tasksTable.parentTaskId })
+      .from(tasksTable).where(eq(tasksTable.projectId, id)),
+  ]);
+
+  const taskIds = projectTasks.map(t => t.id);
+  const allTaskAttachments = taskIds.length > 0
+    ? await db.select().from(taskAttachmentsTable).where(inArray(taskAttachmentsTable.taskId, taskIds)).orderBy(taskAttachmentsTable.createdAt)
+    : [];
+
+  const taskMap = new Map(projectTasks.map(t => [t.id, t]));
+  const attachmentsByTask = new Map<number, typeof allTaskAttachments>();
+  for (const a of allTaskAttachments) {
+    if (!attachmentsByTask.has(a.taskId)) attachmentsByTask.set(a.taskId, []);
+    attachmentsByTask.get(a.taskId)!.push(a);
+  }
+
+  const taskGroups = projectTasks
+    .filter(t => attachmentsByTask.has(t.id))
+    .map(t => {
+      const parent = t.parentTaskId ? taskMap.get(t.parentTaskId) : null;
+      return {
+        taskId: t.id,
+        taskTitle: t.title,
+        isSubtask: t.parentTaskId !== null,
+        parentTaskId: t.parentTaskId ?? null,
+        parentTaskTitle: parent?.title ?? null,
+        attachments: (attachmentsByTask.get(t.id) ?? []).map(a => ({
+          id: a.id,
+          taskId: a.taskId,
+          fileName: a.fileName,
+          objectPath: a.objectPath,
+          fileSize: a.fileSize,
+          mimeType: a.mimeType,
+          uploadedById: a.uploadedById,
+          createdAt: a.createdAt.toISOString(),
+        })),
+      };
+    });
+
+  res.json(GetProjectAllAttachmentsResponse.parse({
+    projectAttachments: projectAttachments.map(buildProjectAttachment),
+    taskGroups,
+  }));
 });
 
 export default router;

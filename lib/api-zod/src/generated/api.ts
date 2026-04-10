@@ -1144,3 +1144,48 @@ export const RequestUploadUrlResponse = zod.object({
 export const GetObjectParams = zod.object({
   objectPath: zod.coerce.string(),
 });
+
+export const ProjectAttachmentItem = zod.object({
+  id: zod.number(),
+  projectId: zod.number(),
+  fileName: zod.string(),
+  objectPath: zod.string(),
+  fileSize: zod.number().nullable(),
+  mimeType: zod.string().nullable(),
+  isPinned: zod.boolean(),
+  uploadedById: zod.number(),
+  createdAt: zod.string(),
+});
+
+export const ListProjectAttachmentsResponse = zod.array(ProjectAttachmentItem);
+
+export const AddProjectAttachmentBody = zod.object({
+  fileName: zod.string(),
+  objectPath: zod.string(),
+  fileSize: zod.number().nullish(),
+  mimeType: zod.string().nullish(),
+  isPinned: zod.boolean().optional(),
+});
+
+export const ProjectAllAttachmentsTaskGroup = zod.object({
+  taskId: zod.number(),
+  taskTitle: zod.string(),
+  isSubtask: zod.boolean(),
+  parentTaskId: zod.number().nullable(),
+  parentTaskTitle: zod.string().nullable(),
+  attachments: zod.array(zod.object({
+    id: zod.number(),
+    taskId: zod.number(),
+    fileName: zod.string(),
+    objectPath: zod.string(),
+    fileSize: zod.number().nullable(),
+    mimeType: zod.string().nullable(),
+    uploadedById: zod.number(),
+    createdAt: zod.string(),
+  })),
+});
+
+export const GetProjectAllAttachmentsResponse = zod.object({
+  projectAttachments: ListProjectAttachmentsResponse,
+  taskGroups: zod.array(ProjectAllAttachmentsTaskGroup),
+});
