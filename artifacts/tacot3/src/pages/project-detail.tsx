@@ -1,11 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
 import { formatQuoteNum } from "@/lib/utils";
 import type { Task, Project } from "@/lib/types";
 import {
   ArrowLeft, Loader2, Building2, FileText,
-  Calendar, CheckSquare, FolderKanban, Info, Users,
+  Calendar, CheckSquare, FolderKanban, Info, Users, ChevronDown,
 } from "lucide-react";
 import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 import { format } from "date-fns";
 import TaskCard from "@/components/tasks/TaskCard";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   active: "default",
@@ -26,6 +29,16 @@ export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = parseInt(params.projectId, 10);
   const [infoOpen, setInfoOpen] = useState(false);
+  const qc = useQueryClient();
+
+  const statusMutation = useMutation({
+    mutationFn: (status: string) =>
+      apiClient.patch(`/projects/${projectId}`, { status }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project", projectId] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
 
   const { data: project, isLoading } = useQuery({
     queryKey: ["project", projectId],
@@ -133,9 +146,38 @@ export default function ProjectDetailPage() {
             >
               <Info className="w-4 h-4" />
             </button>
-            <Badge variant={STATUS_VARIANTS[project.status] ?? "secondary"} className="capitalize">
-              {project.status.replace("_", " ")}
-            </Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1 focus:outline-none">
+                  <Badge
+                    variant={STATUS_VARIANTS[project.status] ?? "secondary"}
+                    className="capitalize cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    {project.status.replace("_", " ")}
+                    <ChevronDown className="w-3 h-3 ml-1 inline" />
+                  </Badge>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {[
+                  { value: "active", label: "Active" },
+                  { value: "on_hold", label: "On Hold" },
+                  { value: "completed", label: "Completed" },
+                  { value: "cancelled", label: "Cancelled" },
+                ].map(opt => (
+                  <DropdownMenuItem
+                    key={opt.value}
+                    onClick={() => statusMutation.mutate(opt.value)}
+                    className="flex items-center gap-2"
+                  >
+                    <Badge variant={STATUS_VARIANTS[opt.value] ?? "secondary"} className="capitalize text-xs">
+                      {opt.label}
+                    </Badge>
+                    {project.status === opt.value && <span className="ml-auto text-xs text-muted-foreground">current</span>}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
