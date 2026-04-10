@@ -168,24 +168,63 @@ function fixSplitWords(s: string): string {
   return s.replace(/\b([A-Z][a-z]{1,3})\s+([a-z]{2,})\b/g, "$1$2");
 }
 
+// Normalize a field value extracted from the PDF:
+// – Collapses spaces within digit sequences (rendering artifacts like "92  618" → "92618")
+// – Collapses spaces on BOTH sides of a dash (e.g. "Denso  -  MO" → "Denso-MO")
+// – Merges split letter-groups (e.g. "P  kwy" → "Pkwy")
+// – Normalises commas / stray dots
+function normField(s: string): string {
+  let v = s;
+  // 1. Collapse digit gaps (multiple passes)
+  for (let i = 0; i < 5; i++) {
+    const n = v.replace(/(\d)\s+(\d)/g, "$1$2").replace(/,\s+(\d)/g, ",$1").replace(/\$\s+/g, "$");
+    if (n === v) break;
+    v = n;
+  }
+  // 2. Collapse spaces-around-dash that are PDF column-separator artefacts (2+ spaces on both sides)
+  v = v.replace(/\s{2,}[-–]\s{2,}/g, "-").replace(/\s*[-–]\s*/g, "-");
+  // 3. Tidy commas and trailing stray dots
+  v = v.replace(/\s*,\s*/g, ", ").replace(/\s+\./g, ".");
+  // 4. Collapse any remaining multiple spaces to single FIRST, so the letter-merge
+  //    step below operates on single-space-separated text (e.g. "P  kwy" → "P kwy")
+  v = v.replace(/\s{2,}/g, " ");
+  // 5. Merge single-letter groups that were split by PDF rendering (e.g. "P kwy" → "Pkwy")
+  v = v.replace(/\b([A-Za-z]{1,4})\s([a-z]{2,6})\b/g, "$1$2");
+  return v.trim();
+}
+
+// Normalise a phone number: collapse digit gaps and dash-with-spaces, preserve "x NNN"
+function normalizePhone(s: string): string {
+  let v = s;
+  for (let i = 0; i < 5; i++) {
+    const n = v.replace(/(\d)\s+(\d)/g, "$1$2").replace(/\s*-\s*/g, "-");
+    if (n === v) break;
+    v = n;
+  }
+  return v.replace(/x(\d)/g, "x $1").replace(/\s{2,}/g, " ").trim();
+}
+
+// Handles both "Company  :  Name  Contact" (colon, AW) and
+//              "Company  Name  Contact"    (no colon, BridgeMed/Denso)
 function extractCompany(text: string): string | null {
-  const between = text.match(/Company\s*:\s*(.+?)\s+Contact\s*:/i);
-  if (between) return between[1].trim();
-  const plain = text.match(/Company\s*:\s*([^\n\r:]{2,60})/i);
-  if (plain) return plain[1].trim();
+  const m = text.match(/Company\s*:?\s{1,12}(.+?)\s{2,}Contact/i);
+  if (m) return normField(m[1]);
   for (const label of ["Customer", "Client", "Bill To"]) {
-    const m = text.match(new RegExp(`${label}\\s*:\\s*([^\\n\\r:]{2,60})`, "i"));
-    if (m) return m[1].trim();
+    const alt = text.match(new RegExp(`${label}\\s*:\\s*([^\\n\\r:]{2,60})`, "i"));
+    if (alt) return normField(alt[1]);
   }
   return null;
 }
 
+// Handles "Contact  :?  Name  (until known next field | EOL)"
+// Stops only at 2+ spaces BEFORE a known field label, preventing premature
+// truncation of names like "Mr.  Giancarlo Touzard" where the gap is a PDF artefact.
 function extractContact(text: string): string | null {
-  const m = text.match(/Contact\s*:\s*(.+?)(?:\n|$)/im);
-  if (m) return m[1].trim();
+  const m = text.match(/Contact\s*:?\s{1,12}(.+?)(?:\s{2,}(?:Phone|Email|Fax|Address|City|Company)\b|\n|$)/i);
+  if (m) return normField(m[1]);
   for (const label of ["Attention", "Attn"]) {
     const alt = text.match(new RegExp(`${label}\\s*:\\s*([^\\n\\r:]{2,60})`, "i"));
-    if (alt) return alt[1].trim();
+    if (alt) return normField(alt[1]);
   }
   return null;
 }
@@ -206,91 +245,136 @@ function extractQuoteNumber(text: string): string | null {
   return null;
 }
 
+// Handles both colon ("Address  :  Street  Phone  :  ...") and
+//          no-colon ("Address  Street  Phone  ...") layouts.
+// Also picks up the city/state from the "City, State  City, ST XXXXX  Email" row.
 function extractAddress(text: string): string | null {
-  const streetMatch = text.match(/Address\s*:\s*(.+?)\s+Phone\s*:/i);
-  let street = streetMatch ? streetMatch[1].trim().replace(/\s+\./g, ".") : null;
+  // Street from the Address row (ends at "Phone" or "Email" column, 2+ spaces)
+  const streetM = text.match(/Address\s*:?\s{1,12}(.+?)\s{2,}(?:Phone|Email)/i);
+  const street = streetM ? normField(streetM[1]) : null;
 
-  const cityMatch = text.match(/([A-Za-z][\w\s,]+CA\s+[\d\s]+)\s+Email\s*:/i)
-    ?? text.match(/([A-Za-z][\w\s,]+\d{5})\s+Email\s*:/i);
-  let city = cityMatch ? collapseDigits(cityMatch[1].trim().replace(/\s*,\s*/g, ", ")) : null;
+  // City/State — try the labeled "City, State  value  Email" row (BridgeMed/Denso).
+  // Only stop at 2+ spaces BEFORE a known field label (or newline/EOL) so that
+  // "Murrieta  , CA 92656  Email" captures the full "Murrieta  , CA 92656".
+  let city: string | null = null;
+  const labeledCityM = text.match(/City\s*,?\s*State\s*:?\s{1,12}(.+?)(?:\s{2,}(?:Email|Phone)\b|\n|$)/i);
+  if (labeledCityM) {
+    city = normField(labeledCityM[1]);
+  } else {
+    // Fallback: continuation line "Anaheim  , CA  92801  Email" (AW style — no "City, State" label)
+    const contM = text.match(/([A-Za-z][\w\s,]+\d{4,6})\s{2,}Email\s*:/i)
+      ?? text.match(/\n([A-Za-z][\w\s,]+\d{4,6})\s+Email\s*:/i);
+    if (contM) city = normField(contM[1]);
+  }
 
   if (street && city) return `${street}, ${city}`;
   if (street) return street;
-
+  // Generic fallback for colon-style without a Phone column delimiter
   const generic = text.match(/Address\s*:\s*([^\n\r]{5,120})/i);
-  return generic ? generic[1].trim() : null;
+  return generic ? normField(generic[1]) : null;
 }
 
+// Address row: "Address  [addr]  Phone  :?  (xxx)  ..."
+// Uses a GREEDY capture to grab the full phone (pdf2json inserts spaces within numbers).
+// Stops only at 2+ spaces followed by a letter (new column) or end-of-line.
 function extractPhone(text: string): string | null {
-  const onAddressLine = text.match(/Address\s*:.+?Phone\s*:\s*([\d\s\-\(\)\+\.]{7,25})/i);
-  if (onAddressLine) return collapseId(onAddressLine[1]);
-  const m = text.match(/(?:Customer|Client|Contact)\s+Phone\s*:\s*([\d\s\-\(\)\+\.]{7,25})/i);
-  if (m) return collapseId(m[1]);
+  const m = text.match(/Address.+?Phone\s*:?\s{1,10}([\d\s\(\)\-\+\.x]{6,40})(?=\s{2,}[A-Za-z]|\n|$)/i);
+  if (m) return normalizePhone(m[1]);
+  const alt = text.match(/(?:Customer|Client|Contact)\s+Phone\s*:\s*([\d\s\-\(\)\+\.x]{7,40})(?=\s{2,}[A-Za-z]|\n|$)/i);
+  if (alt) return normalizePhone(alt[1]);
   return null;
 }
 
+// Handles direct email, spaced "@" (Denso: "Ernesto.Montano  @  na.denso.com"),
+// and generic fallback.
 function extractEmail(text: string): string | null {
-  const labeled = text.match(/Email\s*:\s*([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})/i);
-  if (labeled) return labeled[1].trim();
-  const fallback = text.match(/\b([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})\b/);
-  return fallback ? fallback[1].trim() : null;
+  // Direct (no spaces around @)
+  const direct = text.match(/Email\s*:?\s{1,12}([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})/i);
+  if (direct) return direct[1].trim();
+  // Spaced @ (pdf2json artefact)
+  const spaced = text.match(/Email\s*:?\s{1,12}([A-Za-z0-9._%+\-]+)\s*@\s*([A-Za-z0-9.\-]+\.[A-Za-z]{2,})/i);
+  if (spaced) return `${spaced[1]}@${spaced[2]}`;
+  // Generic fallback (handles spaced @ anywhere in text)
+  const generic = text.match(/\b([A-Za-z0-9._%+\-]+)\s*@\s*([A-Za-z0-9.\-]+\.[A-Za-z]{2,})\b/);
+  if (generic) return `${generic[1]}@${generic[2]}`;
+  return null;
 }
 
+// Generic part-number prefix words to strip from inline descriptions
+const PART_NUM_PREFIXES = new Set(["CUSTOM", "MISC", "Custom", "Standard", "STANDARD"]);
+
+function stripPartNumPrefix(rest: string): string {
+  const allCaps = rest.replace(/^[A-Z][A-Z0-9]+\s*[-–]?\s*/, "").trim();
+  if (allCaps !== rest) return allCaps;
+  const words = rest.split(/\s+/);
+  if (words.length > 0 && PART_NUM_PREFIXES.has(words[0])) return words.slice(1).join(" ");
+  return rest;
+}
+
+// Robust description extractor handling three Toddco quote layouts:
+//  1. BridgeMed  – description on a SEPARATE line BEFORE the qty row
+//  2. Denso / AW – description INLINE on the qty row, after the part-number token
+//  3. Sub-items  – bullet lines after the qty row
 function extractPartNumberAndDescription(text: string): { name: string; description: string; fullDescription: string } {
   const lines = text.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const qtyMatch = line.match(/^\s*\d+\s+([A-Z][A-Z0-9]+)\s*-\s*/);
-    if (!qtyMatch) continue;
 
-    const partStart = qtyMatch[1];
-    const afterPartStart = line.slice(qtyMatch.index! + qtyMatch[0].length);
+  // Find the column-header row ("Qty. Part Number Description ...")
+  const headerIdx = lines.findIndex(l => /\bQty\.?\b/i.test(l) && /\bDescription\b/i.test(l));
+  if (headerIdx < 0) return { name: "", description: "", fullDescription: "" };
 
-    const sameLineCont = afterPartStart.match(/^([A-Z][A-Z0-9]+)\s+[A-Z][a-z]/);
-    let partNumber: string;
-    let descText: string;
-
-    if (sameLineCont) {
-      partNumber = `${partStart}-${sameLineCont[1]}`;
-      descText = afterPartStart.slice(sameLineCont[0].length - 1);
-    } else {
-      partNumber = partStart + "-";
-      const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : "";
-      const contMatch = nextLine.match(/^([A-Z][A-Z0-9]+)\s/);
-      if (contMatch) partNumber += contMatch[1];
-      descText = afterPartStart;
+  // Find end of line-items section
+  let endIdx = lines.length;
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    if (/^\s*(?:Total[\s\w]*[\$:]|TOTAL\s*:|Subtotal\s*:|Delivery\s*:)/i.test(lines[i])) {
+      endIdx = i;
+      break;
     }
-
-    // Find "including" split point
-    const inclIdx = descText.toLowerCase().indexOf("including");
-
-    // Brief description = everything before "including..."
-    const rawDesc = inclIdx > 0 ? descText.slice(0, inclIdx) : descText;
-    const description = rawDesc.replace(/\$[\s\d,]+$/, "").trim();
-
-    // Full description = collect bullet point lines that follow the description line
-    // Look at all lines after the current one until we hit a non-bullet line (price, total, etc.)
-    const bulletLines: string[] = [];
-    const bulletPattern = /^\s*[•\u2022\u25CF\u2023\u2043\-]\s+.+|^\s*o\s+.+/;
-    const subBulletPattern = /^\s*[o○◦]\s+.+/;
-    const stopPattern = /^\s*\$|subtotal|total\s*:/i;
-
-    // The "following options:" part might be on the same line or continue on next lines
-    // Collect all subsequent lines that look like bullet content
-    for (let j = i + 1; j < lines.length; j++) {
-      const bline = lines[j];
-      if (stopPattern.test(bline)) break;
-      // Collect the line as part of full description regardless (raw format preserved)
-      if (bline.trim().length > 0) {
-        bulletLines.push(bline.trim());
-      }
-    }
-
-    const fullDescription = bulletLines.join("\n");
-
-    return { name: partNumber, description, fullDescription };
   }
-  return { name: "", description: "", fullDescription: "" };
+
+  const collected: string[] = [];
+
+  for (let i = headerIdx + 1; i < endIdx; i++) {
+    const raw = collapseDigits(lines[i]);
+    const trimmed = raw.trim();
+
+    if (!trimmed) continue;
+    if (/^\$[\d,\.\s]+$/.test(trimmed)) continue;
+    if (/^[\d\s,\.]+$/.test(trimmed)) continue;
+
+    const qtyM = trimmed.match(/^(\d+)\s+/);
+    if (qtyM) {
+      // ── Qty row ──────────────────────────────────────────────────────────────
+      let rest = trimmed.slice(qtyM[0].length);
+      // Strip trailing price column(s)
+      rest = rest.replace(/\s*\$[\d,\.\s]+(\$[\d,\.\s]+)?\s*$/, "").trim();
+      // If too few tokens, this is just the part number — skip
+      if (rest.split(/\s+/).filter(w => w.length > 0).length < 3) continue;
+
+      const desc = stripPartNumPrefix(rest).replace(/\s+including\b.*/i, "").trim();
+      if (desc.split(/\s+/).filter(w => w.length > 0).length >= 2 && !/^[\$\d,\.]+$/.test(desc)) {
+        collected.push(desc);
+      }
+    } else {
+      // ── Non-qty row ───────────────────────────────────────────────────────────
+      if (/^[A-Z]{4,}\b/.test(trimmed)) continue;            // part-num continuation
+      if (/^[A-Za-z]+\s*[-–]\s*\d+\b/.test(trimmed)) continue; // "Fabrication - 001"
+      if (/^[•\u2022\u25CF\u2023oO○◦]\s/.test(trimmed)) continue; // bullet
+
+      const desc = trimmed.replace(/\s+including\b.*/i, "").trim();
+      if (desc.length >= 5) collected.push(desc);
+    }
+  }
+
+  if (collected.length === 0) return { name: "", description: "", fullDescription: "" };
+
+  const mainDesc = collected[0];
+  const name = mainDesc
+    .replace(/\s+(?:to\s+support|for\s+your|with\s+variable|including)\b.*/i, "")
+    .split(/\s+/)
+    .slice(0, 7)
+    .join(" ");
+
+  return { name, description: mainDesc, fullDescription: collected.join("\n") };
 }
 
 interface ParsedTask {
@@ -355,12 +439,47 @@ function parseBulletPoints(fullDescription: string): ParsedTask[] {
 }
 
 function extractTotalPrice(text: string): string | null {
-  const m = text.match(/\bTOTAL\s*:\s*\$?\s*([\d\s,]+)/i);
-  if (m) {
-    const clean = collapseDigits(m[1].replace(/\s/g, ""));
-    const num = parseFloat(clean.replace(/,/g, ""));
-    if (!isNaN(num)) {
-      return `$${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const lines = text.split("\n");
+
+  function fmt(n: number): string {
+    return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
+  // Aggressively collapse fragmented dollar amounts like "$  1,  213  ,  8  0  8" → "$1,213,808"
+  function squashAmount(s: string): string {
+    let v = s;
+    for (let i = 0; i < 8; i++) {
+      const n = v
+        .replace(/\$\s+/g, "$")
+        .replace(/(\d)\s+(\d)/g, "$1$2")
+        .replace(/(\d)\s+,/g, "$1,")
+        .replace(/,\s+(\d)/g, ",$1");
+      if (n === v) break;
+      v = n;
+    }
+    return v;
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/\bTotal\b/i.test(line)) continue;
+
+    // ── Same-line amount (Denso: "Total USD: $15,627", AW: "TOTAL: $1,213,808") ──
+    const squashed = squashAmount(line);
+    const sameM = squashed.match(/\bTotal\b[^$\d]*\$?([\d,]+(?:\.\d+)?)/i);
+    if (sameM) {
+      const n = parseFloat(sameM[1].replace(/,/g, ""));
+      if (!isNaN(n) && n >= 100) return fmt(n);
+    }
+
+    // ── Amount on the PREVIOUS line (BridgeMed: "$  6  ,  50  0" then "Total US $:") ──
+    if (i > 0) {
+      const prev = squashAmount(lines[i - 1]);
+      const prevM = prev.match(/\$([\d,]+(?:\.\d+)?)\s*$/);
+      if (prevM) {
+        const n = parseFloat(prevM[1].replace(/,/g, ""));
+        if (!isNaN(n) && n >= 100) return fmt(n);
+      }
     }
   }
   return null;
