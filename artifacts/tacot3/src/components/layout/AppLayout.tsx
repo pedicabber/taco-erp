@@ -78,25 +78,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
       >
         {/* Logo */}
-        <div className="flex items-center gap-2 px-3 py-4 border-b border-border min-h-[60px]">
-          <img
-            src={`${import.meta.env.BASE_URL}taco-64.png`}
-            alt="TacoT3"
-            className="flex-shrink-0 w-8 h-8 object-contain"
-          />
-          {sidebarOpen && (
-            <div className="overflow-hidden">
-              <div className="text-sm font-bold text-foreground leading-tight">TacoT3</div>
-              <div className="text-[10px] text-muted-foreground leading-tight">Project Ops</div>
-            </div>
+        <div className={cn(
+          "flex items-center border-b border-border min-h-[60px] overflow-hidden",
+          sidebarOpen ? "gap-2 px-3 py-4" : "justify-center py-4"
+        )}>
+          {sidebarOpen ? (
+            <>
+              <img
+                src={`${import.meta.env.BASE_URL}taco-64.png`}
+                alt="TacoT3"
+                className="flex-shrink-0 w-8 h-8 object-contain"
+              />
+              <div className="overflow-hidden flex-1 min-w-0">
+                <div className="text-sm font-bold text-foreground leading-tight">TacoT3</div>
+                <div className="text-[10px] text-muted-foreground leading-tight">Project Ops</div>
+              </div>
+              <button
+                className="flex-shrink-0 hidden md:flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                title="Collapse sidebar"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
+            <button
+              className="hidden md:flex items-center justify-center w-8 h-8 rounded hover:bg-muted transition-colors"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              title="Expand sidebar"
+            >
+              <ChevronLeft className="w-4 h-4 rotate-180" />
+            </button>
           )}
-          <button
-            className="ml-auto hidden md:flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-          >
-            <ChevronLeft className={cn("w-4 h-4 transition-transform", !sidebarOpen && "rotate-180")} />
-          </button>
         </div>
 
         {/* Nav items */}
