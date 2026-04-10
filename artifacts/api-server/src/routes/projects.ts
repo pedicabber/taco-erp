@@ -331,7 +331,26 @@ function extractPartNumberAndDescription(text: string): { name: string; descript
     }
   }
 
-  const collected: string[] = [];
+  // Each entry in `items` is one logical item description.
+  // Continuation lines (start with lowercase) are appended to the previous item
+  // with a space rather than starting a new one.
+  const items: string[] = [];
+
+  function addText(chunk: string) {
+    if (!chunk || chunk.length < 3) return;
+    // Reject orphaned fragment lines: no capital letter AND fewer than 2 real words
+    // (e.g. "stapler  )" that leaked from a filtered "o  Custom...and\n stapler )" bullet)
+    const realWords = chunk.split(/\s+/).filter(w => /[A-Za-z]{2,}/.test(w)).length;
+    if (!/[A-Z]/.test(chunk) && realWords < 2) return;
+
+    const startsLower = /^[a-z]/.test(chunk);
+    if (startsLower && items.length > 0) {
+      // Continuation of the previous description sentence
+      items[items.length - 1] = `${items[items.length - 1]} ${chunk}`.trim();
+    } else {
+      items.push(chunk);
+    }
+  }
 
   for (let i = headerIdx + 1; i < endIdx; i++) {
     const raw = collapseDigits(lines[i]);
@@ -343,38 +362,43 @@ function extractPartNumberAndDescription(text: string): { name: string; descript
 
     const qtyM = trimmed.match(/^(\d+)\s+/);
     if (qtyM) {
-      // ── Qty row ──────────────────────────────────────────────────────────────
+      // ── Qty row: part number [+ inline description] ──────────────────────────
       let rest = trimmed.slice(qtyM[0].length);
-      // Strip trailing price column(s)
       rest = rest.replace(/\s*\$[\d,\.\s]+(\$[\d,\.\s]+)?\s*$/, "").trim();
-      // If too few tokens, this is just the part number — skip
-      if (rest.split(/\s+/).filter(w => w.length > 0).length < 3) continue;
-
-      const desc = stripPartNumPrefix(rest).replace(/\s+including\b.*/i, "").trim();
-      if (desc.split(/\s+/).filter(w => w.length > 0).length >= 2 && !/^[\$\d,\.]+$/.test(desc)) {
-        collected.push(desc);
+      // If more than just the part number, extract the inline description
+      if (rest.split(/\s+/).filter(w => w.length > 0).length >= 3) {
+        const desc = stripPartNumPrefix(rest)
+          .replace(/\s+including\b.*/i, "")
+          .replace(/\s{2,}/g, " ")
+          .trim();
+        if (desc.split(/\s+/).filter(w => w.length > 0).length >= 2 && !/^[\$\d,\.]+$/.test(desc)) {
+          addText(desc);
+        }
       }
     } else {
-      // ── Non-qty row ───────────────────────────────────────────────────────────
-      if (/^[A-Z]{4,}\b/.test(trimmed)) continue;            // part-num continuation
+      // ── Non-qty row: standalone description text ─────────────────────────────
+      if (/^[A-Z]{4,}\b/.test(trimmed)) continue;             // ALL-CAPS part-number token
       if (/^[A-Za-z]+\s*[-–]\s*\d+\b/.test(trimmed)) continue; // "Fabrication - 001"
-      if (/^[•\u2022\u25CF\u2023oO○◦]\s/.test(trimmed)) continue; // bullet
+      if (/^[•\u2022\u25CF\u2023oO○◦]\s/.test(trimmed)) continue; // bullet point
 
-      const desc = trimmed.replace(/\s+including\b.*/i, "").trim();
-      if (desc.length >= 5) collected.push(desc);
+      const desc = trimmed.replace(/\s+including\b.*/i, "").replace(/\s{2,}/g, " ").trim();
+      if (desc.length >= 5) addText(desc);
     }
   }
 
-  if (collected.length === 0) return { name: "", description: "", fullDescription: "" };
+  if (items.length === 0) return { name: "", description: "", fullDescription: "" };
 
-  const mainDesc = collected[0];
-  const name = mainDesc
+  // Derive a concise project name from the first description
+  const firstName = items[0]
     .replace(/\s+(?:to\s+support|for\s+your|with\s+variable|including)\b.*/i, "")
     .split(/\s+/)
     .slice(0, 7)
     .join(" ");
 
-  return { name, description: mainDesc, fullDescription: collected.join("\n") };
+  // Combine ALL item descriptions for the brief description field
+  const allDescriptions = items.join("\n\n");
+
+  return { name: firstName, description: allDescriptions, fullDescription: allDescriptions };
 }
 
 interface ParsedTask {
