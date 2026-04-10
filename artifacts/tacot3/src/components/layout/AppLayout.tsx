@@ -79,9 +79,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Logo */}
         <div className="flex items-center gap-2 px-3 py-4 border-b border-border min-h-[60px]">
-          <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <FolderKanban className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <img
+            src={`${import.meta.env.BASE_URL}taco-64.png`}
+            alt="TacoT3"
+            className="flex-shrink-0 w-8 h-8 object-contain"
+          />
           {sidebarOpen && (
             <div className="overflow-hidden">
               <div className="text-sm font-bold text-foreground leading-tight">TacoT3</div>

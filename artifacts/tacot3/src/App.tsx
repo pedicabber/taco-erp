@@ -85,13 +85,11 @@ function HomeRedirect() {
       </Show>
       <Show when="signed-out">
         <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground">
-          <div className="mb-6 flex items-center justify-center w-16 h-16 rounded-2xl bg-primary">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-foreground">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-              <line x1="9" y1="14" x2="15" y2="14" />
-              <line x1="12" y1="11" x2="12" y2="17" />
-            </svg>
-          </div>
+          <img
+            src={`${import.meta.env.BASE_URL}taco-128.png`}
+            alt="TacoT3"
+            className="mb-6 w-28 h-28 object-contain drop-shadow-lg"
+          />
           <h1 className="text-4xl font-bold tracking-tight">TacoTrackerT3</h1>
           <p className="mt-2 text-muted-foreground text-lg">Engineering Project Operations</p>
           <p className="mt-1 text-sm text-muted-foreground">Track projects, departments, tasks, and timelines</p>
