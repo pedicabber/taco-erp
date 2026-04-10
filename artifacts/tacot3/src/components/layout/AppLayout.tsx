@@ -102,20 +102,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </button>
             </>
           ) : (
-            <div className="flex flex-col items-center gap-1">
-              <img
-                src={`${import.meta.env.BASE_URL}taco-64.png`}
-                alt="TacoT3"
-                className="w-8 h-8 object-contain"
-              />
-              <button
-                className="hidden md:flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                title="Expand sidebar"
-              >
-                <ChevronLeft className="w-3 h-3 rotate-180" />
-              </button>
-            </div>
+            <button
+              className="hidden md:flex items-center justify-center w-8 h-8 rounded hover:bg-muted transition-colors"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              title="Expand sidebar"
+            >
+              <ChevronLeft className="w-4 h-4 rotate-180" />
+            </button>
           )}
         </div>
 
@@ -128,7 +121,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Link key={item.href} href={item.href}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors group",
+                    "flex items-center cursor-pointer transition-colors group rounded-lg",
+                    sidebarOpen
+                      ? "gap-3 px-2 py-2"
+                      : "justify-center w-9 h-9 mx-auto",
                     active
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted"
