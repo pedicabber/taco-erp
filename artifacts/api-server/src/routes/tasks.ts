@@ -113,6 +113,9 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
     department = assigneeDept;
   }
 
+  const [subtaskRow] = await db.select({ cnt: count() }).from(tasksTable).where(eq(tasksTable.parentTaskId, task.id));
+  const subtaskCount = Number(subtaskRow?.cnt ?? 0);
+
   return {
     id: task.id,
     title: task.title,
@@ -121,6 +124,8 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
     priority: task.priority as "low" | "medium" | "high" | "urgent",
     projectId: task.projectId,
     departmentId: task.departmentId,
+    parentTaskId: task.parentTaskId ?? null,
+    subtaskCount,
     assigneeId: task.assigneeId,
     assignerId: task.assignerId,
     followerIds: task.followerIds ?? [],
@@ -177,13 +182,14 @@ async function logActivity(taskId: number, actorId: number, action: string): Pro
 router.get("/tasks", requireAuth, async (req, res): Promise<void> => {
   let query = db.select().from(tasksTable).$dynamic();
 
-  const { projectId, departmentId, assigneeId, status } = req.query;
+  const { projectId, departmentId, assigneeId, status, parentTaskId } = req.query;
 
   const conditions = [];
   if (projectId) conditions.push(eq(tasksTable.projectId, Number(projectId)));
   if (departmentId) conditions.push(eq(tasksTable.departmentId, Number(departmentId)));
   if (assigneeId) conditions.push(eq(tasksTable.assigneeId, Number(assigneeId)));
   if (status) conditions.push(eq(tasksTable.status, String(status)));
+  if (parentTaskId) conditions.push(eq(tasksTable.parentTaskId, Number(parentTaskId)));
 
   if (conditions.length > 0) {
     query = query.where(and(...conditions));

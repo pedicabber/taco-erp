@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import { parsePdfText } from "../lib/pdfParseAdapter";
 import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable } from "@workspace/db";
+import { TEMPLATE_TASKS } from "../templateTasks";
 import { eq, inArray } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -58,7 +59,7 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
     return;
   }
 
-  const { parsedTasks, ...projectData } = parsed.data;
+  const { parsedTasks: _ignore, ...projectData } = parsed.data;
 
   const [project] = await db.insert(projectsTable).values({
     ...projectData,
@@ -66,16 +67,26 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
     createdById: user.id,
   }).returning();
 
-  // Auto-create tasks from parsed bullet points with "new_tasks" status
-  if (parsedTasks && parsedTasks.length > 0) {
-    const todayIso = new Date().toISOString().split("T")[0];
-    for (const task of parsedTasks) {
+  // Auto-create standard template tasks + subtasks with "new_tasks" status
+  const todayIso = new Date().toISOString().split("T")[0];
+  for (const tmpl of TEMPLATE_TASKS) {
+    const [parent] = await db.insert(tasksTable).values({
+      title: tmpl.title,
+      status: "new_tasks",
+      priority: "medium",
+      projectId: project.id,
+      assignerId: user.id,
+      startDate: todayIso,
+      elapsedSeconds: 0,
+      timerRunning: false,
+    }).returning();
+    for (const sub of tmpl.subtasks) {
       await db.insert(tasksTable).values({
-        title: task.title,
-        description: task.description ?? null,
+        title: sub.title,
         status: "new_tasks",
         priority: "medium",
         projectId: project.id,
+        parentTaskId: parent.id,
         assignerId: user.id,
         startDate: todayIso,
         elapsedSeconds: 0,
@@ -109,8 +120,6 @@ router.post("/projects/parse-pdf", requireAuth, upload.single("file"), async (re
     const totalPrice = extractTotalPrice(text) ?? "";
     const { name: partNumber, description, fullDescription } = extractPartNumberAndDescription(text);
     const startDate = extractStartDate(text) ?? "";
-    const parsedTasks = parseBulletPoints(fullDescription);
-
     const result = {
       company,
       name: partNumber || company || "New Project",
@@ -123,7 +132,6 @@ router.post("/projects/parse-pdf", requireAuth, upload.single("file"), async (re
       contactPhone,
       contactEmail,
       totalPrice,
-      parsedTasks,
     };
 
     res.json(ParsePdfResponse.parse(result));

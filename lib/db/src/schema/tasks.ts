@@ -16,6 +16,7 @@ export const tasksTable = pgTable("tasks", {
   expectedHours: real("expected_hours"),
   dueDate: text("due_date"),
   startDate: text("start_date"),
+  parentTaskId: integer("parent_task_id"),
   elapsedSeconds: integer("elapsed_seconds").notNull().default(0),
   timerRunning: boolean("timer_running").notNull().default(false),
   timerStartedAt: timestamp("timer_started_at", { withTimezone: true }),

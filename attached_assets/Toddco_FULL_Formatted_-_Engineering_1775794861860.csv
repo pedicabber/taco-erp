@@ -1,0 +1,50 @@
+TASKS,SUBTASKS
+Project Kickoff & Requirements,Review quote and scope
+,Identify system requirements
+,Identify customer constraints
+,Request sample materials
+,Assign engineering owner
+System Architecture Design,Define overall system concept
+,Define material flow sequence
+,Select robot model and configuration
+,Define station layout concept
+,Identify key risks and challenges
+Mechanical System Design,Create full system layout CAD
+,Design base frame and structure
+,Design robot mounting and reach envelope
+,Design guarding integration
+,Review for manufacturability
+EOAT (End of Arm Tool) Engineering,"Define handling requirements (weight, size, material)"
+,Select vacuum method and components
+,Design EOAT structure
+,Validate reach and payload limits
+,Finalize EOAT design for build
+Electrical System Design,Define IO list (inputs/outputs)
+,Select PLC hardware
+,Define network architecture
+,Create electrical schematics
+,Design control panel layout
+Controls Architecture Planning,Define PLC structure and standards
+,Define robot-control interface
+,Define safety architecture
+,Define alarm and fault structure
+,Define data tracking requirements
+HMI / User Interface Design,Define operator workflows
+,Design screen layouts
+,Define alarm displays
+,Define user access levels
+,Review usability with team
+Bill of Materials (BOM),Generate mechanical BOM
+,Generate electrical BOM
+,Generate purchased components list
+,Review long lead items
+,Release BOM to purchasing
+Critical Design Review (CDR),Prepare design package
+,Internal engineering review
+,Customer design review meeting
+,Capture required changes
+,Final design approval
+Release to Manufacturing,Finalize all drawings
+,Finalize schematics
+,Release revision-controlled packages
+,Handoff meeting with shop and controls

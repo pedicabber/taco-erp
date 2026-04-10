@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
-import type { Project, Department, ParsedTaskItem } from "@/lib/types";
+import type { Project, Department } from "@/lib/types";
 import {
   Plus, FolderKanban, FileText, Search, Loader2, ChevronRight,
   Building2, Calendar, Eraser, Info, DollarSign,
@@ -62,145 +62,162 @@ interface StagingTask {
   priority: string;
   status: string;
   departmentId: number | null;
+  parentTaskId: number | null;
   startDate: string | null;
 }
 
-function TaskStagingCard({
+function useStagingTasks(projectId: number) {
+  return useQuery<StagingTask[]>({
+    queryKey: ["staging-tasks", projectId],
+    queryFn: () =>
+      apiClient.get(`/tasks?projectId=${projectId}&status=new_tasks`).then(r => r.data),
+    staleTime: 0,
+  });
+}
+
+function StagingSubtaskRow({
   task,
-  departments,
-  onChange,
-  onDeleteRequest,
+  onTitleSave,
+  onDelete,
 }: {
   task: StagingTask;
-  departments: Department[];
-  onChange: (id: number, patch: Partial<StagingTask>) => void;
-  onDeleteRequest: (id: number) => void;
+  onTitleSave: (id: number, title: string) => void;
+  onDelete: (id: number) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [localTitle, setLocalTitle] = useState(task.title);
+  useEffect(() => { setLocalTitle(task.title); }, [task.title]);
 
-  const priority = task.priority as Priority;
-  const pColor = PRIORITY_COLORS[priority] ?? "#eab308";
+  return (
+    <div className="flex items-center gap-2 pl-6 py-1 group">
+      <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+      <Input
+        value={localTitle}
+        onChange={e => setLocalTitle(e.target.value)}
+        onBlur={() => { if (localTitle.trim() && localTitle !== task.title) onTitleSave(task.id, localTitle.trim()); }}
+        className="h-6 text-xs border-transparent focus:border-input bg-transparent hover:border-input px-1"
+      />
+      <button
+        onClick={() => onDelete(task.id)}
+        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-0.5 flex-shrink-0"
+        title="Delete subtask"
+      >
+        <Trash2 className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
 
-  function bumpPriority(dir: 1 | -1) {
-    const idx = PRIORITY_ORDER.indexOf(priority);
-    const next = PRIORITY_ORDER[Math.max(0, Math.min(PRIORITY_ORDER.length - 1, idx + dir))];
-    onChange(task.id, { priority: next });
+function StagingGroup({
+  parent,
+  subtasks,
+  departments,
+  onPatch,
+  onDelete,
+  onAddSubtask,
+}: {
+  parent: StagingTask;
+  subtasks: StagingTask[];
+  departments: Department[];
+  onPatch: (id: number, patch: Partial<StagingTask>) => void;
+  onDelete: (ids: number[]) => void;
+  onAddSubtask: (parentId: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const [localTitle, setLocalTitle] = useState(parent.title);
+  useEffect(() => { setLocalTitle(parent.title); }, [parent.title]);
+
+  const priority = parent.priority as Priority;
+  const PIcon = PRIORITY_ICONS[priority] ?? Minus;
+
+  function handleTitleBlur() {
+    const t = localTitle.trim();
+    if (t && t !== parent.title) onPatch(parent.id, { title: t });
+  }
+
+  function handleDeleteParent() {
+    onDelete([parent.id, ...subtasks.map(s => s.id)]);
   }
 
   return (
-    <Card>
-      <CardContent className="p-3">
-        {/* Title row */}
-        <div className="flex items-start gap-2">
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="flex-1 text-left min-w-0"
-          >
-            <p className={cn("text-sm font-medium line-clamp-2", expanded && "line-clamp-none")}>
-              {task.title}
-            </p>
-            {task.description && !expanded && (
-              <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{task.description}</p>
-            )}
+    <Card className="mb-2">
+      <CardContent className="p-3 pb-2">
+        {/* Parent row */}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setExpanded(v => !v)} className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
-
-          {/* Action icons */}
-          <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
-            <button
-              onClick={() => onDeleteRequest(task.id)}
-              className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
-              title="Delete task"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
+          <Input
+            value={localTitle}
+            onChange={e => setLocalTitle(e.target.value)}
+            onBlur={handleTitleBlur}
+            className="h-7 text-sm font-medium border-transparent focus:border-input bg-transparent hover:border-input flex-1 px-1 min-w-0"
+          />
+          {/* Priority pill */}
+          <div className="flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 flex-shrink-0">
+            <button onClick={() => onPatch(parent.id, { priority: PRIORITY_ORDER[Math.max(0, PRIORITY_ORDER.indexOf(priority) - 1)] })} className="text-muted-foreground hover:text-foreground">
+              <ChevronDown className="w-3 h-3" />
             </button>
-            <button
-              onClick={() => setExpanded(v => !v)}
-              className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
-              title={expanded ? "Close" : "Edit"}
-            >
-              {expanded
-                ? <X className="w-3.5 h-3.5" />
-                : <Edit2 className="w-3.5 h-3.5" />}
+            <PIcon className="w-3 h-3" style={{ color: PRIORITY_COLORS[priority] }} />
+            <button onClick={() => onPatch(parent.id, { priority: PRIORITY_ORDER[Math.min(PRIORITY_ORDER.length - 1, PRIORITY_ORDER.indexOf(priority) + 1)] })} className="text-muted-foreground hover:text-foreground">
+              <ChevronUp className="w-3 h-3" />
             </button>
           </div>
+          {/* Dept select */}
+          <Select
+            value={parent.departmentId?.toString() ?? "none"}
+            onValueChange={v => onPatch(parent.id, { departmentId: v === "none" ? null : Number(v) })}
+          >
+            <SelectTrigger className="h-7 text-xs w-[130px] flex-shrink-0">
+              <SelectValue placeholder="Dept" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No dept</SelectItem>
+              {departments.map(d => (
+                <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {/* Delete parent button */}
+          <button
+            onClick={handleDeleteParent}
+            className="text-muted-foreground hover:text-destructive transition-colors p-0.5 flex-shrink-0"
+            title="Delete task group"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        {/* Expanded edit mode — smooth height animation */}
+        {/* Subtasks list */}
         <AnimatePresence initial={false}>
           {expanded && (
             <motion.div
-              key="edit-fields"
+              key="subtasks"
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.22, ease: "easeInOut" }}
+              transition={{ duration: 0.18, ease: "easeInOut" }}
               className="overflow-hidden"
             >
-              <div className="mt-3 space-y-2 pt-3 border-t">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Title</Label>
-                  <Input
-                    value={task.title}
-                    onChange={e => onChange(task.id, { title: e.target.value })}
-                    className="h-7 text-sm mt-0.5"
+              <div className="mt-1.5 border-t pt-1.5">
+                {subtasks.map(s => (
+                  <StagingSubtaskRow
+                    key={s.id}
+                    task={s}
+                    onTitleSave={(id, title) => onPatch(id, { title })}
+                    onDelete={id => onDelete([id])}
                   />
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Description</Label>
-                  <Textarea
-                    value={task.description ?? ""}
-                    onChange={e => onChange(task.id, { description: e.target.value })}
-                    rows={3}
-                    className="text-sm mt-0.5"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Start Date</Label>
-                  <Input
-                    type="date"
-                    value={task.startDate ?? ""}
-                    onChange={e => onChange(task.id, { startDate: e.target.value })}
-                    className="h-7 text-sm mt-0.5"
-                  />
-                </div>
+                ))}
+                <button
+                  onClick={() => onAddSubtask(parent.id)}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground pl-6 py-1 transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add subtask
+                </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Controls row */}
-        <div className="flex items-center gap-2 mt-3">
-          {/* Priority control */}
-          <div className="flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5">
-            <button onClick={() => bumpPriority(-1)} className="text-muted-foreground hover:text-foreground p-0.5">
-              <ChevronDown className="w-3 h-3" />
-            </button>
-            <span className="text-[10px] font-medium w-12 text-center" style={{ color: pColor }}>
-              {PRIORITY_LABELS[priority]}
-            </span>
-            <button onClick={() => bumpPriority(1)} className="text-muted-foreground hover:text-foreground p-0.5">
-              <ChevronUp className="w-3 h-3" />
-            </button>
-          </div>
-
-          {/* Department */}
-          <Select
-            value={task.departmentId?.toString() ?? "none"}
-            onValueChange={v => onChange(task.id, { departmentId: v === "none" ? null : parseInt(v, 10) })}
-          >
-            <SelectTrigger className="h-7 text-xs flex-1">
-              <SelectValue placeholder="Department" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No department</SelectItem>
-              {departments.map(d => (
-                <SelectItem key={d.id} value={d.id.toString()}>
-                  {d.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </CardContent>
     </Card>
   );
@@ -216,169 +233,185 @@ function TaskStagingDialog({
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const { data: rawTasks = [], isLoading } = useQuery<StagingTask[]>({
-    queryKey: ["staging-tasks", projectId],
-    queryFn: () =>
-      apiClient
-        .get(`/tasks?projectId=${projectId}&status=new_tasks`)
-        .then(r => r.data),
-  });
+  const { data: rawTasks = [], isLoading, refetch } = useStagingTasks(projectId);
 
   const { data: departments = [] } = useQuery<Department[]>({
     queryKey: ["departments", "global"],
-    queryFn: () =>
-      apiClient
-        .get("/departments?global=true")
-        .then(r => r.data as Department[]),
+    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data as Department[]),
   });
 
-  const [localTasks, setLocalTasks] = useState<StagingTask[]>([]);
-  const [initialised, setInitialised] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-  const [confirmCancel, setConfirmCancel] = useState(false);
-  const [confirmSkip, setConfirmSkip] = useState(false);
-  const [discarding, setDiscarding] = useState(false);
+  const [localMap, setLocalMap] = useState<Map<number, StagingTask>>(new Map());
+  const initialised = useRef(false);
 
-  if (!initialised && rawTasks.length > 0) {
-    setLocalTasks(rawTasks);
-    setInitialised(true);
-  }
+  useEffect(() => {
+    if (!initialised.current && rawTasks.length > 0) {
+      initialised.current = true;
+      setLocalMap(new Map(rawTasks.map(t => [t.id, t])));
+    }
+  }, [rawTasks]);
+
+  const allTasks = useMemo(() => Array.from(localMap.values()), [localMap]);
+  const parents = useMemo(() => allTasks.filter(t => !t.parentTaskId), [allTasks]);
+  const childrenMap = useMemo(() => {
+    const m = new Map<number, StagingTask[]>();
+    for (const t of allTasks) {
+      if (t.parentTaskId != null) {
+        const arr = m.get(t.parentTaskId) ?? [];
+        arr.push(t);
+        m.set(t.parentTaskId, arr);
+      }
+    }
+    return m;
+  }, [allTasks]);
+
+  const [discarding, setDiscarding] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const patchMutation = useMutation({
     mutationFn: ({ id, patch }: { id: number; patch: Partial<StagingTask> }) =>
       apiClient.patch(`/tasks/${id}`, patch).then(r => r.data),
+    onError: () => toast({ title: "Failed to save change", variant: "destructive" }),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiClient.delete(`/tasks/${id}`).then(r => r.data),
-    onSuccess: (_data, id) => {
-      setLocalTasks(prev => prev.filter(t => t.id !== id));
-      toast({ title: "Task deleted" });
-    },
-    onError: () => toast({ title: "Failed to delete task", variant: "destructive" }),
-  });
-
-  function handleChange(id: number, patch: Partial<StagingTask>) {
-    setLocalTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+  function handlePatch(id: number, patch: Partial<StagingTask>) {
+    setLocalMap(prev => {
+      const m = new Map(prev);
+      const existing = m.get(id);
+      if (existing) m.set(id, { ...existing, ...patch });
+      return m;
+    });
     patchMutation.mutate({ id, patch });
   }
 
-  function handleConfirmDelete() {
-    if (confirmDeleteId !== null) {
-      deleteMutation.mutate(confirmDeleteId);
-      setConfirmDeleteId(null);
+  async function handleDelete(ids: number[]) {
+    setLocalMap(prev => {
+      const m = new Map(prev);
+      ids.forEach(id => m.delete(id));
+      return m;
+    });
+    await Promise.allSettled(ids.map(id => apiClient.delete(`/tasks/${id}`)));
+  }
+
+  async function handleAddSubtask(parentId: number) {
+    const parent = localMap.get(parentId);
+    if (!parent) return;
+    try {
+      const r = await apiClient.post("/tasks", {
+        title: "New subtask",
+        projectId,
+        parentTaskId: parentId,
+        status: "new_tasks",
+        priority: "medium",
+        departmentId: parent.departmentId,
+      });
+      const newTask: StagingTask = {
+        id: r.data.id,
+        title: r.data.title,
+        description: r.data.description ?? null,
+        priority: r.data.priority,
+        status: r.data.status,
+        departmentId: r.data.departmentId ?? null,
+        parentTaskId: r.data.parentTaskId ?? parentId,
+        startDate: r.data.startDate ?? null,
+      };
+      setLocalMap(prev => {
+        const m = new Map(prev);
+        m.set(newTask.id, newTask);
+        return m;
+      });
+    } catch {
+      toast({ title: "Failed to add subtask", variant: "destructive" });
     }
   }
 
   async function handleDiscardAll() {
     setDiscarding(true);
-    const all = localTasks.length > 0 ? localTasks : rawTasks;
-    await Promise.allSettled(all.map(t => apiClient.delete(`/tasks/${t.id}`)));
+    const ids = allTasks.length > 0 ? allTasks.map(t => t.id) : rawTasks.map(t => t.id);
+    await Promise.allSettled(ids.map(id => apiClient.delete(`/tasks/${id}`)));
     setDiscarding(false);
     qc.invalidateQueries({ queryKey: ["tasks"] });
     qc.invalidateQueries({ queryKey: ["kanban"] });
-    toast({ title: "Tasks discarded", description: "No tasks were imported." });
+    toast({ title: "Tasks removed", description: "No template tasks were kept." });
     onClose();
   }
 
   function handleDone() {
     qc.invalidateQueries({ queryKey: ["tasks"] });
     qc.invalidateQueries({ queryKey: ["kanban-tasks"] });
-    toast({ title: "Tasks staged", description: `${localTasks.length} tasks ready in New Tasks` });
+    const totalSubtasks = allTasks.filter(t => t.parentTaskId != null).length;
+    toast({
+      title: "Tasks ready",
+      description: `${parents.length} task groups (${totalSubtasks} subtasks) added to New Tasks`,
+    });
     onClose();
   }
 
-  const tasks = localTasks.length > 0 ? localTasks : rawTasks;
+  const parentCount = parents.length;
+  const subtaskCount = allTasks.filter(t => t.parentTaskId != null).length;
 
   return (
     <>
-      {/* Main staging dialog — onOpenChange intercepts X / Escape / click-outside */}
-      <Dialog open onOpenChange={open => { if (!open) setConfirmCancel(true); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col gap-0 p-0">
-          <DialogHeader className="px-6 pt-5 pb-4 flex-shrink-0">
-            {/* Title row — "Don't make tasks" button sits left of the dialog's own X */}
-            <div className="flex items-start gap-2 pr-8">
-              <div className="flex-1 min-w-0">
-                <DialogTitle className="flex items-center gap-2">
-                  <FolderKanban className="w-5 h-5 text-amber-500" />
-                  Stage Imported Tasks
-                </DialogTitle>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {tasks.length} task{tasks.length !== 1 ? "s" : ""} imported — set departments and priorities, then continue.
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex-shrink-0 h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2"
-                onClick={() => setConfirmSkip(true)}
-              >
-                Don't make tasks
-              </Button>
-            </div>
+      <Dialog open onOpenChange={open => { if (!open) handleDone(); }}>
+        <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col gap-0 p-0">
+          <DialogHeader className="px-6 pt-5 pb-3 flex-shrink-0 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <FolderKanban className="w-5 h-5 text-amber-500" />
+              Review Project Tasks
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isLoading
+                ? "Loading tasks…"
+                : `${parentCount} task group${parentCount !== 1 ? "s" : ""} · ${subtaskCount} subtask${subtaskCount !== 1 ? "s" : ""} — edit titles, remove groups, then continue.`}
+            </p>
           </DialogHeader>
 
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12 flex-1">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto col-scroll px-6">
-              <div className="space-y-2 py-2">
-                {tasks.map(task => (
-                  <TaskStagingCard
-                    key={task.id}
-                    task={task}
-                    departments={departments}
-                    onChange={handleChange}
-                    onDeleteRequest={setConfirmDeleteId}
-                  />
-                ))}
+          <ScrollArea className="flex-1 overflow-auto px-6 py-4">
+            {isLoading && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
-            </div>
-          )}
+            )}
+            {!isLoading && parents.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-8">No tasks found. Click Done to continue.</p>
+            )}
+            {!isLoading && parents.map(parent => (
+              <StagingGroup
+                key={parent.id}
+                parent={parent}
+                subtasks={childrenMap.get(parent.id) ?? []}
+                departments={departments}
+                onPatch={handlePatch}
+                onDelete={handleDelete}
+                onAddSubtask={handleAddSubtask}
+              />
+            ))}
+          </ScrollArea>
 
-          <div className="flex items-center justify-between px-6 py-4 border-t flex-shrink-0">
-            <p className="text-xs text-muted-foreground">
-              You can always edit tasks later from the board.
-            </p>
-            <Button onClick={handleDone} className="gap-1.5">
-              <Check className="w-4 h-4" />
+          <div className="px-6 py-4 border-t flex-shrink-0 flex items-center justify-between gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+              onClick={() => setConfirmDiscard(true)}
+              disabled={discarding}
+            >
+              {discarding ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
+              Discard All
+            </Button>
+            <Button onClick={handleDone} disabled={discarding}>
+              <Check className="w-4 h-4 mr-1.5" />
               Done Staging
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Confirmation: X / click-outside / Escape */}
-      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+      <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancel task creation?</AlertDialogTitle>
+            <AlertDialogTitle>Discard all tasks?</AlertDialogTitle>
             <AlertDialogDescription>
-              All imported tasks will be discarded and not added to the project. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Continue Staging</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDiscardAll}
-              disabled={discarding}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {discarding ? <Loader2 className="w-4 h-4 animate-spin" /> : "Cancel Import"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Confirmation: "Don't make tasks" button */}
-      <AlertDialog open={confirmSkip} onOpenChange={setConfirmSkip}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Skip imported tasks?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to continue without importing extracted tasks from PDF? The project will be created but no tasks will be added.
+              This will permanently delete all {allTasks.length} template tasks for this project. The project itself will remain.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -388,28 +421,8 @@ function TaskStagingDialog({
               disabled={discarding}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {discarding ? <Loader2 className="w-4 h-4 animate-spin" /> : "Yes, Skip Tasks"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Confirmation: delete individual task */}
-      <AlertDialog open={confirmDeleteId !== null} onOpenChange={open => { if (!open) setConfirmDeleteId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this task?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove the task. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
+              {discarding ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
+              Yes, Discard All
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -433,12 +446,10 @@ function NewProjectDialog({
   const [form, setForm] = useState(EMPTY_FORM);
   const [file, setFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
-  const [parsedTasks, setParsedTasks] = useState<ParsedTaskItem[]>([]);
 
   function clearForm() {
     setForm(EMPTY_FORM);
     setFile(null);
-    setParsedTasks([]);
   }
 
   function handleClose(v: boolean) {
@@ -447,14 +458,14 @@ function NewProjectDialog({
   }
 
   const mutation = useMutation({
-    mutationFn: (data: typeof form & { parsedTasks: ParsedTaskItem[] }) =>
+    mutationFn: (data: typeof form) =>
       apiClient.post("/projects", data).then(r => r.data),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast({ title: "Project created" });
       clearForm();
       onOpenChange(false);
-      onCreated?.(data.id, parsedTasks.length > 0);
+      onCreated?.(data.id, true);
     },
     onError: () => toast({ title: "Failed to create project", variant: "destructive" }),
   });
@@ -468,8 +479,7 @@ function NewProjectDialog({
       const r = await apiClient.post("/projects/parse-pdf", fd, { headers: { "Content-Type": "multipart/form-data" } });
       const data = r.data;
       setForm(prev => ({ ...prev, ...data }));
-      setParsedTasks(data.parsedTasks ?? []);
-      toast({ title: "PDF parsed", description: `${data.parsedTasks?.length ?? 0} tasks detected` });
+      toast({ title: "PDF parsed", description: "Project details filled in from document." });
     } catch {
       toast({ title: "Failed to parse PDF", variant: "destructive" });
     } finally {
@@ -503,29 +513,6 @@ function NewProjectDialog({
                 {parsing ? <Loader2 className="w-3 h-3 animate-spin" /> : "Parse PDF"}
               </Button>
             </div>
-
-            {/* Parsed tasks preview */}
-            {parsedTasks.length > 0 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3">
-                <p className="text-xs font-semibold text-amber-800 dark:text-amber-400 mb-2 flex items-center gap-1.5">
-                  <FolderKanban className="w-3.5 h-3.5" />
-                  {parsedTasks.length} tasks will be created in "New Tasks"
-                </p>
-                <ul className="space-y-1">
-                  {parsedTasks.slice(0, 6).map((t, i) => (
-                    <li key={i} className="text-xs text-amber-900 dark:text-amber-300 flex items-start gap-1.5">
-                      <span className="mt-0.5 text-amber-500">•</span>
-                      <span className="line-clamp-1">{t.title}</span>
-                    </li>
-                  ))}
-                  {parsedTasks.length > 6 && (
-                    <li className="text-xs text-amber-600 dark:text-amber-500 pl-3">
-                      + {parsedTasks.length - 6} more...
-                    </li>
-                  )}
-                </ul>
-              </div>
-            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
@@ -597,7 +584,7 @@ function NewProjectDialog({
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
             <Button
-              onClick={() => mutation.mutate({ ...form, parsedTasks })}
+              onClick={() => mutation.mutate({ ...form })}
               disabled={!form.name || mutation.isPending}
             >
               {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}

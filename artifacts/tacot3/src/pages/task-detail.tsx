@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
@@ -7,7 +7,7 @@ import {
   ArrowLeft, Play, Square, Clock, Edit2, Trash2, Save, X,
   Paperclip, Bell, BellOff, Loader2, AlertTriangle, CheckCircle2,
   Calendar, User, Building2, Upload, FileText, Tag,
-  Eye, Download, File,
+  Eye, Download, File, Plus, ChevronRight, Check, Circle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +66,158 @@ function TimerBar({ elapsed, expectedHours }: { elapsed: number; expectedHours: 
         />
       </div>
     </div>
+  );
+}
+
+type SubtaskRow = {
+  id: number;
+  title: string;
+  status: string;
+  priority: string;
+};
+
+const STATUS_DOT: Record<string, string> = {
+  backlog: "bg-muted-foreground/40",
+  in_progress: "bg-blue-500",
+  in_review: "bg-amber-500",
+  blocked: "bg-red-500",
+  complete: "bg-green-500",
+  new_tasks: "bg-purple-400",
+};
+
+function SubtasksPanel({ taskId, projectId }: { taskId: number; projectId: number }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [newTitle, setNewTitle] = useState("");
+  const [adding, setAdding] = useState(false);
+  const addRef = useRef<HTMLInputElement>(null);
+
+  const { data: subtasks = [], isLoading } = useQuery<SubtaskRow[]>({
+    queryKey: ["subtasks", taskId],
+    queryFn: () =>
+      apiClient.get(`/tasks?projectId=${projectId}&parentTaskId=${taskId}`).then(r => r.data),
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiClient.patch(`/tasks/${id}`, { status }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks", taskId] }),
+    onError: () => toast({ title: "Failed to update subtask", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/tasks/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subtasks", taskId] });
+      qc.invalidateQueries({ queryKey: ["task", taskId] });
+    },
+    onError: () => toast({ title: "Failed to delete subtask", variant: "destructive" }),
+  });
+
+  async function handleAddSubtask() {
+    const title = newTitle.trim();
+    if (!title) return;
+    try {
+      await apiClient.post("/tasks", {
+        title,
+        projectId,
+        parentTaskId: taskId,
+        status: "backlog",
+        priority: "medium",
+      });
+      setNewTitle("");
+      setAdding(false);
+      qc.invalidateQueries({ queryKey: ["subtasks", taskId] });
+      qc.invalidateQueries({ queryKey: ["task", taskId] });
+    } catch {
+      toast({ title: "Failed to add subtask", variant: "destructive" });
+    }
+  }
+
+  const completeCount = subtasks.filter(s => s.status === "complete").length;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            Subtasks
+            {subtasks.length > 0 && (
+              <span className="text-xs font-normal text-muted-foreground">
+                {completeCount}/{subtasks.length} complete
+              </span>
+            )}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => { setAdding(true); setTimeout(() => addRef.current?.focus(), 50); }}
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Add
+          </Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0 space-y-0.5">
+        {isLoading && (
+          <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Loading…
+          </div>
+        )}
+        {!isLoading && subtasks.length === 0 && !adding && (
+          <p className="text-xs text-muted-foreground py-2">No subtasks yet.</p>
+        )}
+        {subtasks.map(sub => (
+          <div key={sub.id} className="flex items-center gap-2 py-1.5 group rounded hover:bg-muted/50 px-1 -mx-1">
+            <button
+              onClick={() => toggleMutation.mutate({ id: sub.id, status: sub.status === "complete" ? "backlog" : "complete" })}
+              className="flex-shrink-0"
+              title={sub.status === "complete" ? "Mark incomplete" : "Mark complete"}
+            >
+              {sub.status === "complete"
+                ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                : <Circle className="w-4 h-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors" />}
+            </button>
+            <Link
+              href={`/tasks/${sub.id}`}
+              className={cn("flex-1 text-sm hover:underline min-w-0 truncate", sub.status === "complete" && "line-through text-muted-foreground")}
+            >
+              {sub.title}
+            </Link>
+            <div className={cn("w-2 h-2 rounded-full flex-shrink-0", STATUS_DOT[sub.status] ?? "bg-muted")} title={sub.status.replace("_", " ")} />
+            <button
+              onClick={() => deleteMutation.mutate(sub.id)}
+              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-0.5 flex-shrink-0"
+              title="Delete subtask"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+        {adding && (
+          <div className="flex items-center gap-2 py-1.5 mt-1">
+            <Circle className="w-4 h-4 text-muted-foreground/30 flex-shrink-0" />
+            <Input
+              ref={addRef}
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleAddSubtask(); if (e.key === "Escape") { setAdding(false); setNewTitle(""); } }}
+              placeholder="Subtask title…"
+              className="h-7 text-sm flex-1"
+            />
+            <button onClick={handleAddSubtask} className="text-green-600 hover:text-green-700 transition-colors p-0.5" title="Add">
+              <Check className="w-4 h-4" />
+            </button>
+            <button onClick={() => { setAdding(false); setNewTitle(""); }} className="text-muted-foreground hover:text-foreground transition-colors p-0.5" title="Cancel">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -460,6 +612,24 @@ export default function TaskDetailPage() {
               </CardContent>
             </Card>
           </motion.div>
+
+          {/* Subtasks panel — shown for parent tasks */}
+          {task && task.parentTaskId == null && (
+            <SubtasksPanel taskId={taskId} projectId={task.projectId} />
+          )}
+
+          {/* Parent task link — shown for subtasks */}
+          {task && task.parentTaskId != null && (
+            <Card>
+              <CardContent className="p-4 flex items-center gap-2">
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Part of:</span>
+                <Link href={`/tasks/${task.parentTaskId}`} className="text-sm font-medium hover:underline text-primary">
+                  View parent task
+                </Link>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Timer */}
           <Card>

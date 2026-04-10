@@ -252,6 +252,9 @@ export interface Task {
   /** @nullable */
   departmentId: number | null;
   /** @nullable */
+  parentTaskId: number | null;
+  subtaskCount: number;
+  /** @nullable */
   assigneeId: number | null;
   /** @nullable */
   assignerId: number | null;
