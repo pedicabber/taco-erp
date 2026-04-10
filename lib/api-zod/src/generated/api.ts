@@ -1040,6 +1040,8 @@ export const GetDashboardSummaryResponse = zod.object({
   overdueTasks: zod.number(),
   tasksInProgress: zod.number(),
   tasksCompleted: zod.number(),
+  totalSubtasks: zod.number(),
+  subtasksCompleted: zod.number(),
   myTasks: zod.number(),
   myOverdueTasks: zod.number(),
 });

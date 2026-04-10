@@ -809,18 +809,23 @@ router.get("/dashboard/summary", requireAuth, async (req: AuthenticatedRequest, 
   const projects = await db.select().from(projectsTable);
   const now = new Date();
 
-  const totalTasks = tasks.length;
-  const tasksInProgress = tasks.filter(t => t.status === "in_progress").length;
-  const tasksCompleted = tasks.filter(t => t.status === "complete").length;
-  const overdueTasks = tasks.filter(t => t.dueDate && new Date(t.dueDate) < now && t.status !== "complete").length;
+  const topLevelTasks = tasks.filter(t => t.parentTaskId === null);
+  const subtasks = tasks.filter(t => t.parentTaskId !== null);
+
+  const totalTasks = topLevelTasks.length;
+  const tasksInProgress = topLevelTasks.filter(t => t.status === "in_progress").length;
+  const tasksCompleted = topLevelTasks.filter(t => t.status === "complete").length;
+  const overdueTasks = topLevelTasks.filter(t => t.dueDate && new Date(t.dueDate) < now && t.status !== "complete").length;
+  const totalSubtasks = subtasks.length;
+  const subtasksCompleted = subtasks.filter(t => t.status === "complete").length;
   const totalProjects = projects.length;
   const activeProjects = projects.filter(p => p.status === "active").length;
 
   let myTasks = 0;
   let myOverdueTasks = 0;
   if (user) {
-    myTasks = tasks.filter(t => t.assigneeId === user.id).length;
-    myOverdueTasks = tasks.filter(t => t.assigneeId === user.id && t.dueDate && new Date(t.dueDate) < now && t.status !== "complete").length;
+    myTasks = topLevelTasks.filter(t => t.assigneeId === user.id).length;
+    myOverdueTasks = topLevelTasks.filter(t => t.assigneeId === user.id && t.dueDate && new Date(t.dueDate) < now && t.status !== "complete").length;
   }
 
   res.json(GetDashboardSummaryResponse.parse({
@@ -830,6 +835,8 @@ router.get("/dashboard/summary", requireAuth, async (req: AuthenticatedRequest, 
     overdueTasks,
     tasksInProgress,
     tasksCompleted,
+    totalSubtasks,
+    subtasksCompleted,
     myTasks,
     myOverdueTasks,
   }));

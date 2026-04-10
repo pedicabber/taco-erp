@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { FolderKanban, CheckSquare, Clock, AlertTriangle, TrendingUp, Activity } from "lucide-react";
+import { FolderKanban, CheckSquare, Clock, AlertTriangle, TrendingUp, Activity, GitBranch } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
@@ -79,7 +79,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatCard
           icon={FolderKanban}
           label="Active Projects"
@@ -90,11 +90,19 @@ export default function DashboardPage() {
         />
         <StatCard
           icon={CheckSquare}
-          label="Total Tasks"
+          label="Tasks"
           value={summary?.totalTasks ?? "—"}
           sub={`${summary?.tasksCompleted ?? 0} completed`}
           color="bg-green-500"
           delay={0.05}
+        />
+        <StatCard
+          icon={GitBranch}
+          label="Subtasks"
+          value={summary?.totalSubtasks ?? "—"}
+          sub={`${summary?.subtasksCompleted ?? 0} completed`}
+          color="bg-purple-500"
+          delay={0.08}
         />
         <StatCard
           icon={Clock}

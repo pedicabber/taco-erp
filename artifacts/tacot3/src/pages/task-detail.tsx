@@ -317,6 +317,13 @@ export default function TaskDetailPage() {
     queryFn: () => apiClient.get(`/tasks/${taskId}/subtask-attachments`).then(r => r.data),
   });
 
+  const parentTaskId: number | null = task?.parentTaskId ?? null;
+  const { data: parentTaskAttachments = [] } = useQuery<TaskAttachment[]>({
+    queryKey: ["task-attachments", parentTaskId],
+    queryFn: () => apiClient.get(`/tasks/${parentTaskId}/attachments`).then(r => r.data),
+    enabled: !!parentTaskId,
+  });
+
   const { data: users = [] } = useQuery({
     queryKey: ["users"],
     queryFn: () => apiClient.get("/users").then(r => r.data),
@@ -778,9 +785,9 @@ export default function TaskDetailPage() {
                 <CardTitle className="text-base flex items-center gap-2">
                   <Paperclip className="w-4 h-4" />
                   Attachments
-                  {(attachments.length + projectAttachments.length + subtaskGroups.reduce((s, g) => s + g.attachments.length, 0)) > 0 && (
+                  {(attachments.length + projectAttachments.length + parentTaskAttachments.length + subtaskGroups.reduce((s, g) => s + g.attachments.length, 0)) > 0 && (
                     <Badge variant="secondary" className="text-xs">
-                      {attachments.length + projectAttachments.length + subtaskGroups.reduce((s, g) => s + g.attachments.length, 0)}
+                      {attachments.length + projectAttachments.length + parentTaskAttachments.length + subtaskGroups.reduce((s, g) => s + g.attachments.length, 0)}
                     </Badge>
                   )}
                 </CardTitle>
@@ -820,6 +827,31 @@ export default function TaskDetailPage() {
                             <span className="text-sm truncate">{a.fileName}</span>
                             {a.isPinned && <Badge variant="outline" className="text-xs py-0 px-1.5 gap-0.5 flex-shrink-0"><Pin className="w-2.5 h-2.5" />pinned</Badge>}
                           </div>
+                          {a.fileSize && <div className="text-xs text-muted-foreground">{a.fileSize >= 1024*1024 ? `${(a.fileSize/1024/1024).toFixed(1)} MB` : `${(a.fileSize/1024).toFixed(1)} KB`}</div>}
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {(type === "image" || type === "pdf") && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPreviewAttachment(a)}><Eye className="w-4 h-4" /></Button>
+                          )}
+                          <a href={fileUrl} download={a.fileName}><Button variant="ghost" size="icon" className="h-7 w-7"><Download className="w-4 h-4" /></Button></a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </AttachmentSection>
+              )}
+
+              {/* Parent Task Assets — only shown when viewing a subtask */}
+              {parentTaskAttachments.length > 0 && (
+                <AttachmentSection title="Parent Task Assets" count={parentTaskAttachments.length} defaultOpen={false}>
+                  {(parentTaskAttachments as TaskAttachment[]).map(a => {
+                    const type = getFileType(a);
+                    const fileUrl = getFileUrl(a.objectPath);
+                    return (
+                      <div key={a.id} className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors">
+                        {type === "image" ? <Image className="w-8 h-8 text-blue-500 flex-shrink-0" /> : type === "pdf" ? <FileText className="w-8 h-8 text-red-500 flex-shrink-0" /> : <File className="w-8 h-8 text-muted-foreground flex-shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm truncate">{a.fileName}</div>
                           {a.fileSize && <div className="text-xs text-muted-foreground">{a.fileSize >= 1024*1024 ? `${(a.fileSize/1024/1024).toFixed(1)} MB` : `${(a.fileSize/1024).toFixed(1)} KB`}</div>}
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">

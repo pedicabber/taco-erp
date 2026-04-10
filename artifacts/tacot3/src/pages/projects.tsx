@@ -460,8 +460,37 @@ function NewProjectDialog({
   const mutation = useMutation({
     mutationFn: (data: typeof form) =>
       apiClient.post("/projects", data).then(r => r.data),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       qc.invalidateQueries({ queryKey: ["projects"] });
+
+      // Auto-pin the PDF that was used to create this project
+      if (file && file.type === "application/pdf") {
+        try {
+          const urlRes = await apiClient.post("/storage/uploads/request-url", {
+            name: file.name,
+            size: file.size,
+            contentType: "application/pdf",
+          });
+          const { uploadURL, objectPath } = urlRes.data;
+          const putRes = await fetch(uploadURL, {
+            method: "PUT",
+            body: file,
+            headers: { "Content-Type": "application/pdf" },
+          });
+          if (putRes.ok) {
+            await apiClient.post(`/projects/${data.id}/attachments`, {
+              fileName: file.name,
+              objectPath,
+              fileSize: file.size,
+              mimeType: "application/pdf",
+              isPinned: true,
+            });
+          }
+        } catch {
+          // Non-critical — project still created, just skip attachment
+        }
+      }
+
       toast({ title: "Project created" });
       clearForm();
       onOpenChange(false);

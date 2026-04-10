@@ -461,6 +461,8 @@ export interface DashboardSummary {
   overdueTasks: number;
   tasksInProgress: number;
   tasksCompleted: number;
+  totalSubtasks: number;
+  subtasksCompleted: number;
   myTasks: number;
   myOverdueTasks: number;
 }
