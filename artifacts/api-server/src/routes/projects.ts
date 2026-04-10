@@ -335,6 +335,8 @@ function extractPartNumberAndDescription(text: string): { name: string; descript
   // Continuation lines (start with lowercase) are appended to the previous item
   // with a space rather than starting a new one.
   const items: string[] = [];
+  // First Part Number encountered in a qty row — used as the project name.
+  let firstPartNumber: string | null = null;
 
   function addText(chunk: string) {
     if (!chunk || chunk.length < 3) return;
@@ -365,6 +367,24 @@ function extractPartNumberAndDescription(text: string): { name: string; descript
       // ── Qty row: part number [+ inline description] ──────────────────────────
       let rest = trimmed.slice(qtyM[0].length);
       rest = rest.replace(/\s*\$[\d,\.\s]+(\$[\d,\.\s]+)?\s*$/, "").trim();
+
+      // ── Capture the first Part Number for use as the project name ────────────
+      // Heuristic: count "natural language" words (3+ letters, not a pure number).
+      // ≤4 → the entire rest is the part number (e.g. "MISC - Fixturing",
+      //       "Custom Fabrication - 001"); collapse multi-space PDF artefacts.
+      // >4 → the rest contains an inline description; part number precedes the
+      //       first double-space gap (AW style "22-0071  Cabinet, Modular...").
+      if (!firstPartNumber && rest) {
+        const naturalWordCount = rest.replace(/\s{2,}/g, " ").split(/\s+/)
+          .filter(w => /[a-z]{3,}/i.test(w) && !/^\d+$/.test(w)).length;
+        if (naturalWordCount <= 4) {
+          firstPartNumber = rest.replace(/\s+/g, " ").trim();
+        } else {
+          const sep = rest.search(/\s{2,}/);
+          firstPartNumber = (sep >= 0 ? rest.slice(0, sep) : rest).replace(/\s+/g, " ").trim();
+        }
+      }
+
       // If more than just the part number, extract the inline description
       if (rest.split(/\s+/).filter(w => w.length > 0).length >= 3) {
         const desc = stripPartNumPrefix(rest)
@@ -386,19 +406,24 @@ function extractPartNumberAndDescription(text: string): { name: string; descript
     }
   }
 
-  if (items.length === 0) return { name: "", description: "", fullDescription: "" };
+  if (items.length === 0 && !firstPartNumber) return { name: "", description: "", fullDescription: "" };
 
-  // Derive a concise project name from the first description
-  const firstName = items[0]
-    .replace(/\s+(?:to\s+support|for\s+your|with\s+variable|including)\b.*/i, "")
-    .split(/\s+/)
-    .slice(0, 7)
-    .join(" ");
+  // Fallback project name: first description sentence (trimmed to 7 words)
+  const firstDescName = items[0]
+    ? items[0]
+      .replace(/\s+(?:to\s+support|for\s+your|with\s+variable|including)\b.*/i, "")
+      .split(/\s+/)
+      .slice(0, 7)
+      .join(" ")
+    : "";
+
+  // Project name = first Part Number (preferred) or first description text (fallback)
+  const projectName = firstPartNumber || firstDescName;
 
   // Combine ALL item descriptions for the brief description field
   const allDescriptions = items.join("\n\n");
 
-  return { name: firstName, description: allDescriptions, fullDescription: allDescriptions };
+  return { name: projectName, description: allDescriptions, fullDescription: allDescriptions };
 }
 
 interface ParsedTask {
