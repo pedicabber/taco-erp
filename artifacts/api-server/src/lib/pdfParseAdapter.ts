@@ -54,7 +54,7 @@ function itemsToRows(items: TextItem[]): string {
       .sort((a, b) => a.x - b.x)
       .map(i => i.text.trim())
       .filter(t => t.length > 0)
-      .join(" ")
+      .join("  ")   // Two spaces = column separator used by all extraction regexes
       .trim();
     if (line) lines.push(line);
   }
