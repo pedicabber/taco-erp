@@ -6,6 +6,7 @@ import projectsRouter from "./projects";
 import departmentsRouter from "./departments";
 import tasksRouter from "./tasks";
 import notificationsRouter from "./notifications";
+import taskTemplatesRouter from "./taskTemplates";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(projectsRouter);
 router.use(departmentsRouter);
 router.use(tasksRouter);
 router.use(notificationsRouter);
+router.use(taskTemplatesRouter);
 
 export default router;

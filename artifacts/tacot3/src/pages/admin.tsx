@@ -8,6 +8,7 @@ import {
   Settings, Users, FolderKanban, Shield, Trash2,
   Loader2, AlertTriangle, ArrowLeft, Search, ChevronUp, ChevronDown,
   Building2, Calendar, FileText, DollarSign, Check, X, Plus, Pencil,
+  ListChecks, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,8 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { cn, formatQuoteNum } from "@/lib/utils";
 import { Redirect } from "wouter";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 interface UserRow {
   id: number;
@@ -582,6 +585,417 @@ function DepartmentsTab() {
   );
 }
 
+// ── Task Templates Tab ────────────────────────────────────────────────────────
+interface TemplateSubtask {
+  id: number;
+  taskTemplateId: number;
+  title: string;
+  sortOrder: number;
+}
+
+interface TemplateTask {
+  id: number;
+  title: string;
+  sortOrder: number;
+  subtasks: TemplateSubtask[];
+}
+
+function TaskTemplatesTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editingTaskTitle, setEditingTaskTitle] = useState("");
+  const [editingSubId, setEditingSubId] = useState<number | null>(null);
+  const [editingSubTitle, setEditingSubTitle] = useState("");
+  const [addingSubForTask, setAddingSubForTask] = useState<number | null>(null);
+  const [newSubTitle, setNewSubTitle] = useState("");
+  const [addingTask, setAddingTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+
+  const { data: settings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["settings"],
+    queryFn: () => apiClient.get("/settings").then(r => r.data),
+  });
+
+  const { data: templates = [], isLoading } = useQuery<TemplateTask[]>({
+    queryKey: ["task-templates"],
+    queryFn: () => apiClient.get("/task-templates").then(r => r.data),
+  });
+
+  const autoPopulate = settings["auto_populate_tasks"] !== "false";
+
+  const settingMutation = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: string }) =>
+      apiClient.put(`/settings/${key}`, { value }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+    onError: () => toast({ title: "Failed to update setting", variant: "destructive" }),
+  });
+
+  const addTaskMutation = useMutation({
+    mutationFn: (title: string) => apiClient.post("/task-templates", { title }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-templates"] });
+      toast({ title: "Task added" });
+      setAddingTask(false);
+      setNewTaskTitle("");
+    },
+    onError: () => toast({ title: "Failed to add task", variant: "destructive" }),
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: ({ id, title }: { id: number; title: string }) =>
+      apiClient.patch(`/task-templates/${id}`, { title }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-templates"] });
+      toast({ title: "Task updated" });
+      setEditingTaskId(null);
+    },
+    onError: () => toast({ title: "Failed to update task", variant: "destructive" }),
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/task-templates/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-templates"] });
+      toast({ title: "Task deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete task", variant: "destructive" }),
+  });
+
+  const addSubMutation = useMutation({
+    mutationFn: ({ taskId, title }: { taskId: number; title: string }) =>
+      apiClient.post(`/task-templates/${taskId}/subtasks`, { title }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-templates"] });
+      toast({ title: "Subtask added" });
+      setAddingSubForTask(null);
+      setNewSubTitle("");
+    },
+    onError: () => toast({ title: "Failed to add subtask", variant: "destructive" }),
+  });
+
+  const updateSubMutation = useMutation({
+    mutationFn: ({ taskId, subId, title }: { taskId: number; subId: number; title: string }) =>
+      apiClient.patch(`/task-templates/${taskId}/subtasks/${subId}`, { title }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-templates"] });
+      toast({ title: "Subtask updated" });
+      setEditingSubId(null);
+    },
+    onError: () => toast({ title: "Failed to update subtask", variant: "destructive" }),
+  });
+
+  const deleteSubMutation = useMutation({
+    mutationFn: ({ taskId, subId }: { taskId: number; subId: number }) =>
+      apiClient.delete(`/task-templates/${taskId}/subtasks/${subId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-templates"] });
+      toast({ title: "Subtask deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete subtask", variant: "destructive" }),
+  });
+
+  function toggleExpand(id: number) {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Global setting */}
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="font-medium text-sm">Auto-populate tasks on project creation</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                When enabled, new projects will automatically receive all template tasks and subtasks below.
+              </p>
+            </div>
+            <Switch
+              checked={autoPopulate}
+              onCheckedChange={v =>
+                settingMutation.mutate({ key: "auto_populate_tasks", value: v ? "true" : "false" })
+              }
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Template list */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Template Tasks</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {templates.length} task{templates.length !== 1 ? "s" : ""} · these are applied to every new project
+            </p>
+          </div>
+          <Button size="sm" onClick={() => setAddingTask(v => !v)}>
+            <Plus className="w-3 h-3 mr-1" />
+            Add Task
+          </Button>
+        </div>
+
+        {addingTask && (
+          <div className="rounded-lg border p-3 space-y-2 bg-muted/30">
+            <p className="text-xs font-medium text-muted-foreground">New Template Task</p>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Task title"
+                value={newTaskTitle}
+                onChange={e => setNewTaskTitle(e.target.value)}
+                className="h-8 text-sm"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === "Enter" && newTaskTitle.trim()) addTaskMutation.mutate(newTaskTitle.trim());
+                  if (e.key === "Escape") { setAddingTask(false); setNewTaskTitle(""); }
+                }}
+              />
+              <Button
+                size="sm"
+                onClick={() => { if (newTaskTitle.trim()) addTaskMutation.mutate(newTaskTitle.trim()); }}
+                disabled={!newTaskTitle.trim() || addTaskMutation.isPending}
+              >
+                {addTaskMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setAddingTask(false); setNewTaskTitle(""); }}>
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-lg border overflow-hidden divide-y divide-border">
+          {templates.length === 0 && (
+            <div className="py-12 text-center text-muted-foreground text-sm">
+              No template tasks yet. Add one above.
+            </div>
+          )}
+          {templates.map((task, idx) => {
+            const expanded = expandedIds.has(task.id);
+            const isEditingTask = editingTaskId === task.id;
+            return (
+              <div key={task.id}>
+                {/* Task row */}
+                <div className="flex items-center gap-2 px-4 py-3 hover:bg-muted/20 transition-colors group">
+                  <button
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => toggleExpand(task.id)}
+                  >
+                    <ChevronRight
+                      className={cn("w-4 h-4 transition-transform", expanded && "rotate-90")}
+                    />
+                  </button>
+                  <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[10px] font-bold text-primary">{idx + 1}</span>
+                  </div>
+
+                  {isEditingTask ? (
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Input
+                        value={editingTaskTitle}
+                        onChange={e => setEditingTaskTitle(e.target.value)}
+                        className="h-7 text-sm flex-1"
+                        autoFocus
+                        onKeyDown={e => {
+                          if (e.key === "Enter" && editingTaskTitle.trim())
+                            updateTaskMutation.mutate({ id: task.id, title: editingTaskTitle.trim() });
+                          if (e.key === "Escape") setEditingTaskId(null);
+                        }}
+                      />
+                      <Button
+                        size="icon"
+                        className="h-7 w-7 flex-shrink-0"
+                        onClick={() => {
+                          if (editingTaskTitle.trim())
+                            updateTaskMutation.mutate({ id: task.id, title: editingTaskTitle.trim() });
+                        }}
+                        disabled={updateTaskMutation.isPending}
+                      >
+                        {updateTaskMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 flex-shrink-0" onClick={() => setEditingTaskId(null)}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span
+                      className="flex-1 text-sm font-medium truncate cursor-pointer"
+                      onClick={() => toggleExpand(task.id)}
+                    >
+                      {task.title}
+                    </span>
+                  )}
+
+                  {!isEditingTask && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">
+                        {task.subtasks.length} sub
+                      </Badge>
+                      <Button
+                        size="icon" variant="ghost" className="h-7 w-7"
+                        onClick={() => { setEditingTaskId(task.id); setEditingTaskTitle(task.title); }}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive">
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete "{task.title}"?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will also delete its {task.subtasks.length} subtask{task.subtasks.length !== 1 ? "s" : ""}. This cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() => deleteTaskMutation.mutate(task.id)}
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  )}
+                </div>
+
+                {/* Subtasks (expanded) */}
+                {expanded && (
+                  <div className="bg-muted/10 border-t border-border/50">
+                    {task.subtasks.map(sub => {
+                      const isEditingSub = editingSubId === sub.id;
+                      return (
+                        <div
+                          key={sub.id}
+                          className="flex items-center gap-2 pl-10 pr-4 py-2 hover:bg-muted/30 transition-colors group/sub border-b border-border/30 last:border-b-0"
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 flex-shrink-0" />
+                          {isEditingSub ? (
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <Input
+                                value={editingSubTitle}
+                                onChange={e => setEditingSubTitle(e.target.value)}
+                                className="h-6 text-xs flex-1"
+                                autoFocus
+                                onKeyDown={e => {
+                                  if (e.key === "Enter" && editingSubTitle.trim())
+                                    updateSubMutation.mutate({ taskId: task.id, subId: sub.id, title: editingSubTitle.trim() });
+                                  if (e.key === "Escape") setEditingSubId(null);
+                                }}
+                              />
+                              <Button
+                                size="icon"
+                                className="h-6 w-6 flex-shrink-0"
+                                onClick={() => {
+                                  if (editingSubTitle.trim())
+                                    updateSubMutation.mutate({ taskId: task.id, subId: sub.id, title: editingSubTitle.trim() });
+                                }}
+                                disabled={updateSubMutation.isPending}
+                              >
+                                {updateSubMutation.isPending ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Check className="w-2.5 h-2.5" />}
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0" onClick={() => setEditingSubId(null)}>
+                                <X className="w-2.5 h-2.5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="flex-1 text-xs text-muted-foreground truncate">{sub.title}</span>
+                              <div className="flex items-center gap-0.5 opacity-0 group-hover/sub:opacity-100 transition-opacity flex-shrink-0">
+                                <Button
+                                  size="icon" variant="ghost" className="h-6 w-6"
+                                  onClick={() => { setEditingSubId(sub.id); setEditingSubTitle(sub.title); }}
+                                >
+                                  <Pencil className="w-2.5 h-2.5" />
+                                </Button>
+                                <Button
+                                  size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive"
+                                  onClick={() => deleteSubMutation.mutate({ taskId: task.id, subId: sub.id })}
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </Button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Add subtask row */}
+                    {addingSubForTask === task.id ? (
+                      <div className="flex items-center gap-2 pl-10 pr-4 py-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary/40 flex-shrink-0" />
+                        <Input
+                          placeholder="Subtask title"
+                          value={newSubTitle}
+                          onChange={e => setNewSubTitle(e.target.value)}
+                          className="h-6 text-xs flex-1"
+                          autoFocus
+                          onKeyDown={e => {
+                            if (e.key === "Enter" && newSubTitle.trim())
+                              addSubMutation.mutate({ taskId: task.id, title: newSubTitle.trim() });
+                            if (e.key === "Escape") { setAddingSubForTask(null); setNewSubTitle(""); }
+                          }}
+                        />
+                        <Button
+                          size="icon"
+                          className="h-6 w-6 flex-shrink-0"
+                          onClick={() => {
+                            if (newSubTitle.trim()) addSubMutation.mutate({ taskId: task.id, title: newSubTitle.trim() });
+                          }}
+                          disabled={addSubMutation.isPending}
+                        >
+                          {addSubMutation.isPending ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Check className="w-2.5 h-2.5" />}
+                        </Button>
+                        <Button
+                          size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0"
+                          onClick={() => { setAddingSubForTask(null); setNewSubTitle(""); }}
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        className="flex items-center gap-2 pl-10 pr-4 py-2 text-xs text-muted-foreground hover:text-primary transition-colors w-full"
+                        onClick={() => { setAddingSubForTask(task.id); setNewSubTitle(""); }}
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add subtask
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Admin Page ───────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const { data: currentUser, isLoading } = useCurrentUser();
@@ -629,7 +1043,7 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="users">
-        <TabsList className="mb-6">
+        <TabsList className="mb-6 flex-wrap h-auto">
           <TabsTrigger value="users" className="gap-2">
             <Users className="w-4 h-4" />
             Users
@@ -641,6 +1055,10 @@ export default function AdminPage() {
           <TabsTrigger value="projects" className="gap-2">
             <FolderKanban className="w-4 h-4" />
             Projects
+          </TabsTrigger>
+          <TabsTrigger value="task-templates" className="gap-2">
+            <ListChecks className="w-4 h-4" />
+            Task Templates
           </TabsTrigger>
         </TabsList>
 
@@ -654,6 +1072,10 @@ export default function AdminPage() {
 
         <TabsContent value="projects">
           <ProjectsTab />
+        </TabsContent>
+
+        <TabsContent value="task-templates">
+          <TaskTemplatesTab />
         </TabsContent>
       </Tabs>
     </div>

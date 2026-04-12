@@ -1,5 +1,6 @@
-import { db, usersTable, departmentsTable } from "@workspace/db";
+import { db, usersTable, departmentsTable, taskTemplatesTable, taskTemplateSubtasksTable, settingsTable } from "@workspace/db";
 import { inArray, isNull } from "drizzle-orm";
+import { TEMPLATE_TASKS } from "./templateTasks";
 
 export const BOOTSTRAP_ADMINS = [
   "davidjohnfrazier@gmail.com",
@@ -37,6 +38,36 @@ export async function bootstrapDepartments() {
       await db.insert(departmentsTable).values(
         GLOBAL_DEPARTMENTS.map(d => ({ name: d.name, color: d.color, projectId: null }))
       );
+    }
+  } catch {
+    // silently skip if table not ready yet
+  }
+}
+
+export async function bootstrapTaskTemplates() {
+  try {
+    const existing = await db.select().from(taskTemplatesTable);
+    if (existing.length === 0) {
+      for (let i = 0; i < TEMPLATE_TASKS.length; i++) {
+        const tmpl = TEMPLATE_TASKS[i];
+        const [row] = await db.insert(taskTemplatesTable).values({
+          title: tmpl.title,
+          sortOrder: i,
+        }).returning();
+        for (let j = 0; j < tmpl.subtasks.length; j++) {
+          await db.insert(taskTemplateSubtasksTable).values({
+            taskTemplateId: row.id,
+            title: tmpl.subtasks[j].title,
+            sortOrder: j,
+          });
+        }
+      }
+    }
+    // Bootstrap default settings
+    const existingSettings = await db.select().from(settingsTable);
+    const settingKeys = existingSettings.map(s => s.key);
+    if (!settingKeys.includes("auto_populate_tasks")) {
+      await db.insert(settingsTable).values({ key: "auto_populate_tasks", value: "true" });
     }
   } catch {
     // silently skip if table not ready yet

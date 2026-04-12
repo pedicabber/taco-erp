@@ -9,3 +9,5 @@ export * from "./task_timer_sessions";
 export * from "./notifications";
 export * from "./activity_log";
 export * from "./kanban_columns";
+export * from "./task_templates";
+export * from "./settings";

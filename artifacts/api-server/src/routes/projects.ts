@@ -1,9 +1,8 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { parsePdfText } from "../lib/pdfParseAdapter";
-import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable, projectAttachmentsTable, usersTable } from "@workspace/db";
-import { TEMPLATE_TASKS } from "../templateTasks";
-import { eq, inArray, and } from "drizzle-orm";
+import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable, projectAttachmentsTable, usersTable, taskTemplatesTable, taskTemplateSubtasksTable, settingsTable } from "@workspace/db";
+import { eq, inArray, and, asc } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -70,31 +69,49 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
     createdById: user.id,
   }).returning();
 
-  // Auto-create standard template tasks + subtasks with "new_tasks" status
-  const todayIso = new Date().toISOString().split("T")[0];
-  for (const tmpl of TEMPLATE_TASKS) {
-    const [parent] = await db.insert(tasksTable).values({
-      title: tmpl.title,
-      status: "new_tasks",
-      priority: "medium",
-      projectId: project.id,
-      assignerId: user.id,
-      startDate: todayIso,
-      elapsedSeconds: 0,
-      timerRunning: false,
-    }).returning();
-    for (const sub of tmpl.subtasks) {
-      await db.insert(tasksTable).values({
-        title: sub.title,
+  // Check global setting before auto-populating tasks
+  const [autoPopulateSetting] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.key, "auto_populate_tasks"));
+  const autoPopulate = autoPopulateSetting?.value !== "false";
+
+  if (autoPopulate) {
+    const templates = await db
+      .select()
+      .from(taskTemplatesTable)
+      .orderBy(asc(taskTemplatesTable.sortOrder));
+    const subtasks = await db
+      .select()
+      .from(taskTemplateSubtasksTable)
+      .orderBy(asc(taskTemplateSubtasksTable.sortOrder));
+
+    const todayIso = new Date().toISOString().split("T")[0];
+    for (const tmpl of templates) {
+      const [parent] = await db.insert(tasksTable).values({
+        title: tmpl.title,
         status: "new_tasks",
         priority: "medium",
         projectId: project.id,
-        parentTaskId: parent.id,
         assignerId: user.id,
         startDate: todayIso,
         elapsedSeconds: 0,
         timerRunning: false,
-      });
+      }).returning();
+      const tmplSubs = subtasks.filter(s => s.taskTemplateId === tmpl.id);
+      for (const sub of tmplSubs) {
+        await db.insert(tasksTable).values({
+          title: sub.title,
+          status: "new_tasks",
+          priority: "medium",
+          projectId: project.id,
+          parentTaskId: parent.id,
+          assignerId: user.id,
+          startDate: todayIso,
+          elapsedSeconds: 0,
+          timerRunning: false,
+        });
+      }
     }
   }
 
