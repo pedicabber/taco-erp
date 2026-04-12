@@ -70,7 +70,7 @@ export default function DashboardPage() {
   const recentProjects = projects?.slice(0, 5) ?? [];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto overflow-x-hidden">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground mt-1">
@@ -143,13 +143,13 @@ export default function DashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {recentProjects.map((project: Project) => (
-                    <Link key={project.id} href={`/projects/${project.id}`}>
-                      <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted cursor-pointer transition-colors">
-                        <div className="min-w-0">
+                    <Link key={project.id} href={`/projects/${project.id}`} className="block">
+                      <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted cursor-pointer transition-colors min-w-0 overflow-hidden">
+                        <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium truncate">{project.name}</p>
-                          <p className="text-xs text-muted-foreground">{project.company}</p>
+                          <p className="text-xs text-muted-foreground truncate">{project.company}</p>
                         </div>
-                        <Badge variant={project.status === "active" ? "default" : "secondary"} className="ml-2 flex-shrink-0 capitalize">
+                        <Badge variant={project.status === "active" ? "default" : "secondary"} className="ml-2 flex-shrink-0 capitalize whitespace-nowrap">
                           {project.status.replace("_", " ")}
                         </Badge>
                       </div>

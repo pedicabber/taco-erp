@@ -95,7 +95,7 @@ export default function ProjectDetailPage() {
   const involvedDepartments = [...involvedDeptMap.values()].sort((a, b) => b.count - a.count);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto overflow-x-hidden">
       {/* Header */}
       <div className="mb-6">
         <Link href="/projects">
@@ -105,80 +105,78 @@ export default function ProjectDetailPage() {
           </button>
         </Link>
 
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <FolderKanban className="w-6 h-6 text-primary" />
+          </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <FolderKanban className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold">{project.name}</h1>
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                  {project.company && (
-                    <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Building2 className="w-3.5 h-3.5" />
-                      {project.company}
-                    </span>
-                  )}
-                  {project.projectId && (
-                    <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <FileText className="w-3.5 h-3.5" />
-                      {formatQuoteNum(project.projectId)}
-                    </span>
-                  )}
-                  {project.startDate && (
-                    <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Calendar className="w-3.5 h-3.5" />
-                      Started {format(new Date(project.startDate), "MMM d, yyyy")}
-                    </span>
-                  )}
-                </div>
+            <div className="flex items-start justify-between gap-2">
+              <h1 className="text-xl sm:text-2xl font-bold leading-tight break-words min-w-0">{project.name}</h1>
+              <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
+                <button
+                  onClick={() => setInfoOpen(true)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                  title="View project info"
+                >
+                  <Info className="w-4 h-4" />
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-1 focus:outline-none">
+                      <Badge
+                        variant={STATUS_VARIANTS[project.status] ?? "secondary"}
+                        className="capitalize cursor-pointer hover:opacity-80 transition-opacity"
+                      >
+                        {project.status.replace("_", " ")}
+                        <ChevronDown className="w-3 h-3 ml-1 inline" />
+                      </Badge>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {[
+                      { value: "active", label: "Active" },
+                      { value: "on_hold", label: "On Hold" },
+                      { value: "completed", label: "Completed" },
+                      { value: "cancelled", label: "Cancelled" },
+                    ].map(opt => (
+                      <DropdownMenuItem
+                        key={opt.value}
+                        onClick={() => statusMutation.mutate(opt.value)}
+                        className="flex items-center gap-2"
+                      >
+                        <Badge variant={STATUS_VARIANTS[opt.value] ?? "secondary"} className="capitalize text-xs">
+                          {opt.label}
+                        </Badge>
+                        {project.status === opt.value && <span className="ml-auto text-xs text-muted-foreground">current</span>}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              {project.company && (
+                <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
+                  {project.company}
+                </span>
+              )}
+              {project.projectId && (
+                <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <FileText className="w-3.5 h-3.5 flex-shrink-0" />
+                  {formatQuoteNum(project.projectId)}
+                </span>
+              )}
+              {project.startDate && (
+                <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
+                  Started {format(new Date(project.startDate), "MMM d, yyyy")}
+                </span>
+              )}
+            </div>
             {project.description && (
-              <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{project.description}</p>
+              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{project.description}</p>
             )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setInfoOpen(true)}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-              title="View project info"
-            >
-              <Info className="w-4 h-4" />
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1 focus:outline-none">
-                  <Badge
-                    variant={STATUS_VARIANTS[project.status] ?? "secondary"}
-                    className="capitalize cursor-pointer hover:opacity-80 transition-opacity"
-                  >
-                    {project.status.replace("_", " ")}
-                    <ChevronDown className="w-3 h-3 ml-1 inline" />
-                  </Badge>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {[
-                  { value: "active", label: "Active" },
-                  { value: "on_hold", label: "On Hold" },
-                  { value: "completed", label: "Completed" },
-                  { value: "cancelled", label: "Cancelled" },
-                ].map(opt => (
-                  <DropdownMenuItem
-                    key={opt.value}
-                    onClick={() => statusMutation.mutate(opt.value)}
-                    className="flex items-center gap-2"
-                  >
-                    <Badge variant={STATUS_VARIANTS[opt.value] ?? "secondary"} className="capitalize text-xs">
-                      {opt.label}
-                    </Badge>
-                    {project.status === opt.value && <span className="ml-auto text-xs text-muted-foreground">current</span>}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
       </div>
