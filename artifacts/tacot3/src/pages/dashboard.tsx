@@ -122,10 +122,10 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-2 gap-6 overflow-hidden">
         {/* Recent Projects */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
-          <Card>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="min-w-0">
+          <Card className="overflow-hidden">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -162,8 +162,8 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Activity Feed */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}>
-          <Card>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }} className="min-w-0">
+          <Card className="overflow-hidden">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -185,12 +185,12 @@ export default function DashboardPage() {
                       <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0 text-xs font-medium">
                         {log.actorName?.[0]?.toUpperCase() ?? "?"}
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm">
+                      <div className="min-w-0 overflow-hidden">
+                        <p className="text-sm truncate">
                           <span className="font-medium">{log.actorName}</span>{" "}
                           <span className="text-muted-foreground">{log.action}</span>
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground truncate">
                           {log.taskTitle} · {formatDistanceToNow(new Date(log.createdAt), { addSuffix: true })}
                         </p>
                       </div>
