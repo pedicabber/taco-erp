@@ -5,7 +5,7 @@ import { formatQuoteNum } from "@/lib/utils";
 import type { Task, Project } from "@/lib/types";
 import {
   ArrowLeft, Loader2, Building2, FileText,
-  Calendar, CheckSquare, FolderKanban, Info, Users, ChevronDown,
+  Calendar, CheckSquare, FolderKanban, Info, Users, ChevronDown, ChevronRight, Package,
 } from "lucide-react";
 import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = parseInt(params.projectId, 10);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(true);
   const qc = useQueryClient();
 
   const statusMutation = useMutation({
@@ -54,6 +55,17 @@ export default function ProjectDetailPage() {
   const { data: summary } = useQuery({
     queryKey: ["project-summary", projectId],
     queryFn: () => apiClient.get(`/projects/${projectId}/summary`).then(r => r.data),
+  });
+
+  const { data: allocatedInventory = [] } = useQuery<Array<{
+    allocationId: number;
+    quantity: number;
+    notes: string | null;
+    createdAt: string;
+    item: { id: number; sku: string; name: string; category: string; unit: string; unitCost: string | null };
+  }>>({
+    queryKey: ["project-inventory", projectId],
+    queryFn: () => apiClient.get(`/projects/${projectId}/inventory`).then(r => r.data),
   });
 
   if (isLoading) {
@@ -284,6 +296,69 @@ export default function ProjectDetailPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Allocated Inventory */}
+      <div className="mt-6">
+        <button
+          className="flex items-center gap-2 w-full text-left mb-3 group"
+          onClick={() => setInventoryOpen(v => !v)}
+        >
+          {inventoryOpen
+            ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+          <Package className="w-4 h-4 text-primary" />
+          <h2 className="font-semibold">Allocated Inventory</h2>
+          {allocatedInventory.length > 0 && (
+            <Badge variant="secondary" className="text-xs">{allocatedInventory.length}</Badge>
+          )}
+        </button>
+
+        {inventoryOpen && (
+          <Card>
+            {allocatedInventory.length === 0 ? (
+              <CardContent className="p-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No inventory allocated to this project yet.{" "}
+                  <Link href="/inventory">
+                    <span className="text-primary hover:underline cursor-pointer">Go to Inventory</span>
+                  </Link>{" "}
+                  to allocate items.
+                </p>
+              </CardContent>
+            ) : (
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40">
+                    <tr className="border-b border-border">
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">SKU</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Item</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs hidden md:table-cell">Category</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Qty</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs hidden lg:table-cell">Unit Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {allocatedInventory.map(alloc => (
+                      <tr key={alloc.allocationId} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{alloc.item.sku}</td>
+                        <td className="px-4 py-2.5 font-medium">{alloc.item.name}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground hidden md:table-cell">{alloc.item.category}</td>
+                        <td className="px-4 py-2.5 font-semibold">
+                          {alloc.quantity}
+                          <span className="text-xs text-muted-foreground font-normal ml-1">{alloc.item.unit}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground hidden lg:table-cell">
+                          {alloc.item.unitCost ? `$${parseFloat(alloc.item.unitCost).toFixed(2)}` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            )}
+          </Card>
+        )}
       </div>
 
       {/* Attachment dump */}
