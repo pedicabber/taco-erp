@@ -35,6 +35,7 @@ interface NavItem {
   icon: React.ElementType;
   label: string;
   href: string;
+  adminOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -44,7 +45,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Trello, label: "Board", href: "/board" },
   { icon: CalendarDays, label: "Calendar", href: "/calendar" },
   { icon: Package, label: "Inventory", href: "/inventory" },
-  { icon: TrendingUp, label: "Sales Pipeline", href: "/sales" },
+  { icon: TrendingUp, label: "Sales Pipeline", href: "/sales", adminOnly: true },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -129,7 +130,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Nav items */}
         <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter(item => !item.adminOnly || isAdmin).map((item) => {
             const Icon = item.icon;
             const active = location.startsWith(item.href);
             return (

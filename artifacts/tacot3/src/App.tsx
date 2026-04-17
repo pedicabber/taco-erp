@@ -2,6 +2,7 @@ import { useEffect, useRef, lazy, Suspense } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
 import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -62,6 +63,13 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
       </Suspense>
     </Show>
   );
+}
+
+function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { data: currentUser, isLoading } = useCurrentUser();
+  if (isLoading) return <PageLoader />;
+  if (currentUser?.role !== "admin") return <Redirect to="/dashboard" />;
+  return <>{children}</>;
 }
 
 function SignInPage() {
@@ -177,7 +185,7 @@ function ClerkProviderWithRoutes() {
             <ProtectedLayout><InventoryPage /></ProtectedLayout>
           </Route>
           <Route path="/sales">
-            <ProtectedLayout><SalesPipelinePage /></ProtectedLayout>
+            <ProtectedLayout><AdminLayout><SalesPipelinePage /></AdminLayout></ProtectedLayout>
           </Route>
           <Route path="/settings">
             <ProtectedLayout><SettingsPage /></ProtectedLayout>

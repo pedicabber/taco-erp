@@ -32,11 +32,8 @@ import {
   Eye,
   Download,
   File,
-  Plus,
   ChevronRight,
   ChevronDown,
-  Check,
-  Circle,
   Pin,
   Image,
 } from "lucide-react";
@@ -138,215 +135,6 @@ function TimerBar({
   );
 }
 
-type SubtaskRow = {
-  id: number;
-  title: string;
-  status: string;
-  priority: string;
-};
-
-const STATUS_DOT: Record<string, string> = {
-  backlog: "bg-muted-foreground/40",
-  in_progress: "bg-blue-500",
-  in_review: "bg-amber-500",
-  blocked: "bg-red-500",
-  complete: "bg-green-500",
-  new_tasks: "bg-purple-400",
-};
-
-function SubtasksPanel({
-  taskId,
-  projectId,
-}: {
-  taskId: number;
-  projectId: number;
-}) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const [newTitle, setNewTitle] = useState("");
-  const [adding, setAdding] = useState(false);
-  const addRef = useRef<HTMLInputElement>(null);
-
-  const { data: subtasks = [], isLoading } = useQuery<SubtaskRow[]>({
-    queryKey: ["subtasks", taskId],
-    queryFn: () =>
-      apiClient
-        .get(`/tasks?projectId=${projectId}&parentTaskId=${taskId}`)
-        .then((r) => r.data),
-  });
-
-  const toggleMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
-      apiClient.patch(`/tasks/${id}`, { status }).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["subtasks", taskId] }),
-    onError: () =>
-      toast({ title: "Failed to update subtask", variant: "destructive" }),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiClient.delete(`/tasks/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["subtasks", taskId] });
-      qc.invalidateQueries({ queryKey: ["task", taskId] });
-    },
-    onError: () =>
-      toast({ title: "Failed to delete subtask", variant: "destructive" }),
-  });
-
-  async function handleAddSubtask() {
-    const title = newTitle.trim();
-    if (!title) return;
-    try {
-      await apiClient.post("/tasks", {
-        title,
-        projectId,
-        parentTaskId: taskId,
-        status: "backlog",
-        priority: "medium",
-      });
-      setNewTitle("");
-      setAdding(false);
-      qc.invalidateQueries({ queryKey: ["subtasks", taskId] });
-      qc.invalidateQueries({ queryKey: ["task", taskId] });
-    } catch {
-      toast({ title: "Failed to add subtask", variant: "destructive" });
-    }
-  }
-
-  const completeCount = subtasks.filter((s) => s.status === "complete").length;
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center justify-between gap-2">
-          <span className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4" />
-            Subtasks
-            {subtasks.length > 0 && (
-              <span className="text-xs font-normal text-muted-foreground">
-                {completeCount}/{subtasks.length} complete
-              </span>
-            )}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => {
-              setAdding(true);
-              setTimeout(() => addRef.current?.focus(), 50);
-            }}
-          >
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            Add
-          </Button>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 space-y-0.5">
-        {isLoading && (
-          <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            Loading…
-          </div>
-        )}
-        {!isLoading && subtasks.length === 0 && !adding && (
-          <p className="text-xs text-muted-foreground py-2">No subtasks yet.</p>
-        )}
-        {subtasks.map((sub) => (
-          <div
-            key={sub.id}
-            className="flex items-center gap-2 py-1.5 group rounded hover:bg-muted/50 px-1 -mx-1"
-          >
-            <button
-              onClick={() =>
-                toggleMutation.mutate({
-                  id: sub.id,
-                  status: sub.status === "complete" ? "backlog" : "complete",
-                })
-              }
-              className="flex-shrink-0"
-              title={
-                sub.status === "complete" ? "Mark incomplete" : "Mark complete"
-              }
-            >
-              {sub.status === "complete" ? (
-                <CheckCircle2 className="w-4 h-4 text-green-500" />
-              ) : (
-                <Circle className="w-4 h-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors" />
-              )}
-            </button>
-            <Link
-              href={`/tasks/${sub.id}`}
-              className={cn(
-                "flex-1 text-sm hover:underline min-w-0 truncate",
-                sub.status === "complete" &&
-                  "line-through text-muted-foreground",
-              )}
-            >
-              {sub.title}
-            </Link>
-            <div
-              className={cn(
-                "w-2 h-2 rounded-full flex-shrink-0",
-                STATUS_DOT[sub.status] ?? "bg-muted",
-              )}
-              title={sub.status.replace("_", " ")}
-            />
-            <ConfirmDialog
-              trigger={
-                <button
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-0.5 flex-shrink-0"
-                  title="Delete subtask"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              }
-              title="Delete subtask?"
-              description="This will permanently delete this subtask. This action cannot be undone."
-              onConfirm={() => deleteMutation.mutate(sub.id)}
-            />
-          </div>
-        ))}
-        {adding && (
-          <div className="flex items-center gap-2 py-1.5 mt-1">
-            <Circle className="w-4 h-4 text-muted-foreground/30 flex-shrink-0" />
-            <Input
-              ref={addRef}
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleAddSubtask();
-                if (e.key === "Escape") {
-                  setAdding(false);
-                  setNewTitle("");
-                }
-              }}
-              placeholder="Subtask title…"
-              className="h-7 text-sm flex-1"
-            />
-            <button
-              onClick={handleAddSubtask}
-              className="text-green-600 hover:text-green-700 transition-colors p-0.5"
-              title="Add"
-            >
-              <Check className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                setAdding(false);
-                setNewTitle("");
-              }}
-              className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
-              title="Cancel"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 function AttachmentSection({
   title,
@@ -433,6 +221,8 @@ export default function TaskDetailPage() {
     objectPath: string;
     mimeType?: string | null;
   } | null>(null);
+  const [sqdcError, setSqdcError] = useState(false);
+  const sqdcCardRef = useRef<HTMLDivElement>(null);
 
   function getFileUrl(objectPath: string) {
     return `/api/storage/objects${objectPath.replace(/^\/objects/, "")}`;
@@ -472,25 +262,6 @@ export default function TaskDetailPage() {
     queryFn: () =>
       apiClient.get(`/projects/${projectId}/attachments`).then((r) => r.data),
     enabled: !!projectId,
-  });
-
-  type SubtaskGroup = {
-    taskId: number;
-    taskTitle: string;
-    attachments: TaskAttachment[];
-  };
-  const { data: subtaskGroups = [] } = useQuery<SubtaskGroup[]>({
-    queryKey: ["subtask-attachments", taskId],
-    queryFn: () =>
-      apiClient.get(`/tasks/${taskId}/subtask-attachments`).then((r) => r.data),
-  });
-
-  const parentTaskId: number | null = task?.parentTaskId ?? null;
-  const { data: parentTaskAttachments = [] } = useQuery<TaskAttachment[]>({
-    queryKey: ["task-attachments", parentTaskId],
-    queryFn: () =>
-      apiClient.get(`/tasks/${parentTaskId}/attachments`).then((r) => r.data),
-    enabled: !!parentTaskId,
   });
 
   const { data: users = [] } = useQuery({
@@ -954,7 +725,7 @@ export default function TaskDetailPage() {
                             </Button>
                           }
                           title="Delete this task?"
-                          description="This will permanently delete the task and all its subtasks and attachments. This action cannot be undone."
+                          description="This will permanently delete the task and all its attachments. This action cannot be undone."
                           onConfirm={() => deleteMutation.mutate()}
                           isPending={deleteMutation.isPending}
                         />
@@ -965,27 +736,6 @@ export default function TaskDetailPage() {
               </CardContent>
             </Card>
           </motion.div>
-
-          {/* Subtasks panel — shown for parent tasks */}
-          {task && task.parentTaskId == null && (
-            <SubtasksPanel taskId={taskId} projectId={task.projectId} />
-          )}
-
-          {/* Parent task link — shown for subtasks */}
-          {task && task.parentTaskId != null && (
-            <Card>
-              <CardContent className="p-4 flex items-center gap-2">
-                <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Part of:</span>
-                <Link
-                  href={`/tasks/${task.parentTaskId}`}
-                  className="text-sm font-medium hover:underline text-primary"
-                >
-                  View parent task
-                </Link>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Timer */}
           <Card>
@@ -1100,22 +850,9 @@ export default function TaskDetailPage() {
                 <CardTitle className="text-base flex items-center gap-2">
                   <Paperclip className="w-4 h-4" />
                   Attachments
-                  {attachments.length +
-                    projectAttachments.length +
-                    parentTaskAttachments.length +
-                    subtaskGroups.reduce(
-                      (s, g) => s + g.attachments.length,
-                      0,
-                    ) >
-                    0 && (
+                  {attachments.length + projectAttachments.length > 0 && (
                     <Badge variant="secondary" className="text-xs">
-                      {attachments.length +
-                        projectAttachments.length +
-                        parentTaskAttachments.length +
-                        subtaskGroups.reduce(
-                          (s, g) => s + g.attachments.length,
-                          0,
-                        )}
+                      {attachments.length + projectAttachments.length}
                     </Badge>
                   )}
                 </CardTitle>
@@ -1215,65 +952,6 @@ export default function TaskDetailPage() {
                 </AttachmentSection>
               )}
 
-              {/* Parent Task Assets — only shown when viewing a subtask */}
-              {parentTaskAttachments.length > 0 && (
-                <AttachmentSection
-                  title="Parent Task Assets"
-                  count={parentTaskAttachments.length}
-                  defaultOpen={false}
-                >
-                  {(parentTaskAttachments as TaskAttachment[]).map((a) => {
-                    const type = getFileType(a);
-                    const fileUrl = getFileUrl(a.objectPath);
-                    return (
-                      <div
-                        key={a.id}
-                        className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
-                      >
-                        {type === "image" ? (
-                          <Image className="w-8 h-8 text-blue-500 flex-shrink-0" />
-                        ) : type === "pdf" ? (
-                          <FileText className="w-8 h-8 text-red-500 flex-shrink-0" />
-                        ) : (
-                          <File className="w-8 h-8 text-muted-foreground flex-shrink-0" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm truncate">{a.fileName}</div>
-                          {a.fileSize && (
-                            <div className="text-xs text-muted-foreground">
-                              {a.fileSize >= 1024 * 1024
-                                ? `${(a.fileSize / 1024 / 1024).toFixed(1)} MB`
-                                : `${(a.fileSize / 1024).toFixed(1)} KB`}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {(type === "image" || type === "pdf") && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => setPreviewAttachment(a)}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          )}
-                          <a href={fileUrl} download={a.fileName}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                            >
-                              <Download className="w-4 h-4" />
-                            </Button>
-                          </a>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </AttachmentSection>
-              )}
-
               {/* This Task */}
               <AttachmentSection
                 title="This Task"
@@ -1358,69 +1036,6 @@ export default function TaskDetailPage() {
                 )}
               </AttachmentSection>
 
-              {/* Subtask Assets */}
-              {subtaskGroups.map((group) => (
-                <AttachmentSection
-                  key={group.taskId}
-                  title={`Subtask: ${group.taskTitle}`}
-                  count={group.attachments.length}
-                  defaultOpen={false}
-                >
-                  {group.attachments.map((a: TaskAttachment) => {
-                    const type = getFileType(a);
-                    const fileUrl = getFileUrl(a.objectPath);
-                    return (
-                      <div
-                        key={a.id}
-                        className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
-                      >
-                        {type === "image" ? (
-                          <img
-                            src={fileUrl}
-                            alt={a.fileName}
-                            className="w-10 h-10 object-cover rounded flex-shrink-0 bg-muted"
-                          />
-                        ) : type === "pdf" ? (
-                          <FileText className="w-8 h-8 text-red-500 flex-shrink-0" />
-                        ) : (
-                          <File className="w-8 h-8 text-muted-foreground flex-shrink-0" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm truncate">{a.fileName}</div>
-                          {a.fileSize && (
-                            <div className="text-xs text-muted-foreground">
-                              {a.fileSize >= 1024 * 1024
-                                ? `${(a.fileSize / 1024 / 1024).toFixed(1)} MB`
-                                : `${(a.fileSize / 1024).toFixed(1)} KB`}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {(type === "image" || type === "pdf") && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => setPreviewAttachment(a)}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          )}
-                          <a href={fileUrl} download={a.fileName}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                            >
-                              <Download className="w-4 h-4" />
-                            </Button>
-                          </a>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </AttachmentSection>
-              ))}
             </CardContent>
           </Card>
         </div>
@@ -1545,9 +1160,19 @@ export default function TaskDetailPage() {
                         : "hover:bg-muted text-muted-foreground hover:text-foreground",
                     )}
                     onClick={() => {
-                      if (task.status !== status) {
-                        updateMutation.mutate({ status });
+                      if (task.status === status) return;
+                      if (status === "complete") {
+                        const qOk = task.qualityResult && task.qualityResult !== "pending";
+                        const dOk = task.deliveryStatus && task.deliveryStatus !== "pending";
+                        if (!qOk || !dOk) {
+                          setSqdcError(true);
+                          sqdcCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          setTimeout(() => setSqdcError(false), 4000);
+                          return;
+                        }
                       }
+                      setSqdcError(false);
+                      updateMutation.mutate({ status });
                     }}
                   >
                     {label}
@@ -1558,11 +1183,23 @@ export default function TaskDetailPage() {
           </Card>
 
           {/* SQDC Validation Card */}
-          <Card>
+          <div ref={sqdcCardRef}>
+          <Card className={cn(
+            "transition-all duration-300",
+            sqdcError && "ring-2 ring-destructive border-destructive shadow-lg shadow-destructive/20"
+          )}>
             <CardContent className="p-4 space-y-3">
-              <Label className="text-xs text-muted-foreground block font-semibold tracking-wide uppercase">
-                SQDC Validation
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground block font-semibold tracking-wide uppercase">
+                  SQDC Validation
+                </Label>
+                {sqdcError && (
+                  <span className="text-xs font-semibold text-destructive flex items-center gap-1 animate-pulse">
+                    <AlertTriangle className="w-3 h-3" />
+                    Required to complete
+                  </span>
+                )}
+              </div>
 
               {/* Safety */}
               <div>
@@ -1586,14 +1223,15 @@ export default function TaskDetailPage() {
 
               {/* Quality */}
               <div>
-                <Label className="text-xs mb-1 block">Quality Result</Label>
+                <Label className={cn("text-xs mb-1 block", sqdcError && (!task.qualityResult || task.qualityResult === "pending") && "text-destructive font-semibold")}>Quality Result</Label>
                 <Select
                   value={task.qualityResult ?? "pending"}
-                  onValueChange={(v) =>
-                    updateMutation.mutate({ qualityResult: v === "pending" ? null : v })
-                  }
+                  onValueChange={(v) => {
+                    updateMutation.mutate({ qualityResult: v === "pending" ? null : v });
+                    if (v !== "pending") setSqdcError(false);
+                  }}
                 >
-                  <SelectTrigger className="h-8 text-sm">
+                  <SelectTrigger className={cn("h-8 text-sm", sqdcError && (!task.qualityResult || task.qualityResult === "pending") && "border-destructive ring-1 ring-destructive")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1607,14 +1245,15 @@ export default function TaskDetailPage() {
 
               {/* Delivery */}
               <div>
-                <Label className="text-xs mb-1 block">Delivery Status</Label>
+                <Label className={cn("text-xs mb-1 block", sqdcError && (!task.deliveryStatus || task.deliveryStatus === "pending") && "text-destructive font-semibold")}>Delivery Status</Label>
                 <Select
                   value={task.deliveryStatus ?? "pending"}
-                  onValueChange={(v) =>
-                    updateMutation.mutate({ deliveryStatus: v === "pending" ? null : v })
-                  }
+                  onValueChange={(v) => {
+                    updateMutation.mutate({ deliveryStatus: v === "pending" ? null : v });
+                    if (v !== "pending") setSqdcError(false);
+                  }}
                 >
-                  <SelectTrigger className="h-8 text-sm">
+                  <SelectTrigger className={cn("h-8 text-sm", sqdcError && (!task.deliveryStatus || task.deliveryStatus === "pending") && "border-destructive ring-1 ring-destructive")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1632,6 +1271,7 @@ export default function TaskDetailPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
         </div>
       </div>
 
