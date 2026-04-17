@@ -136,6 +136,10 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
     timerRunning: task.timerRunning,
     timerStartedAt: task.timerStartedAt?.toISOString() ?? null,
     completedAt: task.completedAt?.toISOString() ?? null,
+    safetyFlag: task.safetyFlag ?? null,
+    qualityResult: task.qualityResult ?? null,
+    deliveryStatus: task.deliveryStatus ?? null,
+    costMaterialNotes: task.costMaterialNotes ?? null,
     createdAt: task.createdAt.toISOString(),
     updatedAt: task.updatedAt.toISOString(),
     assignee,
@@ -275,6 +279,12 @@ router.patch("/tasks/:taskId", requireAuth, async (req: AuthenticatedRequest, re
       const extraSeconds = Math.floor((Date.now() - current.timerStartedAt.getTime()) / 1000);
       updates.elapsedSeconds = (current.elapsedSeconds ?? 0) + extraSeconds;
       updates.timerStartedAt = null;
+    }
+  } else if (parsed.data.status && parsed.data.status !== "complete") {
+    // If moving away from complete, clear the completedAt timestamp
+    const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
+    if (current?.status === "complete") {
+      updates.completedAt = null;
     }
   }
 

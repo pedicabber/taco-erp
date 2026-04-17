@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
@@ -78,8 +78,20 @@ const STATUS_STYLES: Record<string, string> = {
   in_progress: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
   in_review:
     "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
+  on_hold: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
   blocked: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
   complete: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  backlog: "Backlog",
+  in_progress: "In Progress",
+  in_review: "In Review",
+  on_hold: "On Hold",
+  blocked: "Blocked",
+  complete: "Completed",
+  new_tasks: "New Tasks",
+  cancelled: "Cancelled",
 };
 
 function formatSeconds(s: number): string {
@@ -368,6 +380,27 @@ function AttachmentSection({
       </button>
       {open && <div className="p-2 space-y-1.5">{children}</div>}
     </div>
+  );
+}
+
+function SqdcNotesInput({
+  task,
+  onSave,
+}: {
+  task: { costMaterialNotes?: string | null };
+  onSave: (value: string) => void;
+}) {
+  const [value, setValue] = useState(task.costMaterialNotes ?? "");
+  useEffect(() => { setValue(task.costMaterialNotes ?? ""); }, [task.costMaterialNotes]);
+  return (
+    <Textarea
+      value={value}
+      onChange={e => setValue(e.target.value)}
+      onBlur={() => onSave(value)}
+      placeholder="Add notes on cost variances or materials…"
+      rows={2}
+      className="text-sm resize-none"
+    />
   );
 }
 
@@ -724,12 +757,11 @@ export default function TaskDetailPage() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="backlog">Backlog</SelectItem>
-                            <SelectItem value="in_progress">
-                              In Progress
-                            </SelectItem>
+                            <SelectItem value="in_progress">In Progress</SelectItem>
                             <SelectItem value="in_review">In Review</SelectItem>
+                            <SelectItem value="on_hold">On Hold</SelectItem>
                             <SelectItem value="blocked">Blocked</SelectItem>
-                            <SelectItem value="complete">Complete</SelectItem>
+                            <SelectItem value="complete">Completed</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -871,7 +903,7 @@ export default function TaskDetailPage() {
                               STATUS_STYLES[task.status],
                             )}
                           >
-                            {task.status.replace("_", " ")}
+                            {STATUS_LABELS[task.status] ?? task.status.replace(/_/g, " ")}
                           </span>
                           <span className="text-xs text-muted-foreground capitalize">
                             {task.priority} priority
@@ -1496,13 +1528,14 @@ export default function TaskDetailPage() {
                 Update Status
               </Label>
               <div className="space-y-1.5">
-                {[
-                  "backlog",
-                  "in_progress",
-                  "in_review",
-                  "blocked",
-                  "complete",
-                ].map((status) => (
+                {([
+                  ["backlog", "Backlog"],
+                  ["in_progress", "In Progress"],
+                  ["in_review", "In Review"],
+                  ["on_hold", "On Hold"],
+                  ["blocked", "Blocked"],
+                  ["complete", "Completed"],
+                ] as [string, string][]).map(([status, label]) => (
                   <button
                     key={status}
                     className={cn(
@@ -1517,11 +1550,85 @@ export default function TaskDetailPage() {
                       }
                     }}
                   >
-                    <span className="capitalize">
-                      {status.replace("_", " ")}
-                    </span>
+                    {label}
                   </button>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* SQDC Validation Card */}
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <Label className="text-xs text-muted-foreground block font-semibold tracking-wide uppercase">
+                SQDC Validation
+              </Label>
+
+              {/* Safety */}
+              <div>
+                <Label className="text-xs mb-1 block">Safety</Label>
+                <Select
+                  value={task.safetyFlag ?? "none"}
+                  onValueChange={(v) =>
+                    updateMutation.mutate({ safetyFlag: v === "none" ? null : v })
+                  }
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No issues</SelectItem>
+                    <SelectItem value="near_miss">Near Miss</SelectItem>
+                    <SelectItem value="incident">Incident</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Quality */}
+              <div>
+                <Label className="text-xs mb-1 block">Quality Result</Label>
+                <Select
+                  value={task.qualityResult ?? "pending"}
+                  onValueChange={(v) =>
+                    updateMutation.mutate({ qualityResult: v === "pending" ? null : v })
+                  }
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="pass">Pass</SelectItem>
+                    <SelectItem value="rework">Rework Required</SelectItem>
+                    <SelectItem value="fail">Fail</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Delivery */}
+              <div>
+                <Label className="text-xs mb-1 block">Delivery Status</Label>
+                <Select
+                  value={task.deliveryStatus ?? "pending"}
+                  onValueChange={(v) =>
+                    updateMutation.mutate({ deliveryStatus: v === "pending" ? null : v })
+                  }
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="on_time">On Time</SelectItem>
+                    <SelectItem value="late">Late</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Cost / Material Notes */}
+              <div>
+                <Label className="text-xs mb-1 block">Cost / Material Notes</Label>
+                <SqdcNotesInput task={task} onSave={(v) => updateMutation.mutate({ costMaterialNotes: v || null })} />
               </div>
             </CardContent>
           </Card>

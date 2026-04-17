@@ -358,6 +358,10 @@ export const ListTasksResponseItem = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
+  safetyFlag: zod.string().nullable(),
+  qualityResult: zod.string().nullable(),
+  deliveryStatus: zod.string().nullable(),
+  costMaterialNotes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -430,6 +434,10 @@ export const GetTaskResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
+  safetyFlag: zod.string().nullable(),
+  qualityResult: zod.string().nullable(),
+  deliveryStatus: zod.string().nullable(),
+  costMaterialNotes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -475,6 +483,10 @@ export const UpdateTaskBody = zod.object({
   expectedHours: zod.number().nullish(),
   dueDate: zod.string().nullish(),
   startDate: zod.string().nullish(),
+  safetyFlag: zod.string().nullish(),
+  qualityResult: zod.string().nullish(),
+  deliveryStatus: zod.string().nullish(),
+  costMaterialNotes: zod.string().nullish(),
 });
 
 export const UpdateTaskResponse = zod.object({
@@ -497,6 +509,10 @@ export const UpdateTaskResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
+  safetyFlag: zod.string().nullable(),
+  qualityResult: zod.string().nullable(),
+  deliveryStatus: zod.string().nullable(),
+  costMaterialNotes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -558,6 +574,10 @@ export const StartTaskTimerResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
+  safetyFlag: zod.string().nullable(),
+  qualityResult: zod.string().nullable(),
+  deliveryStatus: zod.string().nullable(),
+  costMaterialNotes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -612,6 +632,10 @@ export const StopTaskTimerResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
+  safetyFlag: zod.string().nullable(),
+  qualityResult: zod.string().nullable(),
+  deliveryStatus: zod.string().nullable(),
+  costMaterialNotes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -670,6 +694,10 @@ export const EditTaskTimerResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
+  safetyFlag: zod.string().nullable(),
+  qualityResult: zod.string().nullable(),
+  deliveryStatus: zod.string().nullable(),
+  costMaterialNotes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -724,6 +752,10 @@ export const FollowTaskResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
+  safetyFlag: zod.string().nullable(),
+  qualityResult: zod.string().nullable(),
+  deliveryStatus: zod.string().nullable(),
+  costMaterialNotes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -778,6 +810,10 @@ export const UnfollowTaskResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
+  safetyFlag: zod.string().nullable(),
+  qualityResult: zod.string().nullable(),
+  deliveryStatus: zod.string().nullable(),
+  costMaterialNotes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -832,6 +868,10 @@ export const GetTaskRelationsResponseItem = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
+  safetyFlag: zod.string().nullable(),
+  qualityResult: zod.string().nullable(),
+  deliveryStatus: zod.string().nullable(),
+  costMaterialNotes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod

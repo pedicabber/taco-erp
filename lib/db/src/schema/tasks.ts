@@ -21,6 +21,10 @@ export const tasksTable = pgTable("tasks", {
   timerRunning: boolean("timer_running").notNull().default(false),
   timerStartedAt: timestamp("timer_started_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  safetyFlag: text("safety_flag"),
+  qualityResult: text("quality_result"),
+  deliveryStatus: text("delivery_status"),
+  costMaterialNotes: text("cost_material_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

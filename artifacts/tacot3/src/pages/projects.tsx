@@ -1,12 +1,12 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
-import type { Project, Department } from "@/lib/types";
+import type { Project } from "@/lib/types";
 import {
   Plus, FolderKanban, FileText, Search, Loader2, ChevronRight,
   Building2, Calendar, Eraser, Info, DollarSign,
-  ChevronUp, ChevronDown, Edit2, Check, Minus, Zap, X, Trash2,
+  ChevronUp, ChevronDown, Minus, Zap, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,17 +15,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { cn, formatQuoteNum } from "@/lib/utils";
 import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
 
@@ -54,383 +50,6 @@ const EMPTY_FORM = {
   contactPhone: "", contactEmail: "", totalPrice: "",
   deliveryDate: "", scopeOfWork: "",
 };
-
-// ── Task Staging Dialog ─────────────────────────────────────────────────────
-interface StagingTask {
-  id: number;
-  title: string;
-  description: string | null;
-  priority: string;
-  status: string;
-  departmentId: number | null;
-  parentTaskId: number | null;
-  startDate: string | null;
-}
-
-function useStagingTasks(projectId: number) {
-  return useQuery<StagingTask[]>({
-    queryKey: ["staging-tasks", projectId],
-    queryFn: () =>
-      apiClient.get(`/tasks?projectId=${projectId}&status=new_tasks`).then(r => r.data),
-    staleTime: 0,
-  });
-}
-
-function StagingSubtaskRow({
-  task,
-  onTitleSave,
-  onDelete,
-}: {
-  task: StagingTask;
-  onTitleSave: (id: number, title: string) => void;
-  onDelete: (id: number) => void;
-}) {
-  const [localTitle, setLocalTitle] = useState(task.title);
-  useEffect(() => { setLocalTitle(task.title); }, [task.title]);
-
-  return (
-    <div className="flex items-center gap-2 pl-6 py-1 group">
-      <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-      <Input
-        value={localTitle}
-        onChange={e => setLocalTitle(e.target.value)}
-        onBlur={() => { if (localTitle.trim() && localTitle !== task.title) onTitleSave(task.id, localTitle.trim()); }}
-        className="h-6 text-xs border-transparent focus:border-input bg-transparent hover:border-input px-1"
-      />
-      <button
-        onClick={() => onDelete(task.id)}
-        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-0.5 flex-shrink-0"
-        title="Delete subtask"
-      >
-        <Trash2 className="w-3 h-3" />
-      </button>
-    </div>
-  );
-}
-
-function StagingGroup({
-  parent,
-  subtasks,
-  departments,
-  onPatch,
-  onDelete,
-  onAddSubtask,
-}: {
-  parent: StagingTask;
-  subtasks: StagingTask[];
-  departments: Department[];
-  onPatch: (id: number, patch: Partial<StagingTask>) => void;
-  onDelete: (ids: number[]) => void;
-  onAddSubtask: (parentId: number) => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const [localTitle, setLocalTitle] = useState(parent.title);
-  useEffect(() => { setLocalTitle(parent.title); }, [parent.title]);
-
-  const priority = parent.priority as Priority;
-  const PIcon = PRIORITY_ICONS[priority] ?? Minus;
-
-  function handleTitleBlur() {
-    const t = localTitle.trim();
-    if (t && t !== parent.title) onPatch(parent.id, { title: t });
-  }
-
-  function handleDeleteParent() {
-    onDelete([parent.id, ...subtasks.map(s => s.id)]);
-  }
-
-  return (
-    <Card className="mb-2">
-      <CardContent className="p-3 pb-2">
-        {/* Parent row */}
-        <div className="flex items-center gap-2">
-          <button onClick={() => setExpanded(v => !v)} className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          </button>
-          <Input
-            value={localTitle}
-            onChange={e => setLocalTitle(e.target.value)}
-            onBlur={handleTitleBlur}
-            className="h-7 text-sm font-medium border-transparent focus:border-input bg-transparent hover:border-input flex-1 px-1 min-w-0"
-          />
-          {/* Priority pill */}
-          <div className="flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 flex-shrink-0">
-            <button onClick={() => onPatch(parent.id, { priority: PRIORITY_ORDER[Math.max(0, PRIORITY_ORDER.indexOf(priority) - 1)] })} className="text-muted-foreground hover:text-foreground">
-              <ChevronDown className="w-3 h-3" />
-            </button>
-            <PIcon className="w-3 h-3" style={{ color: PRIORITY_COLORS[priority] }} />
-            <button onClick={() => onPatch(parent.id, { priority: PRIORITY_ORDER[Math.min(PRIORITY_ORDER.length - 1, PRIORITY_ORDER.indexOf(priority) + 1)] })} className="text-muted-foreground hover:text-foreground">
-              <ChevronUp className="w-3 h-3" />
-            </button>
-          </div>
-          {/* Dept select */}
-          <Select
-            value={parent.departmentId?.toString() ?? "none"}
-            onValueChange={v => onPatch(parent.id, { departmentId: v === "none" ? null : Number(v) })}
-          >
-            <SelectTrigger className="h-7 text-xs w-[130px] flex-shrink-0">
-              <SelectValue placeholder="Dept" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No dept</SelectItem>
-              {departments.map(d => (
-                <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {/* Delete parent button */}
-          <button
-            onClick={handleDeleteParent}
-            className="text-muted-foreground hover:text-destructive transition-colors p-0.5 flex-shrink-0"
-            title="Delete task group"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Subtasks list */}
-        <AnimatePresence initial={false}>
-          {expanded && (
-            <motion.div
-              key="subtasks"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.18, ease: "easeInOut" }}
-              className="overflow-hidden"
-            >
-              <div className="mt-1.5 border-t pt-1.5">
-                {subtasks.map(s => (
-                  <StagingSubtaskRow
-                    key={s.id}
-                    task={s}
-                    onTitleSave={(id, title) => onPatch(id, { title })}
-                    onDelete={id => onDelete([id])}
-                  />
-                ))}
-                <button
-                  onClick={() => onAddSubtask(parent.id)}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground pl-6 py-1 transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                  Add subtask
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TaskStagingDialog({
-  projectId,
-  onClose,
-}: {
-  projectId: number;
-  onClose: () => void;
-}) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-
-  const { data: rawTasks = [], isLoading, refetch } = useStagingTasks(projectId);
-
-  const { data: departments = [] } = useQuery<Department[]>({
-    queryKey: ["departments", "global"],
-    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data as Department[]),
-  });
-
-  const [localMap, setLocalMap] = useState<Map<number, StagingTask>>(new Map());
-  const initialised = useRef(false);
-
-  useEffect(() => {
-    if (!initialised.current && rawTasks.length > 0) {
-      initialised.current = true;
-      setLocalMap(new Map(rawTasks.map(t => [t.id, t])));
-    }
-  }, [rawTasks]);
-
-  const allTasks = useMemo(() => Array.from(localMap.values()), [localMap]);
-  const parents = useMemo(() => allTasks.filter(t => !t.parentTaskId), [allTasks]);
-  const childrenMap = useMemo(() => {
-    const m = new Map<number, StagingTask[]>();
-    for (const t of allTasks) {
-      if (t.parentTaskId != null) {
-        const arr = m.get(t.parentTaskId) ?? [];
-        arr.push(t);
-        m.set(t.parentTaskId, arr);
-      }
-    }
-    return m;
-  }, [allTasks]);
-
-  const [discarding, setDiscarding] = useState(false);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-
-  const patchMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: number; patch: Partial<StagingTask> }) =>
-      apiClient.patch(`/tasks/${id}`, patch).then(r => r.data),
-    onError: () => toast({ title: "Failed to save change", variant: "destructive" }),
-  });
-
-  function handlePatch(id: number, patch: Partial<StagingTask>) {
-    setLocalMap(prev => {
-      const m = new Map(prev);
-      const existing = m.get(id);
-      if (existing) m.set(id, { ...existing, ...patch });
-      return m;
-    });
-    patchMutation.mutate({ id, patch });
-  }
-
-  async function handleDelete(ids: number[]) {
-    setLocalMap(prev => {
-      const m = new Map(prev);
-      ids.forEach(id => m.delete(id));
-      return m;
-    });
-    await Promise.allSettled(ids.map(id => apiClient.delete(`/tasks/${id}`)));
-  }
-
-  async function handleAddSubtask(parentId: number) {
-    const parent = localMap.get(parentId);
-    if (!parent) return;
-    try {
-      const r = await apiClient.post("/tasks", {
-        title: "New subtask",
-        projectId,
-        parentTaskId: parentId,
-        status: "new_tasks",
-        priority: "medium",
-        departmentId: parent.departmentId,
-      });
-      const newTask: StagingTask = {
-        id: r.data.id,
-        title: r.data.title,
-        description: r.data.description ?? null,
-        priority: r.data.priority,
-        status: r.data.status,
-        departmentId: r.data.departmentId ?? null,
-        parentTaskId: r.data.parentTaskId ?? parentId,
-        startDate: r.data.startDate ?? null,
-      };
-      setLocalMap(prev => {
-        const m = new Map(prev);
-        m.set(newTask.id, newTask);
-        return m;
-      });
-    } catch {
-      toast({ title: "Failed to add subtask", variant: "destructive" });
-    }
-  }
-
-  async function handleDiscardAll() {
-    setDiscarding(true);
-    const ids = allTasks.length > 0 ? allTasks.map(t => t.id) : rawTasks.map(t => t.id);
-    await Promise.allSettled(ids.map(id => apiClient.delete(`/tasks/${id}`)));
-    setDiscarding(false);
-    qc.invalidateQueries({ queryKey: ["tasks"] });
-    qc.invalidateQueries({ queryKey: ["kanban"] });
-    toast({ title: "Tasks removed", description: "No template tasks were kept." });
-    onClose();
-  }
-
-  function handleDone() {
-    qc.invalidateQueries({ queryKey: ["tasks"] });
-    qc.invalidateQueries({ queryKey: ["kanban-tasks"] });
-    const totalSubtasks = allTasks.filter(t => t.parentTaskId != null).length;
-    toast({
-      title: "Tasks ready",
-      description: `${parents.length} task groups (${totalSubtasks} subtasks) added to New Tasks`,
-    });
-    onClose();
-  }
-
-  const parentCount = parents.length;
-  const subtaskCount = allTasks.filter(t => t.parentTaskId != null).length;
-
-  return (
-    <>
-      <Dialog open onOpenChange={open => { if (!open) handleDone(); }}>
-        <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col gap-0 p-0">
-          <DialogHeader className="px-6 pt-5 pb-3 flex-shrink-0 border-b">
-            <DialogTitle className="flex items-center gap-2">
-              <FolderKanban className="w-5 h-5 text-amber-500" />
-              Review Project Tasks
-            </DialogTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {isLoading
-                ? "Loading tasks…"
-                : `${parentCount} task group${parentCount !== 1 ? "s" : ""} · ${subtaskCount} subtask${subtaskCount !== 1 ? "s" : ""} — edit titles, remove groups, then continue.`}
-            </p>
-          </DialogHeader>
-
-          <ScrollArea className="flex-1 overflow-auto px-6 py-4">
-            {isLoading && (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
-            {!isLoading && parents.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-8">No tasks found. Click Done to continue.</p>
-            )}
-            {!isLoading && parents.map(parent => (
-              <StagingGroup
-                key={parent.id}
-                parent={parent}
-                subtasks={childrenMap.get(parent.id) ?? []}
-                departments={departments}
-                onPatch={handlePatch}
-                onDelete={handleDelete}
-                onAddSubtask={handleAddSubtask}
-              />
-            ))}
-          </ScrollArea>
-
-          <div className="px-6 py-4 border-t flex-shrink-0 flex items-center justify-between gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-              onClick={() => setConfirmDiscard(true)}
-              disabled={discarding}
-            >
-              {discarding ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
-              Discard All
-            </Button>
-            <Button onClick={handleDone} disabled={discarding}>
-              <Check className="w-4 h-4 mr-1.5" />
-              Done Staging
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Discard all tasks?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete all {allTasks.length} template tasks for this project. The project itself will remain.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Go Back</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDiscardAll}
-              disabled={discarding}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {discarding ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
-              Yes, Discard All
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}
 
 // ── New Project Dialog ──────────────────────────────────────────────────────
 function NewProjectDialog({
@@ -589,18 +208,6 @@ function NewProjectDialog({
                 <Label>Delivery Date</Label>
                 <Input type="date" value={form.deliveryDate} onChange={e => setForm(p => ({ ...p, deliveryDate: e.target.value }))} />
               </div>
-              <div>
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={v => setForm(p => ({ ...p, status: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="on_hold">On Hold</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="col-span-2">
                 <Label>Brief Description</Label>
                 <Textarea
@@ -649,8 +256,6 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [infoProject, setInfoProject] = useState<Project | null>(null);
-  const [stagingProjectId, setStagingProjectId] = useState<number | null>(null);
-
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: () => apiClient.get("/projects").then(r => r.data),
@@ -659,10 +264,6 @@ export default function ProjectsPage() {
   const filtered = (projects as Project[]).filter(p =>
     [p.name, p.company, p.projectId].some(v => v?.toLowerCase().includes(search.toLowerCase()))
   );
-
-  function handleProjectCreated(projectId: number, hasTasks: boolean) {
-    if (hasTasks) setStagingProjectId(projectId);
-  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -776,20 +377,13 @@ export default function ProjectsPage() {
       <NewProjectDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onCreated={handleProjectCreated}
+        onCreated={() => {}}
       />
 
       {infoProject && (
         <ProjectInfoDialog
           project={infoProject}
           onClose={() => setInfoProject(null)}
-        />
-      )}
-
-      {stagingProjectId !== null && (
-        <TaskStagingDialog
-          projectId={stagingProjectId}
-          onClose={() => setStagingProjectId(null)}
         />
       )}
     </div>

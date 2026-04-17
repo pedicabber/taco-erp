@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { parsePdfText } from "../lib/pdfParseAdapter";
-import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable, projectAttachmentsTable, usersTable, taskTemplatesTable, taskTemplateSubtasksTable, settingsTable } from "@workspace/db";
-import { eq, inArray, and, asc } from "drizzle-orm";
+import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable, projectAttachmentsTable, usersTable, settingsTable } from "@workspace/db";
+import { eq, inArray, isNull } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -67,53 +67,92 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
 
   const [project] = await db.insert(projectsTable).values({
     ...projectData,
-    status: projectData.status ?? "active",
+    status: "active",
     createdById: user.id,
   }).returning();
 
-  // Check global setting before auto-populating tasks
-  const [autoPopulateSetting] = await db
+  // ── Auto-create predefined tasks for each global department ──────────────
+  const DEPT_TASKS: { dept: string; color: string; tasks: string[] }[] = [
+    {
+      dept: "ENGINEERING",
+      color: "#3b82f6",
+      tasks: [
+        "Project Kickoff & Requirements",
+        "System Design (Mechanical + Electrical + Controls)",
+        "EOAT Design",
+        "Controls & HMI Design",
+        "BOM & Procurement Release",
+        "Design Review & Release to Manufacturing",
+      ],
+    },
+    {
+      dept: "MANUFACTURING",
+      color: "#f59e0b",
+      tasks: [
+        "Procurement & Material Planning",
+        "Panel Build",
+        "Mechanical Fabrication",
+        "EOAT Assembly",
+        "System Assembly",
+        "Pre-Integration Check",
+      ],
+    },
+    {
+      dept: "CONTROLS",
+      color: "#a855f7",
+      tasks: [
+        "PLC Development",
+        "HMI Development",
+        "Robot Programming",
+        "System Integration",
+        "Controls Validation",
+      ],
+    },
+    {
+      dept: "TEST / DEBUG",
+      color: "#ef4444",
+      tasks: [
+        "Initial Power-On",
+        "Dry Cycle Testing",
+        "System Debugging (Mechanical + Electrical + Programming)",
+        "Cycle Time Optimization",
+        "Factory Acceptance Test (FAT)",
+      ],
+    },
+  ];
+
+  // Fetch all global (non-project-specific) departments once
+  const globalDepts = await db
     .select()
-    .from(settingsTable)
-    .where(eq(settingsTable.key, "auto_populate_tasks"));
-  const autoPopulate = autoPopulateSetting?.value !== "false";
+    .from(departmentsTable)
+    .where(isNull(departmentsTable.projectId));
 
-  if (autoPopulate) {
-    const templates = await db
-      .select()
-      .from(taskTemplatesTable)
-      .orderBy(asc(taskTemplatesTable.sortOrder));
-    const subtasks = await db
-      .select()
-      .from(taskTemplateSubtasksTable)
-      .orderBy(asc(taskTemplateSubtasksTable.sortOrder));
+  const deptMap = new Map(globalDepts.map(d => [d.name, d]));
 
-    const todayIso = new Date().toISOString().split("T")[0];
-    for (const tmpl of templates) {
-      const [parent] = await db.insert(tasksTable).values({
-        title: tmpl.title,
-        status: "new_tasks",
+  for (const { dept: deptName, color, tasks } of DEPT_TASKS) {
+    // Find or create the global department
+    let deptRecord = deptMap.get(deptName);
+    if (!deptRecord) {
+      const [created] = await db.insert(departmentsTable).values({
+        name: deptName,
+        color,
+        projectId: null,
+      }).returning();
+      deptRecord = created;
+      deptMap.set(deptName, created);
+    }
+
+    for (const title of tasks) {
+      await db.insert(tasksTable).values({
+        title,
+        status: "backlog",
         priority: "medium",
         projectId: project.id,
+        departmentId: deptRecord.id,
         assignerId: user.id,
-        startDate: todayIso,
         elapsedSeconds: 0,
         timerRunning: false,
-      }).returning();
-      const tmplSubs = subtasks.filter(s => s.taskTemplateId === tmpl.id);
-      for (const sub of tmplSubs) {
-        await db.insert(tasksTable).values({
-          title: sub.title,
-          status: "new_tasks",
-          priority: "medium",
-          projectId: project.id,
-          parentTaskId: parent.id,
-          assignerId: user.id,
-          startDate: todayIso,
-          elapsedSeconds: 0,
-          timerRunning: false,
-        });
-      }
+      });
     }
   }
 
@@ -412,12 +451,24 @@ function extractPartNumberAndDescription(text: string): { name: string; scopeOfW
       if (!firstPartNumber && nameCandidate) {
         const naturalWordCount = nameCandidate.replace(/\s{2,}/g, " ").split(/\s+/)
           .filter(w => /[a-z]{3,}/i.test(w) && !/^\d+$/.test(w)).length;
+        let candidate: string;
         if (naturalWordCount <= 4) {
-          firstPartNumber = nameCandidate.replace(/\s+/g, " ").trim();
+          candidate = nameCandidate.replace(/\s+/g, " ").trim();
         } else {
           const sep = nameCandidate.search(/\s{2,}/);
-          firstPartNumber = (sep >= 0 ? nameCandidate.slice(0, sep) : nameCandidate)
+          candidate = (sep >= 0 ? nameCandidate.slice(0, sep) : nameCandidate)
             .replace(/\s+/g, " ").trim();
+        }
+        // Skip meaningless single ALL-CAPS tokens (e.g. "CUSTOM", "MISC") and
+        // use the description portion that comes after the first double-space gap
+        const isBareToken = /^[A-Z][A-Z\d\-]+$/.test(candidate.replace(/\s+/g, "")) ||
+          PART_NUM_PREFIXES.has(candidate.trim());
+        if (isBareToken && nameCandidate.search(/\s{2,}/) >= 0) {
+          const sep = nameCandidate.search(/\s{2,}/);
+          const afterToken = nameCandidate.slice(sep).replace(/\s+/g, " ").trim();
+          firstPartNumber = afterToken || candidate;
+        } else {
+          firstPartNumber = candidate;
         }
       }
 
@@ -484,13 +535,17 @@ function extractPartNumberAndDescription(text: string): { name: string; scopeOfW
 function extractDeliveryDate(text: string, startDate: string): string | null {
   if (!startDate) return null;
 
-  // Patterns: "32 weeks ARO", "32-week lead time", "Delivery: 32 weeks"
+  // Patterns (loosest last so more specific ones match first)
   const patterns = [
-    /delivery\s*(?:time|lead\s*time)?\s*:?\s*(\d+)\s*[-–]?\s*weeks?\b/i,
-    /(\d+)\s*[-–]?\s*weeks?\s+(?:ARO|after\s+receipt|lead\s*time|from\s+(?:receipt|order|PO|award))/i,
+    /delivery\s*(?:time|lead\s*time|date)?\s*:?\s*(\d+)\s*[-–]?\s*weeks?\b/i,
+    /(\d+)\s*[-–]?\s*weeks?\s+(?:ARO|after\s+receipt|lead\s*time|from\s+(?:receipt|order|PO|award|date\s+of\s+order))/i,
     /lead\s*time\s*:?\s*(\d+)\s*[-–]?\s*weeks?\b/i,
     /(\d+)\s*[-–]?\s*weeks?\s+(?:delivery|from\s+start|after\s+start)/i,
-    /(\d+)\s*[-–]?\s*week\s+(?:schedule|program|build)/i,
+    /(\d+)\s*[-–]?\s*week\s+(?:schedule|program|build|project)/i,
+    // Generic: "XX Weeks" appearing within 80 chars of "schedule" or "timeline"
+    /(?:schedule|timeline|duration)[^.]{0,80}?(\d{1,3})\s*[-–]?\s*weeks?\b/i,
+    // Last resort: any standalone "XX weeks" or "XX-week"
+    /\b(\d{1,3})\s*[-–]?\s*weeks?\b/i,
   ];
 
   for (const pat of patterns) {
