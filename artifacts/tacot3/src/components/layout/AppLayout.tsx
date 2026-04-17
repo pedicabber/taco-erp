@@ -49,7 +49,9 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true
+  );
   const [location] = useLocation();
   const { user } = useUser();
   const { theme, setTheme } = useTheme();

@@ -116,8 +116,8 @@ function NewTaskDialog({
               placeholder="Task description..."
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="col-span-full">
               <Label>Project *</Label>
               <Select value={form.projectId} onValueChange={v => setForm(p => ({ ...p, projectId: v, departmentId: NONE }))}>
                 <SelectTrigger>
@@ -202,7 +202,7 @@ function NewTaskDialog({
               <Label>Due Date</Label>
               <Input type="date" value={form.dueDate} onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))} />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-full">
               <Label>Description</Label>
               <Textarea
                 value={form.description}
@@ -261,7 +261,7 @@ export default function TasksPage() {
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Tasks</h1>

@@ -244,9 +244,9 @@ function SqdcDetailPanel({ m, colors }: { m: SqdcMetric; colors: typeof COL[keyo
       animate={{ opacity: 1, height: "auto" }}
       exit={{ opacity: 0, height: 0 }}
       transition={{ duration: 0.25, ease: "easeInOut" }}
-      className="overflow-hidden col-span-4"
+      className="overflow-hidden col-span-full"
     >
-      <div className="grid grid-cols-4 gap-3 pt-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
         {/* Calendar */}
         <div className="bg-card/60 border border-border/50 rounded-xl p-3">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Status Calendar</p>
@@ -348,7 +348,7 @@ function SqdcDashboard() {
       </div>
 
       {/* Board */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Row 1: Score tiles */}
         {SQDC_DATA.map((m, i) => (
           <motion.div

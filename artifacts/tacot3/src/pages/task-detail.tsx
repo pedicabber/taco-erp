@@ -479,7 +479,7 @@ export default function TaskDetailPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       {/* Back */}
       <Link href="/tasks">
         <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
@@ -514,7 +514,7 @@ export default function TaskDetailPage() {
                       rows={4}
                       placeholder="Description..."
                     />
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid sm:grid-cols-2 gap-3">
                       <div>
                         <Label>Status</Label>
                         <Select

@@ -167,8 +167,8 @@ function NewProjectDialog({
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="col-span-full">
                 <Label>Project Name *</Label>
                 <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Custom Welding Fixture" />
               </div>
@@ -180,7 +180,7 @@ function NewProjectDialog({
                 <Label>Quote / Project ID</Label>
                 <Input value={form.projectId} onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))} placeholder="QT-2024-0042" />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-full">
                 <Label>Address</Label>
                 <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="742 Evergreen Terrace, Springfield, CA 90210" />
               </div>
@@ -208,7 +208,7 @@ function NewProjectDialog({
                 <Label>Delivery Date</Label>
                 <Input type="date" value={form.deliveryDate} onChange={e => setForm(p => ({ ...p, deliveryDate: e.target.value }))} />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-full">
                 <Label>Brief Description</Label>
                 <Textarea
                   value={form.description}
@@ -217,7 +217,7 @@ function NewProjectDialog({
                   rows={2}
                 />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-full">
                 <Label>Scope of Work</Label>
                 <Textarea
                   value={form.scopeOfWork}
@@ -266,7 +266,7 @@ export default function ProjectsPage() {
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Projects</h1>
