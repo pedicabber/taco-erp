@@ -4,11 +4,10 @@ import { apiClient } from "@/lib/apiClient";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   FolderKanban, CheckSquare, Clock, AlertTriangle, Activity,
-  ShieldCheck, Star, Truck, DollarSign, ChevronRight, ArrowLeft,
+  ShieldCheck, Star, Truck, DollarSign, ChevronRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -223,20 +222,16 @@ function SqdcHeaderTile({
       )}
     >
       <div className="flex items-start gap-3">
-        <div className={cn(colors.letterBg, "rounded-lg w-14 h-14 flex items-center justify-center flex-shrink-0")}>
-          <span className="text-4xl font-black text-white leading-none">{m.key}</span>
+        <div className={cn(colors.letterBg, "rounded-lg w-12 h-12 flex items-center justify-center flex-shrink-0")}>
+          <span className="text-3xl font-black text-white leading-none">{m.key}</span>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold">{m.fullName}</p>
-          <p className="text-4xl font-black leading-none mt-0.5 text-white">{m.scoreLabel}</p>
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold truncate">{m.fullName}</p>
+          <p className="text-2xl sm:text-3xl lg:text-4xl font-black leading-none mt-0.5 text-white truncate">{m.scoreLabel}</p>
           <p className="text-[10px] uppercase text-white/40 mt-0.5 tracking-wider">SCORE</p>
         </div>
       </div>
-      <div className="flex items-center gap-1.5 mt-3">
-        <div className={cn("w-2 h-2 rounded-full", colors.dotColor)} />
-        <span className={cn("text-[10px] font-bold uppercase tracking-widest", colors.statusText)}>{m.statusLabel}</span>
-      </div>
-      <p className="text-[9px] text-white/30 mt-1 uppercase tracking-widest flex items-center gap-0.5">
+      <p className="text-[9px] text-white/30 mt-3 uppercase tracking-widest flex items-center gap-0.5">
         {isExpanded ? "Tap to close" : "Click for details"}
         <ChevronRight className={cn("w-2.5 h-2.5 inline transition-transform", isExpanded && "rotate-90")} />
       </p>
@@ -246,11 +241,10 @@ function SqdcHeaderTile({
 
 // ── Snippet panel (drops below tiles on click) ─────────────────────────────────
 function SqdcSnippetPanel({
-  m, colors, onMoreInfo,
+  m, colors,
 }: {
   m: SqdcMetric;
   colors: typeof COL[keyof typeof COL];
-  onMoreInfo: () => void;
 }) {
   const fmt = (v: number) =>
     m.trendUnit === "%" ? `${v}%` : v >= 1000 ? `$${Math.round(v / 1000)}k` : v.toString();
@@ -330,137 +324,6 @@ function SqdcSnippetPanel({
             </div>
           </div>
         </div>
-        {/* More Info button */}
-        <div className="flex justify-end mt-3 pt-3 border-t border-white/10">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-white/70 hover:text-white hover:bg-white/10 text-xs gap-1.5 h-8"
-            onClick={onMoreInfo}
-          >
-            More Info <ChevronRight className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-// ── Full detail view (opened via "More Info") ──────────────────────────────────
-function SqdcFullDetail({
-  m, colors, onBack,
-}: {
-  m: SqdcMetric;
-  colors: typeof COL[keyof typeof COL];
-  onBack: () => void;
-}) {
-  const fmt = (v: number) =>
-    m.trendUnit === "%" ? `${v}%` : v >= 1000 ? `$${Math.round(v / 1000)}k` : v.toString();
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 16 }}
-      transition={{ duration: 0.22 }}
-    >
-      {/* Back button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onBack}
-        className="mb-4 gap-1.5 text-muted-foreground hover:text-foreground -ml-1"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to Board
-      </Button>
-
-      {/* Full-width header tile */}
-      <div className={cn("rounded-xl border p-5 mb-5", colors.headerBg)}>
-        <div className="flex items-center gap-5 flex-wrap">
-          <div className={cn(colors.letterBg, "rounded-xl w-20 h-20 flex items-center justify-center flex-shrink-0")}>
-            <span className="text-5xl font-black text-white leading-none">{m.key}</span>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold">{m.fullName}</p>
-            <p className="text-5xl font-black leading-none mt-0.5 text-white">{m.scoreLabel}</p>
-            <p className="text-[10px] uppercase text-white/40 mt-1 tracking-wider">SCORE</p>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <div className={cn("w-3 h-3 rounded-full", colors.dotColor)} />
-            <span className={cn("text-sm font-bold uppercase tracking-widest", colors.statusText)}>{m.statusLabel}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Detail sections — 2×2 grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Calendar */}
-        <div className="bg-card border border-border/60 rounded-xl p-4">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold mb-3">Status Calendar</p>
-          <SqdcCalendar data={m.calendarData} size="lg" />
-        </div>
-
-        {/* Key Metrics */}
-        <div className="bg-card border border-border/60 rounded-xl p-4">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold mb-3">Key Metrics</p>
-          <div className="flex flex-col gap-3">
-            {m.keyMetrics.map((km, i) => (
-              <div key={i} className={cn("rounded-lg px-4 py-3 border", colors.metricBg)}>
-                <p className="text-3xl font-black leading-none">{km.value}</p>
-                <p className="text-xs mt-1 opacity-80">{km.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 6-Month Trend */}
-        <div className="bg-card border border-border/60 rounded-xl p-4">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold mb-3">6-Month Trend</p>
-          <div className="h-44">
-            <ResponsiveContainer width="100%" height="100%">
-              {m.trendType === "bar" ? (
-                <BarChart data={m.trendData} barSize={16}>
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#888" }} axisLine={false} tickLine={false} />
-                  <YAxis hide />
-                  <Tooltip
-                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 11 }}
-                    formatter={(v: number) => [fmt(v), m.fullName]}
-                  />
-                  <Bar dataKey="value" fill={colors.chartColor} radius={[3, 3, 0, 0]} />
-                </BarChart>
-              ) : (
-                <LineChart data={m.trendData}>
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#888" }} axisLine={false} tickLine={false} />
-                  <YAxis hide domain={["auto", "auto"]} />
-                  <Tooltip
-                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 11 }}
-                    formatter={(v: number) => [fmt(v), m.fullName]}
-                  />
-                  <Line type="monotone" dataKey="value" stroke={colors.chartColor} strokeWidth={2.5} dot={{ r: 4, fill: colors.chartColor }} />
-                </LineChart>
-              )}
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Action Plan */}
-        <div className="bg-card border border-border/60 rounded-xl p-4">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold mb-3">Action Plan</p>
-          <div className="space-y-2">
-            <div className="grid grid-cols-3 gap-2 text-xs uppercase tracking-widest text-muted-foreground font-bold pb-2 border-b border-border">
-              <span>Action</span><span>Due</span><span>Status</span>
-            </div>
-            {m.actionPlan.map((ap, i) => (
-              <div key={i} className="grid grid-cols-3 gap-2 items-center py-1.5">
-                <span className="text-sm truncate text-foreground">{ap.action}</span>
-                <span className="text-sm text-muted-foreground">{ap.due}</span>
-                <span className={cn("text-xs px-2 py-1 rounded-md font-medium capitalize", ACTION_STATUS_STYLE[ap.status])}>
-                  {ap.status === "in-progress" ? "In Progress" : ap.status.charAt(0).toUpperCase() + ap.status.slice(1)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </motion.div>
   );
@@ -469,7 +332,6 @@ function SqdcFullDetail({
 // ── SQDC Dashboard (admin) ────────────────────────────────────────────────────
 function SqdcDashboard() {
   const [expanded, setExpanded] = useState<"S" | "Q" | "D" | "C" | null>(null);
-  const [fullDetail, setFullDetail] = useState<"S" | "Q" | "D" | "C" | null>(null);
 
   const { data: summary } = useQuery({
     queryKey: ["dashboard-summary"],
@@ -499,15 +361,6 @@ function SqdcDashboard() {
     setExpanded(prev => prev === key ? null : key);
   }
 
-  function openFullDetail(key: "S" | "Q" | "D" | "C") {
-    setFullDetail(key);
-    setExpanded(null);
-  }
-
-  function closeFullDetail() {
-    setFullDetail(null);
-  }
-
   return (
     <div className="p-4 sm:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -521,59 +374,46 @@ function SqdcDashboard() {
         </span>
       </div>
 
-      <AnimatePresence mode="wait">
-        {/* ── Full Detail View ───────────────────────────────────────────── */}
-        {fullDetail ? (
-          <SqdcFullDetail
-            key="full-detail"
-            m={SQDC_DATA.find(m => m.key === fullDetail)!}
-            colors={COL[fullDetail]}
-            onBack={closeFullDetail}
-          />
-        ) : (
-          <motion.div
-            key="board"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-          >
-            {/* ── SQDC Tiles ─────────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-              {SQDC_DATA.map((m, i) => (
-                <motion.div
-                  key={m.key}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.07, duration: 0.3 }}
-                  className={cn(
-                    // Mobile: hide non-selected tiles when one is expanded
-                    expanded && expanded !== m.key && "hidden lg:block",
-                    // Mobile: selected tile spans full width (2 of 2 cols)
-                    expanded === m.key && "col-span-2 lg:col-span-1",
-                  )}
-                >
-                  <SqdcHeaderTile
-                    m={m}
-                    colors={COL[m.key]}
-                    onClick={() => toggle(m.key)}
-                    isExpanded={expanded === m.key}
-                  />
-                </motion.div>
-              ))}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.18 }}
+      >
+        {/* ── SQDC Tiles ───────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          {SQDC_DATA.map((m, i) => (
+            <motion.div
+              key={m.key}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.07, duration: 0.3 }}
+              className={cn(
+                // Mobile: hide non-selected tiles when one is expanded
+                expanded && expanded !== m.key && "hidden lg:block",
+                // Mobile: selected tile spans full width (2 of 2 cols)
+                expanded === m.key && "col-span-2 lg:col-span-1",
+              )}
+            >
+              <SqdcHeaderTile
+                m={m}
+                colors={COL[m.key]}
+                onClick={() => toggle(m.key)}
+                isExpanded={expanded === m.key}
+              />
+            </motion.div>
+          ))}
 
-              {/* Snippet panel — col-span-full so it appears below all tiles */}
-              <AnimatePresence>
-                {expanded && (
-                  <SqdcSnippetPanel
-                    key={expanded}
-                    m={SQDC_DATA.find(m => m.key === expanded)!}
-                    colors={COL[expanded]}
-                    onMoreInfo={() => openFullDetail(expanded)}
-                  />
-                )}
-              </AnimatePresence>
-            </div>
+          {/* Snippet panel — col-span-full so it appears below all tiles */}
+          <AnimatePresence>
+            {expanded && (
+              <SqdcSnippetPanel
+                key={expanded}
+                m={SQDC_DATA.find(m => m.key === expanded)!}
+                colors={COL[expanded]}
+              />
+            )}
+          </AnimatePresence>
+        </div>
 
             {/* ── Regular Dashboard Content ──────────────────────────────── */}
             <div className="border-t border-border/50 pt-6">
@@ -662,12 +502,10 @@ function SqdcDashboard() {
                       )}
                     </CardContent>
                   </Card>
-                </motion.div>
-              </div>
+              </motion.div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      </motion.div>
     </div>
   );
 }
