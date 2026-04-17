@@ -127,7 +127,7 @@ router.post("/inventory/:id/allocate", requireAuth, async (req: AuthenticatedReq
     return;
   }
 
-  const dbUser = await syncUserFromClerk(req.auth.userId);
+  const dbUser = await syncUserFromClerk(req);
 
   // Check item exists and has enough available qty
   const [item] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, id));
