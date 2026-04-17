@@ -5,6 +5,7 @@ import { TEMPLATE_TASKS } from "./templateTasks";
 export const BOOTSTRAP_ADMINS = [
   "davidjohnfrazier@gmail.com",
   "jferris@toddco.com",
+  "jferris.toddco@gmail.com",
   "jayf6304@gmail.com",
 ];
 
