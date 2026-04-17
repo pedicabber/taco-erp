@@ -7,6 +7,7 @@ export const BOOTSTRAP_ADMINS = [
   "jferris@toddco.com",
   "jferris.toddco@gmail.com",
   "jayf6304@gmail.com",
+  "justinsferris@gmail.com",
 ];
 
 const GLOBAL_DEPARTMENTS = [
