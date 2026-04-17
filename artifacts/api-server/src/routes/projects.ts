@@ -37,6 +37,8 @@ function buildProject(p: typeof projectsTable.$inferSelect) {
     contactPhone: p.contactPhone,
     contactEmail: p.contactEmail,
     totalPrice: p.totalPrice,
+    deliveryDate: p.deliveryDate,
+    scopeOfWork: p.scopeOfWork,
     createdById: p.createdById,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -138,8 +140,11 @@ router.post("/projects/parse-pdf", requireAuth, upload.single("file"), async (re
     const contactPhone = extractPhone(text) ?? "";
     const contactEmail = extractEmail(text) ?? "";
     const totalPrice = extractTotalPrice(text) ?? "";
-    const { name: partNumber, description, fullDescription } = extractPartNumberAndDescription(text);
     const startDate = extractStartDate(text) ?? "";
+    const { name: partNumber, scopeOfWork: rawScope, fullDescription } = extractPartNumberAndDescription(text);
+    const scopeOfWork = rawScope || fullDescription || "";
+    const description = extractBriefDescription(text) || scopeOfWork.split("\n")[0] || "";
+    const deliveryDate = extractDeliveryDate(text, startDate);
     const result = {
       company,
       name: partNumber || company || "New Project",
@@ -152,6 +157,8 @@ router.post("/projects/parse-pdf", requireAuth, upload.single("file"), async (re
       contactPhone,
       contactEmail,
       totalPrice,
+      deliveryDate: deliveryDate ?? "",
+      scopeOfWork,
     };
 
     res.json(ParsePdfResponse.parse(result));
@@ -294,11 +301,17 @@ function extractAddress(text: string): string | null {
 // Address row: "Address  [addr]  Phone  :?  (xxx)  ..."
 // Uses a GREEDY capture to grab the full phone (pdf2json inserts spaces within numbers).
 // Stops only at 2+ spaces followed by a letter (new column) or end-of-line.
+// Handles dash-separated, dot-separated, and parenthetical formats.
 function extractPhone(text: string): string | null {
+  // Primary: inline with Address row
   const m = text.match(/Address.+?Phone\s*:?\s{1,10}([\d\s\(\)\-\+\.x]{6,40})(?=\s{2,}[A-Za-z]|\n|$)/i);
   if (m) return normalizePhone(m[1]);
+  // Secondary: labeled phone (Customer/Client/Contact Phone: ...)
   const alt = text.match(/(?:Customer|Client|Contact)\s+Phone\s*:\s*([\d\s\-\(\)\+\.x]{7,40})(?=\s{2,}[A-Za-z]|\n|$)/i);
   if (alt) return normalizePhone(alt[1]);
+  // Tertiary: standalone "Phone: ..." line (dot-separated common in Toddco quotes)
+  const standalone = text.match(/\bPhone\s*:?\s*([\d\s\(\)\-\+\.x]{7,30})(?=\s{2,}[A-Za-z]|\n|$)/i);
+  if (standalone) return normalizePhone(standalone[1]);
   return null;
 }
 
@@ -328,18 +341,21 @@ function stripPartNumPrefix(rest: string): string {
   return rest;
 }
 
-// Robust description extractor handling three Toddco quote layouts:
+// Robust description + scope-of-work extractor handling three Toddco quote layouts:
 //  1. BridgeMed  – description on a SEPARATE line BEFORE the qty row
 //  2. Denso / AW – description INLINE on the qty row, after the part-number token
 //  3. Sub-items  – bullet lines after the qty row
-function extractPartNumberAndDescription(text: string): { name: string; description: string; fullDescription: string } {
+//
+// Project name: the first Part Number / description phrase, truncated at "including the following:"
+// Scope of work: the bullet/detail lines that follow "including the following:"
+function extractPartNumberAndDescription(text: string): { name: string; scopeOfWork: string; fullDescription: string } {
   const lines = text.split("\n");
 
   // Find the column-header row ("Qty. Part Number Description ...")
   const headerIdx = lines.findIndex(l => /\bQty\.?\b/i.test(l) && /\bDescription\b/i.test(l));
-  if (headerIdx < 0) return { name: "", description: "", fullDescription: "" };
+  if (headerIdx < 0) return { name: "", scopeOfWork: "", fullDescription: "" };
 
-  // Find end of line-items section
+  // Find end of line-items section (Total/Subtotal row)
   let endIdx = lines.length;
   for (let i = headerIdx + 1; i < lines.length; i++) {
     if (/^\s*(?:Total[\s\w]*[\$:]|TOTAL\s*:|Subtotal\s*:|Delivery\s*:)/i.test(lines[i])) {
@@ -348,23 +364,21 @@ function extractPartNumberAndDescription(text: string): { name: string; descript
     }
   }
 
-  // Each entry in `items` is one logical item description.
-  // Continuation lines (start with lowercase) are appended to the previous item
-  // with a space rather than starting a new one.
+  // Scope-of-work lines (bullet points and detail lines from "including the following:")
+  const scopeLines: string[] = [];
+  // All item description lines for fullDescription
   const items: string[] = [];
   // First Part Number encountered in a qty row — used as the project name.
   let firstPartNumber: string | null = null;
+  // Whether we are past "including the following:" in the current item
+  let inScope = false;
 
-  function addText(chunk: string) {
+  function addItem(chunk: string) {
     if (!chunk || chunk.length < 3) return;
-    // Reject orphaned fragment lines: no capital letter AND fewer than 2 real words
-    // (e.g. "stapler  )" that leaked from a filtered "o  Custom...and\n stapler )" bullet)
     const realWords = chunk.split(/\s+/).filter(w => /[A-Za-z]{2,}/.test(w)).length;
     if (!/[A-Z]/.test(chunk) && realWords < 2) return;
-
     const startsLower = /^[a-z]/.test(chunk);
     if (startsLower && items.length > 0) {
-      // Continuation of the previous description sentence
       items[items.length - 1] = `${items[items.length - 1]} ${chunk}`.trim();
     } else {
       items.push(chunk);
@@ -381,51 +395,70 @@ function extractPartNumberAndDescription(text: string): { name: string; descript
 
     const qtyM = trimmed.match(/^(\d+)\s+/);
     if (qtyM) {
-      // ── Qty row: part number [+ inline description] ──────────────────────────
+      // ── Qty row: reset scope flag, parse part number + inline description ────
+      inScope = false;
       let rest = trimmed.slice(qtyM[0].length);
       rest = rest.replace(/\s*\$[\d,\.\s]+(\$[\d,\.\s]+)?\s*$/, "").trim();
 
-      // ── Capture the first Part Number for use as the project name ────────────
-      // Heuristic: count "natural language" words (3+ letters, not a pure number).
-      // ≤4 → the entire rest is the part number (e.g. "MISC - Fixturing",
-      //       "Custom Fabrication - 001"); collapse multi-space PDF artefacts.
-      // >4 → the rest contains an inline description; part number precedes the
-      //       first double-space gap (AW style "22-0071  Cabinet, Modular...").
-      if (!firstPartNumber && rest) {
-        const naturalWordCount = rest.replace(/\s{2,}/g, " ").split(/\s+/)
+      // Check if this row contains "including the following:" — split there
+      const inclIdx = rest.search(/\s+including\s+the\s+following\s*:/i);
+      let nameCandidate = rest;
+      if (inclIdx >= 0) {
+        nameCandidate = rest.slice(0, inclIdx).trim();
+        inScope = true;
+      }
+
+      // Capture first Part Number for the project name
+      if (!firstPartNumber && nameCandidate) {
+        const naturalWordCount = nameCandidate.replace(/\s{2,}/g, " ").split(/\s+/)
           .filter(w => /[a-z]{3,}/i.test(w) && !/^\d+$/.test(w)).length;
         if (naturalWordCount <= 4) {
-          firstPartNumber = rest.replace(/\s+/g, " ").trim();
+          firstPartNumber = nameCandidate.replace(/\s+/g, " ").trim();
         } else {
-          const sep = rest.search(/\s{2,}/);
-          firstPartNumber = (sep >= 0 ? rest.slice(0, sep) : rest).replace(/\s+/g, " ").trim();
+          const sep = nameCandidate.search(/\s{2,}/);
+          firstPartNumber = (sep >= 0 ? nameCandidate.slice(0, sep) : nameCandidate)
+            .replace(/\s+/g, " ").trim();
         }
       }
 
-      // If more than just the part number, extract the inline description
-      if (rest.split(/\s+/).filter(w => w.length > 0).length >= 3) {
-        const desc = stripPartNumPrefix(rest)
-          .replace(/\s+including\b.*/i, "")
-          .replace(/\s{2,}/g, " ")
-          .trim();
+      // If inline description exists (before "including the following:")
+      if (nameCandidate.split(/\s+/).filter(w => w.length > 0).length >= 3) {
+        const desc = stripPartNumPrefix(nameCandidate).replace(/\s{2,}/g, " ").trim();
         if (desc.split(/\s+/).filter(w => w.length > 0).length >= 2 && !/^[\$\d,\.]+$/.test(desc)) {
-          addText(desc);
+          addItem(desc);
         }
       }
     } else {
-      // ── Non-qty row: standalone description text ─────────────────────────────
+      // ── Non-qty row ───────────────────────────────────────────────────────────
+      // If we're inside "including the following:" — collect as scope of work
+      if (inScope) {
+        // Include bullet points and plain text lines
+        const scopeLine = trimmed.replace(/^[•\u2022\u25CF\u2023oO○◦]\s*/u, "").replace(/\s{2,}/g, " ").trim();
+        if (scopeLine.length >= 3) scopeLines.push(scopeLine);
+        continue;
+      }
+
+      // Check if this standalone line contains "including the following:"
+      const inclIdx = trimmed.search(/\s+including\s+the\s+following\s*:/i);
+      if (inclIdx >= 0) {
+        const before = trimmed.slice(0, inclIdx).trim();
+        if (before.length >= 3) addItem(before);
+        inScope = true;
+        continue;
+      }
+
       if (/^[A-Z]{4,}\b/.test(trimmed)) continue;             // ALL-CAPS part-number token
       if (/^[A-Za-z]+\s*[-–]\s*\d+\b/.test(trimmed)) continue; // "Fabrication - 001"
-      if (/^[•\u2022\u25CF\u2023oO○◦]\s/.test(trimmed)) continue; // bullet point
+      if (/^[•\u2022\u25CF\u2023oO○◦]\s/.test(trimmed)) continue; // bullet point (outside scope)
 
-      const desc = trimmed.replace(/\s+including\b.*/i, "").replace(/\s{2,}/g, " ").trim();
-      if (desc.length >= 5) addText(desc);
+      const desc = trimmed.replace(/\s{2,}/g, " ").trim();
+      if (desc.length >= 5) addItem(desc);
     }
   }
 
-  if (items.length === 0 && !firstPartNumber) return { name: "", description: "", fullDescription: "" };
+  if (items.length === 0 && !firstPartNumber) return { name: "", scopeOfWork: "", fullDescription: "" };
 
-  // Fallback project name: first description sentence (trimmed to 7 words)
+  // Fallback project name from first description sentence (≤7 words)
   const firstDescName = items[0]
     ? items[0]
       .replace(/\s+(?:to\s+support|for\s+your|with\s+variable|including)\b.*/i, "")
@@ -434,13 +467,62 @@ function extractPartNumberAndDescription(text: string): { name: string; descript
       .join(" ")
     : "";
 
-  // Project name = first Part Number (preferred) or first description text (fallback)
-  const projectName = firstPartNumber || firstDescName;
+  // Project name = first Part Number (preferred) or description fallback
+  // Strip any trailing "including the following:" fragment from the name
+  const rawName = firstPartNumber || firstDescName;
+  const projectName = rawName.replace(/\s+including\s+the\s+following\s*:?.*/i, "").trim();
 
-  // Combine ALL item descriptions for the brief description field
-  const allDescriptions = items.join("\n\n");
+  const scopeOfWork = scopeLines.join("\n");
+  const fullDescription = items.join("\n\n");
 
-  return { name: projectName, description: allDescriptions, fullDescription: allDescriptions };
+  return { name: projectName, scopeOfWork, fullDescription };
+}
+
+// Extracts the delivery date by finding a "XX week" lead time in the PDF and
+// adding that many weeks to the provided start date.
+// Returns an ISO date string (YYYY-MM-DD) or null if not found.
+function extractDeliveryDate(text: string, startDate: string): string | null {
+  if (!startDate) return null;
+
+  // Patterns: "32 weeks ARO", "32-week lead time", "Delivery: 32 weeks"
+  const patterns = [
+    /delivery\s*(?:time|lead\s*time)?\s*:?\s*(\d+)\s*[-–]?\s*weeks?\b/i,
+    /(\d+)\s*[-–]?\s*weeks?\s+(?:ARO|after\s+receipt|lead\s*time|from\s+(?:receipt|order|PO|award))/i,
+    /lead\s*time\s*:?\s*(\d+)\s*[-–]?\s*weeks?\b/i,
+    /(\d+)\s*[-–]?\s*weeks?\s+(?:delivery|from\s+start|after\s+start)/i,
+    /(\d+)\s*[-–]?\s*week\s+(?:schedule|program|build)/i,
+  ];
+
+  for (const pat of patterns) {
+    const m = text.match(pat);
+    if (m) {
+      const weeks = parseInt(m[1], 10);
+      if (isNaN(weeks) || weeks <= 0 || weeks > 260) continue;
+      const base = new Date(startDate);
+      if (isNaN(base.getTime())) continue;
+      base.setDate(base.getDate() + weeks * 7);
+      return base.toISOString().split("T")[0];
+    }
+  }
+  return null;
+}
+
+// Extracts the first paragraph from a "Conclusion" section near the end of the PDF.
+// Falls back to null so the caller can use Scope of Work instead.
+function extractBriefDescription(text: string): string | null {
+  // Look for a "Conclusion" heading (case-insensitive)
+  const conclusionM = text.match(/\bConclusion\b[:\s\n]+([\s\S]{20,600}?)(?:\n{2,}|\n[A-Z][A-Z\s]{3,}:|$)/i);
+  if (conclusionM) {
+    const raw = conclusionM[1]
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+      .join(" ");
+    // Return first sentence or first 200 chars
+    const sentence = raw.replace(/\s{2,}/g, " ").trim();
+    return sentence.length > 0 ? sentence.slice(0, 400) : null;
+  }
+  return null;
 }
 
 interface ParsedTask {

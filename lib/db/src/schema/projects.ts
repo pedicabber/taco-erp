@@ -16,6 +16,8 @@ export const projectsTable = pgTable("projects", {
   contactPhone: text("contact_phone"),
   contactEmail: text("contact_email"),
   totalPrice: text("total_price"),
+  deliveryDate: text("delivery_date"),
+  scopeOfWork: text("scope_of_work"),
   createdById: integer("created_by_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

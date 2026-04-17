@@ -51,6 +51,8 @@ export default function ProjectInfoDialog({
     contactPhone: project.contactPhone ?? "",
     contactEmail: project.contactEmail ?? "",
     totalPrice: project.totalPrice ?? "",
+    deliveryDate: (project as any).deliveryDate ?? "",
+    scopeOfWork: (project as any).scopeOfWork ?? "",
   });
 
   const updateMutation = useMutation({
@@ -79,6 +81,8 @@ export default function ProjectInfoDialog({
       contactPhone: project.contactPhone ?? "",
       contactEmail: project.contactEmail ?? "",
       totalPrice: project.totalPrice ?? "",
+      deliveryDate: (project as any).deliveryDate ?? "",
+      scopeOfWork: (project as any).scopeOfWork ?? "",
     });
     setEditing(false);
   }
@@ -147,6 +151,16 @@ export default function ProjectInfoDialog({
                     <Input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} />
                   ) : (
                     <p className="mt-0.5">{form.startDate ? format(new Date(form.startDate), "MMM d, yyyy") : "—"}</p>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> Delivery Date
+                  </Label>
+                  {editing ? (
+                    <Input type="date" value={form.deliveryDate} onChange={e => setForm(p => ({ ...p, deliveryDate: e.target.value }))} />
+                  ) : (
+                    <p className="mt-0.5">{form.deliveryDate ? format(new Date(form.deliveryDate), "MMM d, yyyy") : "—"}</p>
                   )}
                 </div>
                 <div>
@@ -252,23 +266,46 @@ export default function ProjectInfoDialog({
 
             <Separator />
 
-            {/* ─── Full scope of work ─── */}
+            {/* ─── Scope of Work (parsed from quote) ─── */}
             <section>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Scope of Work</p>
               <p className="text-xs text-muted-foreground mb-2">
-                Full project scope including all line items. Update as the project progresses.
+                Bullet-point scope from the quote description (after "including the following:").
+              </p>
+              {editing ? (
+                <Textarea
+                  value={form.scopeOfWork}
+                  onChange={e => setForm(p => ({ ...p, scopeOfWork: e.target.value }))}
+                  rows={6}
+                  className="font-mono text-sm"
+                  placeholder="Scope of work bullet points from quote..."
+                />
+              ) : (
+                <div className="rounded-md bg-muted/40 border p-3 text-sm leading-relaxed whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
+                  {form.scopeOfWork?.trim() || "No scope of work recorded."}
+                </div>
+              )}
+            </section>
+
+            <Separator />
+
+            {/* ─── Full line items ─── */}
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Full Description / Line Items</p>
+              <p className="text-xs text-muted-foreground mb-2">
+                All line item descriptions parsed from the quote.
               </p>
               {editing ? (
                 <Textarea
                   value={form.fullDescription}
                   onChange={e => setForm(p => ({ ...p, fullDescription: e.target.value }))}
-                  rows={10}
+                  rows={8}
                   className="font-mono text-sm"
-                  placeholder="Full scope / bullet point list from quote..."
+                  placeholder="Full line items from quote..."
                 />
               ) : (
-                <div className="rounded-md bg-muted/40 border p-3 text-sm leading-relaxed whitespace-pre-wrap font-mono max-h-64 overflow-y-auto">
-                  {form.fullDescription?.trim() || "No scope of work recorded."}
+                <div className="rounded-md bg-muted/40 border p-3 text-sm leading-relaxed whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
+                  {form.fullDescription?.trim() || "No line items recorded."}
                 </div>
               )}
             </section>

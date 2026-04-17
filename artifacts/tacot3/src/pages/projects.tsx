@@ -52,6 +52,7 @@ const EMPTY_FORM = {
   name: "", company: "", projectId: "", description: "", fullDescription: "",
   startDate: "", status: "active", address: "", contactName: "",
   contactPhone: "", contactEmail: "", totalPrice: "",
+  deliveryDate: "", scopeOfWork: "",
 };
 
 // ── Task Staging Dialog ─────────────────────────────────────────────────────
@@ -585,6 +586,10 @@ function NewProjectDialog({
                 <Input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} />
               </div>
               <div>
+                <Label>Delivery Date</Label>
+                <Input type="date" value={form.deliveryDate} onChange={e => setForm(p => ({ ...p, deliveryDate: e.target.value }))} />
+              </div>
+              <div>
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={v => setForm(p => ({ ...p, status: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -603,6 +608,15 @@ function NewProjectDialog({
                   onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
                   placeholder="High-level description shown on project card..."
                   rows={2}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>Scope of Work</Label>
+                <Textarea
+                  value={form.scopeOfWork}
+                  onChange={e => setForm(p => ({ ...p, scopeOfWork: e.target.value }))}
+                  placeholder="Detailed scope parsed from the quote (line items, bullet points)..."
+                  rows={4}
                 />
               </div>
             </div>

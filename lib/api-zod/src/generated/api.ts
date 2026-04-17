@@ -102,6 +102,8 @@ export const ListProjectsResponseItem = zod.object({
   contactPhone: zod.string().nullable(),
   contactEmail: zod.string().nullable(),
   totalPrice: zod.string().nullable(),
+  deliveryDate: zod.string().nullable(),
+  scopeOfWork: zod.string().nullable(),
   createdById: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -129,6 +131,8 @@ export const CreateProjectBody = zod.object({
   contactPhone: zod.string().nullish(),
   contactEmail: zod.string().nullish(),
   totalPrice: zod.string().nullish(),
+  deliveryDate: zod.string().nullish(),
+  scopeOfWork: zod.string().nullish(),
   parsedTasks: zod.array(ParsedTaskItem).optional(),
 });
 
@@ -153,6 +157,8 @@ export const GetProjectResponse = zod.object({
   contactPhone: zod.string().nullable(),
   contactEmail: zod.string().nullable(),
   totalPrice: zod.string().nullable(),
+  deliveryDate: zod.string().nullable(),
+  scopeOfWork: zod.string().nullable(),
   createdById: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -178,6 +184,8 @@ export const UpdateProjectBody = zod.object({
   contactPhone: zod.string().nullish(),
   contactEmail: zod.string().nullish(),
   totalPrice: zod.string().nullish(),
+  deliveryDate: zod.string().nullish(),
+  scopeOfWork: zod.string().nullish(),
 });
 
 export const UpdateProjectResponse = zod.object({
@@ -194,6 +202,8 @@ export const UpdateProjectResponse = zod.object({
   contactPhone: zod.string().nullable(),
   contactEmail: zod.string().nullable(),
   totalPrice: zod.string().nullable(),
+  deliveryDate: zod.string().nullable(),
+  scopeOfWork: zod.string().nullable(),
   createdById: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -251,6 +261,8 @@ export const ParsePdfResponse = zod.object({
   contactPhone: zod.string(),
   contactEmail: zod.string(),
   totalPrice: zod.string(),
+  deliveryDate: zod.string(),
+  scopeOfWork: zod.string(),
 });
 
 /**
