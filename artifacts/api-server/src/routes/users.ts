@@ -35,6 +35,7 @@ router.get("/users/me", requireAuth, async (req: AuthenticatedRequest, res): Pro
     departmentName = dept?.name ?? null;
   }
 
+  res.set("Cache-Control", "no-store");
   res.json(buildUserProfile(user, departmentName));
 });
 

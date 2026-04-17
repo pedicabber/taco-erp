@@ -8,6 +8,6 @@ export function useCurrentUser() {
     queryKey: ["current-user"],
     queryFn: () => apiClient.get("/users/me").then(r => r.data),
     enabled: !!isSignedIn,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
   });
 }
