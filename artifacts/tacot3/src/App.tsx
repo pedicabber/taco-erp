@@ -42,6 +42,9 @@ const CalendarPage = lazy(() => import("@/pages/calendar"));
 const NotificationsPage = lazy(() => import("@/pages/notifications"));
 const ActivityFullPage = lazy(() => import("@/pages/activity"));
 const AdminPage = lazy(() => import("@/pages/admin"));
+const InventoryPage = lazy(() => import("@/pages/inventory"));
+const SalesPipelinePage = lazy(() => import("@/pages/sales"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
 
 function PageLoader() {
   return (
@@ -169,6 +172,15 @@ function ClerkProviderWithRoutes() {
           </Route>
           <Route path="/admin">
             <ProtectedLayout><AdminPage /></ProtectedLayout>
+          </Route>
+          <Route path="/inventory">
+            <ProtectedLayout><InventoryPage /></ProtectedLayout>
+          </Route>
+          <Route path="/sales">
+            <ProtectedLayout><SalesPipelinePage /></ProtectedLayout>
+          </Route>
+          <Route path="/settings">
+            <ProtectedLayout><SettingsPage /></ProtectedLayout>
           </Route>
           <Route component={NotFound} />
         </Switch>

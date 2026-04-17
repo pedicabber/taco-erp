@@ -9,12 +9,13 @@ import {
   CalendarDays,
   Bell,
   Menu,
-  X,
   ChevronLeft,
   Sun,
   Moon,
   Monitor,
   Settings,
+  Package,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -42,6 +43,8 @@ const NAV_ITEMS: NavItem[] = [
   { icon: CheckSquare, label: "Tasks", href: "/tasks" },
   { icon: Trello, label: "Board", href: "/board" },
   { icon: CalendarDays, label: "Calendar", href: "/calendar" },
+  { icon: Package, label: "Inventory", href: "/inventory" },
+  { icon: TrendingUp, label: "Sales Pipeline", href: "/sales" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -61,6 +64,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     (notifications as Array<{ isRead: boolean }> | undefined)?.filter(
       (n) => !n.isRead,
     ).length ?? 0;
+
+  const isAdmin = currentUser?.role === "admin";
+  const settingsHref = isAdmin ? "/admin" : "/settings";
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
@@ -222,21 +228,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex-1" />
 
-          {/* Admin cog — only visible to admins */}
-          {currentUser?.role === "admin" && (
-            <Link href="/admin">
-              <div
-                className={cn(
-                  "flex items-center justify-center w-9 h-9 rounded-lg hover:bg-muted transition-colors cursor-pointer",
+          {/* Settings / Admin gear — visible to all users */}
+          <Link href={settingsHref}>
+            <div
+              className={cn(
+                "flex items-center justify-center w-9 h-9 rounded-lg hover:bg-muted transition-colors cursor-pointer",
+                (location.startsWith("/admin") || location.startsWith("/settings")) &&
+                  "bg-primary/10 text-primary",
+                isAdmin &&
                   location.startsWith("/admin") &&
-                    "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400",
-                )}
-                title="Admin Panel"
-              >
-                <Settings className="w-5 h-5" />
-              </div>
-            </Link>
-          )}
+                  "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400",
+              )}
+              title={isAdmin ? "Admin Panel" : "Account Settings"}
+            >
+              <Settings className="w-5 h-5" />
+            </div>
+          </Link>
 
           {/* Notification bell */}
           <Link href="/notifications">
