@@ -53,11 +53,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const { data: notifications } = useQuery({
     queryKey: ["notifications"],
-    queryFn: () => apiClient.get("/notifications").then(r => r.data),
+    queryFn: () => apiClient.get("/notifications").then((r) => r.data),
     refetchInterval: 30000,
   });
 
-  const unreadCount = (notifications as Array<{ isRead: boolean }> | undefined)?.filter(n => !n.isRead).length ?? 0;
+  const unreadCount =
+    (notifications as Array<{ isRead: boolean }> | undefined)?.filter(
+      (n) => !n.isRead,
+    ).length ?? 0;
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
@@ -74,24 +77,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         className={cn(
           "fixed md:relative z-30 flex flex-col h-full bg-card border-r border-border transition-all duration-300",
           sidebarOpen ? "w-56" : "w-16",
-          !sidebarOpen && "-translate-x-full md:translate-x-0"
+          !sidebarOpen && "-translate-x-full md:translate-x-0",
         )}
       >
         {/* Logo */}
-        <div className={cn(
-          "flex items-center border-b border-border min-h-[60px] overflow-hidden",
-          sidebarOpen ? "gap-2 px-3 py-4" : "justify-center py-4"
-        )}>
+        <div
+          className={cn(
+            "flex items-center border-b border-border min-h-[60px] overflow-hidden",
+            sidebarOpen ? "gap-2 px-3 py-4" : "justify-center py-4",
+          )}
+        >
           {sidebarOpen ? (
             <>
               <img
                 src={`${import.meta.env.BASE_URL}taco-64.png`}
                 alt="TacoT3"
-                className="flex-shrink-0 w-8 h-8 object-contain"
+                className="flex-shrink-0 w-15 h-15 object-contain"
               />
               <div className="overflow-hidden flex-1 min-w-0">
-                <div className="text-sm font-bold text-foreground leading-tight">TacoT3</div>
-                <div className="text-[10px] text-muted-foreground leading-tight">Project Ops</div>
+                <div className="text-xl font-bold text-foreground leading-tight">
+                  TacoT3
+                </div>
+                <div className="text-sm text-muted-foreground leading-tight">
+                  Project Ops
+                </div>
               </div>
               <button
                 className="flex-shrink-0 hidden md:flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
@@ -114,7 +123,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Nav items */}
         <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map(item => {
+          {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = location.startsWith(item.href);
             return (
@@ -127,12 +136,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       : "justify-center w-9 h-9 mx-auto",
                     active
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
                   title={!sidebarOpen ? item.label : undefined}
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" />
-                  {sidebarOpen && <span className="text-sm font-medium truncate">{item.label}</span>}
+                  {sidebarOpen && (
+                    <span className="text-sm font-medium truncate">
+                      {item.label}
+                    </span>
+                  )}
                 </div>
               </Link>
             );
@@ -146,10 +159,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Button
                 variant="ghost"
                 size="sm"
-                className={cn("w-full justify-start gap-2", !sidebarOpen && "justify-center px-2")}
+                className={cn(
+                  "w-full justify-start gap-2",
+                  !sidebarOpen && "justify-center px-2",
+                )}
                 title="Toggle theme"
               >
-                {theme === "dark" ? <Moon className="w-4 h-4" /> : theme === "light" ? <Sun className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
+                {theme === "dark" ? (
+                  <Moon className="w-4 h-4" />
+                ) : theme === "light" ? (
+                  <Sun className="w-4 h-4" />
+                ) : (
+                  <Monitor className="w-4 h-4" />
+                )}
                 {sidebarOpen && <span className="text-sm">Theme</span>}
               </Button>
             </DropdownMenuTrigger>
@@ -166,12 +188,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div className={cn("flex items-center gap-2 px-2 py-1 rounded-lg", !sidebarOpen && "justify-center")}>
+          <div
+            className={cn(
+              "flex items-center gap-2 px-2 py-1 rounded-lg",
+              !sidebarOpen && "justify-center",
+            )}
+          >
             <UserButton />
             {sidebarOpen && (
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium truncate">{currentUser?.name ?? user?.fullName ?? "User"}</div>
-                <div className="text-[10px] text-muted-foreground truncate capitalize">{currentUser?.role ?? "member"}</div>
+                <div className="text-xs font-medium truncate">
+                  {currentUser?.name ?? user?.fullName ?? "User"}
+                </div>
+                <div className="text-[10px] text-muted-foreground truncate capitalize">
+                  {currentUser?.role ?? "member"}
+                </div>
               </div>
             )}
           </div>
@@ -197,7 +228,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div
                 className={cn(
                   "flex items-center justify-center w-9 h-9 rounded-lg hover:bg-muted transition-colors cursor-pointer",
-                  location.startsWith("/admin") && "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                  location.startsWith("/admin") &&
+                    "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400",
                 )}
                 title="Admin Panel"
               >
@@ -223,9 +255,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
+        <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>
   );
