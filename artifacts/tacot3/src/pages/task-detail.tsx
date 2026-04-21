@@ -239,6 +239,7 @@ export default function TaskDetailPage() {
   const [sqdcError, setSqdcError] = useState(false);
   const sqdcCardRef = useRef<HTMLDivElement>(null);
   const [notesDraft, setNotesDraft] = useState("");
+  const [timerLogOpen, setTimerLogOpen] = useState(false);
 
   function getFileUrl(objectPath: string) {
     return `/api/storage/objects${objectPath.replace(/^\/objects/, "")}`;
@@ -883,11 +884,26 @@ export default function TaskDetailPage() {
 
               {timerSessions.length > 0 && (
                 <div className="mt-4 border-t pt-3">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">
-                    Clock-in log
-                  </p>
-                  <div className="space-y-2">
-                    {timerSessions.slice(0, 5).map((session) => {
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between text-left text-xs font-medium text-muted-foreground mb-2 hover:text-foreground"
+                    onClick={() => setTimerLogOpen((open) => !open)}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {timerLogOpen ? (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      )}
+                      Clock-in log
+                    </span>
+                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+                      {timerSessions.length}
+                    </Badge>
+                  </button>
+                  {timerLogOpen && (
+                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {timerSessions.map((session) => {
                       const duration =
                         session.durationSeconds ??
                         Math.max(
@@ -919,7 +935,8 @@ export default function TaskDetailPage() {
                         </div>
                       );
                     })}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

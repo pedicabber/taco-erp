@@ -139,7 +139,8 @@ export interface Department {
   name: string;
   /** @nullable */
   color: string | null;
-  projectId: number;
+  /** @nullable */
+  projectId: number | null;
   createdAt: string;
 }
 

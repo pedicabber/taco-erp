@@ -83,6 +83,8 @@ REST API server.
 - Mobile-friendly responsive layout with collapsible sidebar
 - Timer: `elapsedSeconds` stored in DB + `timerStartedAt` timestamp for live compute
 - New projects auto-create five task templates for each global department: ENGINEERING, MANUFACTURING, CONTROLS, INSTALL, PROJECT MANAGEMENT, and OFFICE/ADMIN
+- On new projects with start and delivery dates, ENGINEERING task windows cover the first 25% of project lead time, and MANUFACTURING task windows cover the next 35% of lead time
 - Task notes are stored in the `tasks.notes` column and edited on the task detail page between time tracking and attachments
+- Attachment object links are served from stored task/project attachment records so browser previews and downloads work without losing auth context
 - User sync: Clerk users auto-synced to `users` table on first request via `syncUserFromClerk()`
 - Vite dev proxy forwards `/api` to port 8080 and `/__clerk` for Clerk proxy

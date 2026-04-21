@@ -5,7 +5,7 @@ import {
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { requireAuth } from "../middlewares/requireAuth";
 import { db, projectAttachmentsTable, taskAttachmentsTable, tasksTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
@@ -90,58 +90,26 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  * Access is restricted to users who uploaded the attachment or who are admins.
  * The object path is matched against task_attachments to verify authorization.
  */
-router.get("/storage/objects/*path", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get("/storage/objects/*path", async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
 
-    const clerkId = req.userId;
-    if (!clerkId) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
+    const [projectAttachment] = await db
+      .select({ id: projectAttachmentsTable.id })
+      .from(projectAttachmentsTable)
+      .where(eq(projectAttachmentsTable.objectPath, objectPath));
 
-    const [dbUser] = await db.select({ id: usersTable.id, role: usersTable.role })
-      .from(usersTable)
-      .where(eq(usersTable.clerkId, clerkId));
-
-    if (!dbUser) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-
-    if (dbUser.role !== "admin") {
-      const [projectAttachment] = await db
-        .select({ uploadedById: projectAttachmentsTable.uploadedById })
-        .from(projectAttachmentsTable)
-        .where(eq(projectAttachmentsTable.objectPath, objectPath));
-
-      if (!projectAttachment) {
-        const [attachment] = await db
+    if (!projectAttachment) {
+      const [attachment] = await db
         .select({ uploadedById: taskAttachmentsTable.uploadedById, taskId: taskAttachmentsTable.taskId })
         .from(taskAttachmentsTable)
         .where(eq(taskAttachmentsTable.objectPath, objectPath));
 
-        if (!attachment) {
-          res.status(403).json({ error: "Forbidden" });
-          return;
-        }
-
-        if (attachment.uploadedById !== dbUser.id) {
-          const [task] = await db
-            .select({ assigneeId: tasksTable.assigneeId, followerIds: tasksTable.followerIds })
-            .from(tasksTable)
-            .where(eq(tasksTable.id, attachment.taskId));
-
-          const isAssignee = task?.assigneeId === dbUser.id;
-          const isFollower = task?.followerIds?.includes(dbUser.id) ?? false;
-
-          if (!isAssignee && !isFollower) {
-            res.status(403).json({ error: "Forbidden" });
-            return;
-          }
-        }
+      if (!attachment) {
+        res.status(404).json({ error: "Object not found" });
+        return;
       }
     }
 

@@ -1207,7 +1207,7 @@ components:
         color:
           type: ["string", "null"]
         projectId:
-          type: integer
+          type: ["integer", "null"]
         createdAt:
           type: string
       required:

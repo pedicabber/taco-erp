@@ -307,7 +307,7 @@ export const ListDepartmentsResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
   color: zod.string().nullable(),
-  projectId: zod.number(),
+  projectId: zod.number().nullable(),
   createdAt: zod.string(),
 });
 export const ListDepartmentsResponse = zod.array(ListDepartmentsResponseItem);
@@ -332,7 +332,7 @@ export const GetDepartmentResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   color: zod.string().nullable(),
-  projectId: zod.number(),
+  projectId: zod.number().nullable(),
   createdAt: zod.string(),
 });
 
@@ -352,7 +352,7 @@ export const UpdateDepartmentResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   color: zod.string().nullable(),
-  projectId: zod.number(),
+  projectId: zod.number().nullable(),
   createdAt: zod.string(),
 });
 

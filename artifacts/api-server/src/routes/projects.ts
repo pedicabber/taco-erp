@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import { parsePdfText } from "../lib/pdfParseAdapter";
 import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable, projectAttachmentsTable, usersTable, settingsTable, inventoryAllocationsTable } from "@workspace/db";
-import { eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -54,6 +54,48 @@ function buildProject(p: typeof projectsTable.$inferSelect) {
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
   };
+}
+
+function parseDateOnly(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function formatDateOnly(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function addLeadTimePercent(start: Date, leadMs: number, percent: number): Date {
+  return new Date(start.getTime() + Math.round(leadMs * percent));
+}
+
+function getDepartmentTaskTiming(project: typeof projectsTable.$inferSelect, departmentName: string) {
+  const start = parseDateOnly(project.startDate);
+  const delivery = parseDateOnly(project.deliveryDate);
+  if (!start || !delivery || delivery.getTime() <= start.getTime()) return {};
+
+  const leadMs = delivery.getTime() - start.getTime();
+  const leadDays = leadMs / (24 * 60 * 60 * 1000);
+
+  if (departmentName === "ENGINEERING") {
+    return {
+      startDate: formatDateOnly(start),
+      dueDate: formatDateOnly(addLeadTimePercent(start, leadMs, 0.25)),
+      expectedHours: Math.max(1, Math.round(leadDays * 0.25 * 8)),
+    };
+  }
+
+  if (departmentName === "MANUFACTURING") {
+    return {
+      startDate: formatDateOnly(addLeadTimePercent(start, leadMs, 0.25)),
+      dueDate: formatDateOnly(addLeadTimePercent(start, leadMs, 0.6)),
+      expectedHours: Math.max(1, Math.round(leadDays * 0.35 * 8)),
+    };
+  }
+
+  return {};
 }
 
 router.get("/projects", requireAuth, async (_req, res): Promise<void> => {
@@ -111,6 +153,7 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
     }
 
     for (const title of tasks) {
+      const timing = getDepartmentTaskTiming(project, deptName);
       await db.insert(tasksTable).values({
         title,
         status: "backlog",
@@ -120,6 +163,7 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
         assignerId: user.id,
         elapsedSeconds: 0,
         timerRunning: false,
+        ...timing,
       });
     }
   }
