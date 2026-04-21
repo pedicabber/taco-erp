@@ -6,10 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface RequestUploadUrlBody {
-  name: string;
-  size: number;
-  contentType: string;
-  taskId?: number;
-  projectId?: number;
+export interface UpdateKanbanColumnBody {
+  label?: string;
+  hexColor?: string;
+  sortOrder?: number;
 }

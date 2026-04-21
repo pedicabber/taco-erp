@@ -24,4 +24,6 @@ export interface UpdateTaskBody {
   dueDate?: string | null;
   /** @nullable */
   startDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }

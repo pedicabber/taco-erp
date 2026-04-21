@@ -37,6 +37,8 @@ export interface Task {
   timerStartedAt: string | null;
   /** @nullable */
   completedAt: string | null;
+  /** @nullable */
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
   assignee: UserProfileMini | null;

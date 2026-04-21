@@ -65,11 +65,12 @@ REST API server.
 - **Projects**: Create from PDF (scrapes company, quote no, part number, description, date) or manually
 - **Departments**: Color-coded per project, assign tasks to departments
 - **Tasks**: 5 statuses (backlog/in_progress/in_review/blocked/complete), 4 priorities
-- **Timer**: Start/stop/edit per task; live elapsed counter; warn when over expected hours
+- **Timer**: Start/stop/edit per task; live elapsed counter; clock-in sessions record who started each timer; warn when over expected hours
 - **Kanban Board**: Drag-and-drop between status columns; filter by project/department
 - **Calendar**: Monthly view showing task start/due dates; Gantt view with dual bars (expected vs actual)
 - **Notifications**: Overdue, assigned, timer alerts; mark read/all read
 - **File Uploads**: Attach files to tasks via object storage presigned URLs
+- **Project Attachments**: Project-level files, including quote PDFs, stored via object storage and visible alongside task attachments
 - **Followers**: Follow tasks to receive notifications
 - **Activity Feed**: Recent actions dashboard
 
@@ -79,5 +80,7 @@ REST API server.
 - Adaptive dark/light/system mode stored in `localStorage`
 - Mobile-friendly responsive layout with collapsible sidebar
 - Timer: `elapsedSeconds` stored in DB + `timerStartedAt` timestamp for live compute
+- New projects auto-create five task templates for each global department: ENGINEERING, MANUFACTURING, CONTROLS, INSTALL, PROJECT MANAGEMENT, and OFFICE/ADMIN
+- Task notes are stored in the `tasks.notes` column and edited on the task detail page between time tracking and attachments
 - User sync: Clerk users auto-synced to `users` table on first request via `syncUserFromClerk()`
 - Vite dev proxy forwards `/api` to port 8080 and `/__clerk` for Clerk proxy

@@ -6,6 +6,7 @@ import { eq, inArray, isNull } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
+import { DEPARTMENT_TASKS } from "../templateTasks";
 import {
   CreateProjectBody,
   GetProjectResponse,
@@ -14,13 +15,23 @@ import {
   UpdateProjectResponse,
   GetProjectSummaryResponse,
   ParsePdfResponse,
-  ListProjectAttachmentsResponse,
-  AddProjectAttachmentBody,
-  GetProjectAllAttachmentsResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+function parseProjectAttachmentBody(body: unknown) {
+  if (!body || typeof body !== "object") return null;
+  const data = body as Record<string, unknown>;
+  if (typeof data.fileName !== "string" || typeof data.objectPath !== "string") return null;
+  return {
+    fileName: data.fileName,
+    objectPath: data.objectPath,
+    fileSize: typeof data.fileSize === "number" ? data.fileSize : null,
+    mimeType: typeof data.mimeType === "string" ? data.mimeType : null,
+    isPinned: typeof data.isPinned === "boolean" ? data.isPinned : false,
+  };
+}
 
 function buildProject(p: typeof projectsTable.$inferSelect) {
   return {
@@ -71,56 +82,6 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
     createdById: user.id,
   }).returning();
 
-  // ── Auto-create predefined tasks for each global department ──────────────
-  const DEPT_TASKS: { dept: string; color: string; tasks: string[] }[] = [
-    {
-      dept: "ENGINEERING",
-      color: "#3b82f6",
-      tasks: [
-        "Project Kickoff & Requirements",
-        "System Design (Mechanical + Electrical + Controls)",
-        "EOAT Design",
-        "Controls & HMI Design",
-        "BOM & Procurement Release",
-        "Design Review & Release to Manufacturing",
-      ],
-    },
-    {
-      dept: "MANUFACTURING",
-      color: "#f59e0b",
-      tasks: [
-        "Procurement & Material Planning",
-        "Panel Build",
-        "Mechanical Fabrication",
-        "EOAT Assembly",
-        "System Assembly",
-        "Pre-Integration Check",
-      ],
-    },
-    {
-      dept: "CONTROLS",
-      color: "#a855f7",
-      tasks: [
-        "PLC Development",
-        "HMI Development",
-        "Robot Programming",
-        "System Integration",
-        "Controls Validation",
-      ],
-    },
-    {
-      dept: "TEST / DEBUG",
-      color: "#ef4444",
-      tasks: [
-        "Initial Power-On",
-        "Dry Cycle Testing",
-        "System Debugging (Mechanical + Electrical + Programming)",
-        "Cycle Time Optimization",
-        "Factory Acceptance Test (FAT)",
-      ],
-    },
-  ];
-
   // Fetch all global (non-project-specific) departments once
   const globalDepts = await db
     .select()
@@ -129,7 +90,7 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
 
   const deptMap = new Map(globalDepts.map(d => [d.name, d]));
 
-  for (const { dept: deptName, color, tasks } of DEPT_TASKS) {
+  for (const { dept: deptName, color, tasks } of DEPARTMENT_TASKS) {
     // Find or create the global department
     let deptRecord = deptMap.get(deptName);
     if (!deptRecord) {
@@ -140,6 +101,13 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
       }).returning();
       deptRecord = created;
       deptMap.set(deptName, created);
+    } else if (deptRecord.color !== color) {
+      const [updatedDept] = await db.update(departmentsTable)
+        .set({ color })
+        .where(eq(departmentsTable.id, deptRecord.id))
+        .returning();
+      deptRecord = updatedDept;
+      deptMap.set(deptName, updatedDept);
     }
 
     for (const title of tasks) {
@@ -841,7 +809,7 @@ router.get("/projects/:projectId/attachments", requireAuth, async (req, res): Pr
     .where(eq(projectAttachmentsTable.projectId, id))
     .orderBy(projectAttachmentsTable.isPinned, projectAttachmentsTable.createdAt);
 
-  res.json(ListProjectAttachmentsResponse.parse(attachments.map(buildProjectAttachment)));
+  res.json(attachments.map(buildProjectAttachment));
 });
 
 router.post("/projects/:projectId/attachments", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
@@ -851,27 +819,27 @@ router.post("/projects/:projectId/attachments", requireAuth, async (req: Authent
   const id = parseInt(req.params.projectId, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid project ID" }); return; }
 
-  const parsed = AddProjectAttachmentBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const parsed = parseProjectAttachmentBody(req.body);
+  if (!parsed) { res.status(400).json({ error: "Invalid attachment body" }); return; }
 
   const OBJECT_PATH_RE = /^\/objects\/[a-z0-9/_-]+$/i;
-  if (!OBJECT_PATH_RE.test(parsed.data.objectPath)) {
+  if (!OBJECT_PATH_RE.test(parsed.objectPath)) {
     res.status(400).json({ error: "Invalid object path" }); return;
   }
 
   const existing = await db.select({ id: projectAttachmentsTable.id })
     .from(projectAttachmentsTable)
-    .where(eq(projectAttachmentsTable.objectPath, parsed.data.objectPath));
+    .where(eq(projectAttachmentsTable.objectPath, parsed.objectPath));
 
   if (existing.length > 0) { res.status(409).json({ error: "Object already attached" }); return; }
 
   const [attachment] = await db.insert(projectAttachmentsTable).values({
     projectId: id,
-    fileName: parsed.data.fileName,
-    objectPath: parsed.data.objectPath,
-    fileSize: parsed.data.fileSize ?? null,
-    mimeType: parsed.data.mimeType ?? null,
-    isPinned: parsed.data.isPinned ?? false,
+    fileName: parsed.fileName,
+    objectPath: parsed.objectPath,
+    fileSize: parsed.fileSize,
+    mimeType: parsed.mimeType,
+    isPinned: parsed.isPinned,
     uploadedById: user.id,
   }).returning();
 
@@ -953,10 +921,10 @@ router.get("/projects/:projectId/all-attachments", requireAuth, async (req, res)
       };
     });
 
-  res.json(GetProjectAllAttachmentsResponse.parse({
+  res.json({
     projectAttachments: projectAttachments.map(buildProjectAttachment),
     taskGroups,
-  }));
+  });
 });
 
 export default router;

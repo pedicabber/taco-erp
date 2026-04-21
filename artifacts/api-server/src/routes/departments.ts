@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db, departmentsTable } from "@workspace/db";
-import { eq, isNull, and } from "drizzle-orm";
+import { and, eq, isNull, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
+import { DEPARTMENT_TASKS } from "../templateTasks";
 import {
   CreateDepartmentBody,
   GetDepartmentResponse,
@@ -28,7 +29,19 @@ router.get("/departments", requireAuth, async (req, res): Promise<void> => {
 
   let depts;
   if (globalParam === "true") {
-    depts = await db.select().from(departmentsTable).where(isNull(departmentsTable.projectId)).orderBy(departmentsTable.name);
+    depts = await db
+      .select()
+      .from(departmentsTable)
+      .where(
+        and(
+          isNull(departmentsTable.projectId),
+          inArray(
+            departmentsTable.name,
+            DEPARTMENT_TASKS.map(d => d.dept),
+          ),
+        ),
+      )
+      .orderBy(departmentsTable.name);
   } else if (projectIdParam !== undefined) {
     const pid = parseInt(projectIdParam, 10);
     if (isNaN(pid)) {

@@ -94,16 +94,8 @@ export const ListProjectsResponseItem = zod.object({
   company: zod.string(),
   projectId: zod.string(),
   description: zod.string().nullable(),
-  fullDescription: zod.string().nullable(),
   startDate: zod.string().nullable(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]),
-  address: zod.string().nullable(),
-  contactName: zod.string().nullable(),
-  contactPhone: zod.string().nullable(),
-  contactEmail: zod.string().nullable(),
-  totalPrice: zod.string().nullable(),
-  deliveryDate: zod.string().nullable(),
-  scopeOfWork: zod.string().nullable(),
   createdById: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -113,27 +105,13 @@ export const ListProjectsResponse = zod.array(ListProjectsResponseItem);
 /**
  * @summary Create a new project
  */
-export const ParsedTaskItem = zod.object({
-  title: zod.string(),
-  description: zod.string().optional(),
-});
-
 export const CreateProjectBody = zod.object({
   name: zod.string(),
   company: zod.string(),
   projectId: zod.string(),
   description: zod.string().nullish(),
-  fullDescription: zod.string().nullish(),
   startDate: zod.string().nullish(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]).optional(),
-  address: zod.string().nullish(),
-  contactName: zod.string().nullish(),
-  contactPhone: zod.string().nullish(),
-  contactEmail: zod.string().nullish(),
-  totalPrice: zod.string().nullish(),
-  deliveryDate: zod.string().nullish(),
-  scopeOfWork: zod.string().nullish(),
-  parsedTasks: zod.array(ParsedTaskItem).optional(),
 });
 
 /**
@@ -149,16 +127,8 @@ export const GetProjectResponse = zod.object({
   company: zod.string(),
   projectId: zod.string(),
   description: zod.string().nullable(),
-  fullDescription: zod.string().nullable(),
   startDate: zod.string().nullable(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]),
-  address: zod.string().nullable(),
-  contactName: zod.string().nullable(),
-  contactPhone: zod.string().nullable(),
-  contactEmail: zod.string().nullable(),
-  totalPrice: zod.string().nullable(),
-  deliveryDate: zod.string().nullable(),
-  scopeOfWork: zod.string().nullable(),
   createdById: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -176,16 +146,8 @@ export const UpdateProjectBody = zod.object({
   company: zod.string().optional(),
   projectId: zod.string().optional(),
   description: zod.string().nullish(),
-  fullDescription: zod.string().nullish(),
   startDate: zod.string().nullish(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]).optional(),
-  address: zod.string().nullish(),
-  contactName: zod.string().nullish(),
-  contactPhone: zod.string().nullish(),
-  contactEmail: zod.string().nullish(),
-  totalPrice: zod.string().nullish(),
-  deliveryDate: zod.string().nullish(),
-  scopeOfWork: zod.string().nullish(),
 });
 
 export const UpdateProjectResponse = zod.object({
@@ -194,16 +156,8 @@ export const UpdateProjectResponse = zod.object({
   company: zod.string(),
   projectId: zod.string(),
   description: zod.string().nullable(),
-  fullDescription: zod.string().nullable(),
   startDate: zod.string().nullable(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]),
-  address: zod.string().nullable(),
-  contactName: zod.string().nullable(),
-  contactPhone: zod.string().nullable(),
-  contactEmail: zod.string().nullable(),
-  totalPrice: zod.string().nullable(),
-  deliveryDate: zod.string().nullable(),
-  scopeOfWork: zod.string().nullable(),
   createdById: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -243,6 +197,95 @@ export const GetProjectSummaryResponse = zod.object({
 });
 
 /**
+ * @summary List project attachments
+ */
+export const ListProjectAttachmentsParams = zod.object({
+  projectId: zod.coerce.number(),
+});
+
+export const ListProjectAttachmentsResponseItem = zod.object({
+  id: zod.number(),
+  projectId: zod.number(),
+  fileName: zod.string(),
+  objectPath: zod.string(),
+  fileSize: zod.number().nullable(),
+  mimeType: zod.string().nullable(),
+  isPinned: zod.boolean(),
+  uploadedById: zod.number(),
+  createdAt: zod.string(),
+});
+export const ListProjectAttachmentsResponse = zod.array(
+  ListProjectAttachmentsResponseItem,
+);
+
+/**
+ * @summary Add a project attachment
+ */
+export const AddProjectAttachmentParams = zod.object({
+  projectId: zod.coerce.number(),
+});
+
+export const AddProjectAttachmentBody = zod.object({
+  fileName: zod.string(),
+  objectPath: zod.string(),
+  fileSize: zod.number().nullish(),
+  mimeType: zod.string().nullish(),
+  isPinned: zod.boolean().optional(),
+});
+
+/**
+ * @summary Delete a project attachment
+ */
+export const DeleteProjectAttachmentParams = zod.object({
+  projectId: zod.coerce.number(),
+  attachmentId: zod.coerce.number(),
+});
+
+/**
+ * @summary Get project and task attachments grouped for a project
+ */
+export const GetProjectAllAttachmentsParams = zod.object({
+  projectId: zod.coerce.number(),
+});
+
+export const GetProjectAllAttachmentsResponse = zod.object({
+  projectAttachments: zod.array(
+    zod.object({
+      id: zod.number(),
+      projectId: zod.number(),
+      fileName: zod.string(),
+      objectPath: zod.string(),
+      fileSize: zod.number().nullable(),
+      mimeType: zod.string().nullable(),
+      isPinned: zod.boolean(),
+      uploadedById: zod.number(),
+      createdAt: zod.string(),
+    }),
+  ),
+  taskGroups: zod.array(
+    zod.object({
+      taskId: zod.number(),
+      taskTitle: zod.string(),
+      isSubtask: zod.boolean(),
+      parentTaskId: zod.number().nullable(),
+      parentTaskTitle: zod.string().nullable(),
+      attachments: zod.array(
+        zod.object({
+          id: zod.number(),
+          taskId: zod.number(),
+          fileName: zod.string(),
+          objectPath: zod.string(),
+          fileSize: zod.number().nullable(),
+          mimeType: zod.string().nullable(),
+          uploadedById: zod.number(),
+          createdAt: zod.string(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
  * @summary Parse a quote PDF to extract project details
  */
 export const ParsePdfBody = zod.object({
@@ -254,15 +297,7 @@ export const ParsePdfResponse = zod.object({
   name: zod.string(),
   projectId: zod.string(),
   description: zod.string(),
-  fullDescription: zod.string(),
   startDate: zod.string(),
-  address: zod.string(),
-  contactName: zod.string(),
-  contactPhone: zod.string(),
-  contactEmail: zod.string(),
-  totalPrice: zod.string(),
-  deliveryDate: zod.string(),
-  scopeOfWork: zod.string(),
 });
 
 /**
@@ -272,7 +307,7 @@ export const ListDepartmentsResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
   color: zod.string().nullable(),
-  projectId: zod.number().nullable(),
+  projectId: zod.number(),
   createdAt: zod.string(),
 });
 export const ListDepartmentsResponse = zod.array(ListDepartmentsResponseItem);
@@ -283,7 +318,7 @@ export const ListDepartmentsResponse = zod.array(ListDepartmentsResponseItem);
 export const CreateDepartmentBody = zod.object({
   name: zod.string(),
   color: zod.string().nullish(),
-  projectId: zod.number().nullish(),
+  projectId: zod.number(),
 });
 
 /**
@@ -297,7 +332,7 @@ export const GetDepartmentResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   color: zod.string().nullable(),
-  projectId: zod.number().nullable(),
+  projectId: zod.number(),
   createdAt: zod.string(),
 });
 
@@ -317,7 +352,7 @@ export const UpdateDepartmentResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   color: zod.string().nullable(),
-  projectId: zod.number().nullable(),
+  projectId: zod.number(),
   createdAt: zod.string(),
 });
 
@@ -342,12 +377,16 @@ export const ListTasksResponseItem = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "in_progress",
+    "in_review",
+    "blocked",
+    "complete",
+  ]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
-  parentTaskId: zod.number().nullable(),
-  subtaskCount: zod.number(),
   assigneeId: zod.number().nullable(),
   assignerId: zod.number().nullable(),
   followerIds: zod.array(zod.number()),
@@ -358,10 +397,7 @@ export const ListTasksResponseItem = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
-  safetyFlag: zod.string().nullable(),
-  qualityResult: zod.string().nullable(),
-  deliveryStatus: zod.string().nullable(),
-  costMaterialNotes: zod.string().nullable(),
+  notes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -396,7 +432,9 @@ export const ListTasksResponse = zod.array(ListTasksResponseItem);
 export const CreateTaskBody = zod.object({
   title: zod.string(),
   description: zod.string().nullish(),
-  status: zod.string().optional(),
+  status: zod
+    .enum(["backlog", "in_progress", "in_review", "blocked", "complete"])
+    .optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
   projectId: zod.number(),
   departmentId: zod.number().nullish(),
@@ -404,7 +442,7 @@ export const CreateTaskBody = zod.object({
   expectedHours: zod.number().nullish(),
   dueDate: zod.string().nullish(),
   startDate: zod.string().nullish(),
-  parentTaskId: zod.number().nullish(),
+  notes: zod.string().nullish(),
 });
 
 /**
@@ -418,12 +456,16 @@ export const GetTaskResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "in_progress",
+    "in_review",
+    "blocked",
+    "complete",
+  ]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
-  parentTaskId: zod.number().nullable(),
-  subtaskCount: zod.number(),
   assigneeId: zod.number().nullable(),
   assignerId: zod.number().nullable(),
   followerIds: zod.array(zod.number()),
@@ -434,10 +476,7 @@ export const GetTaskResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
-  safetyFlag: zod.string().nullable(),
-  qualityResult: zod.string().nullable(),
-  deliveryStatus: zod.string().nullable(),
-  costMaterialNotes: zod.string().nullable(),
+  notes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -475,30 +514,32 @@ export const UpdateTaskParams = zod.object({
 export const UpdateTaskBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().nullish(),
-  status: zod.string().optional(),
+  status: zod
+    .enum(["backlog", "in_progress", "in_review", "blocked", "complete"])
+    .optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
   departmentId: zod.number().nullish(),
   assigneeId: zod.number().nullish(),
-  parentTaskId: zod.number().nullish(),
   expectedHours: zod.number().nullish(),
   dueDate: zod.string().nullish(),
   startDate: zod.string().nullish(),
-  safetyFlag: zod.string().nullish(),
-  qualityResult: zod.string().nullish(),
-  deliveryStatus: zod.string().nullish(),
-  costMaterialNotes: zod.string().nullish(),
+  notes: zod.string().nullish(),
 });
 
 export const UpdateTaskResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "in_progress",
+    "in_review",
+    "blocked",
+    "complete",
+  ]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
-  parentTaskId: zod.number().nullable(),
-  subtaskCount: zod.number(),
   assigneeId: zod.number().nullable(),
   assignerId: zod.number().nullable(),
   followerIds: zod.array(zod.number()),
@@ -509,10 +550,7 @@ export const UpdateTaskResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
-  safetyFlag: zod.string().nullable(),
-  qualityResult: zod.string().nullable(),
-  deliveryStatus: zod.string().nullable(),
-  costMaterialNotes: zod.string().nullable(),
+  notes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -558,12 +596,16 @@ export const StartTaskTimerResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "in_progress",
+    "in_review",
+    "blocked",
+    "complete",
+  ]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
-  parentTaskId: zod.number().nullable(),
-  subtaskCount: zod.number(),
   assigneeId: zod.number().nullable(),
   assignerId: zod.number().nullable(),
   followerIds: zod.array(zod.number()),
@@ -574,10 +616,7 @@ export const StartTaskTimerResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
-  safetyFlag: zod.string().nullable(),
-  qualityResult: zod.string().nullable(),
-  deliveryStatus: zod.string().nullable(),
-  costMaterialNotes: zod.string().nullable(),
+  notes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -616,12 +655,16 @@ export const StopTaskTimerResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "in_progress",
+    "in_review",
+    "blocked",
+    "complete",
+  ]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
-  parentTaskId: zod.number().nullable(),
-  subtaskCount: zod.number(),
   assigneeId: zod.number().nullable(),
   assignerId: zod.number().nullable(),
   followerIds: zod.array(zod.number()),
@@ -632,10 +675,7 @@ export const StopTaskTimerResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
-  safetyFlag: zod.string().nullable(),
-  qualityResult: zod.string().nullable(),
-  deliveryStatus: zod.string().nullable(),
-  costMaterialNotes: zod.string().nullable(),
+  notes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -678,12 +718,16 @@ export const EditTaskTimerResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "in_progress",
+    "in_review",
+    "blocked",
+    "complete",
+  ]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
-  parentTaskId: zod.number().nullable(),
-  subtaskCount: zod.number(),
   assigneeId: zod.number().nullable(),
   assignerId: zod.number().nullable(),
   followerIds: zod.array(zod.number()),
@@ -694,10 +738,7 @@ export const EditTaskTimerResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
-  safetyFlag: zod.string().nullable(),
-  qualityResult: zod.string().nullable(),
-  deliveryStatus: zod.string().nullable(),
-  costMaterialNotes: zod.string().nullable(),
+  notes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -736,12 +777,16 @@ export const FollowTaskResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "in_progress",
+    "in_review",
+    "blocked",
+    "complete",
+  ]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
-  parentTaskId: zod.number().nullable(),
-  subtaskCount: zod.number(),
   assigneeId: zod.number().nullable(),
   assignerId: zod.number().nullable(),
   followerIds: zod.array(zod.number()),
@@ -752,10 +797,7 @@ export const FollowTaskResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
-  safetyFlag: zod.string().nullable(),
-  qualityResult: zod.string().nullable(),
-  deliveryStatus: zod.string().nullable(),
-  costMaterialNotes: zod.string().nullable(),
+  notes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -794,12 +836,16 @@ export const UnfollowTaskResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "in_progress",
+    "in_review",
+    "blocked",
+    "complete",
+  ]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
-  parentTaskId: zod.number().nullable(),
-  subtaskCount: zod.number(),
   assigneeId: zod.number().nullable(),
   assignerId: zod.number().nullable(),
   followerIds: zod.array(zod.number()),
@@ -810,10 +856,7 @@ export const UnfollowTaskResponse = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
-  safetyFlag: zod.string().nullable(),
-  qualityResult: zod.string().nullable(),
-  deliveryStatus: zod.string().nullable(),
-  costMaterialNotes: zod.string().nullable(),
+  notes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -852,12 +895,16 @@ export const GetTaskRelationsResponseItem = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullable(),
-  status: zod.string(),
+  status: zod.enum([
+    "backlog",
+    "in_progress",
+    "in_review",
+    "blocked",
+    "complete",
+  ]),
   priority: zod.enum(["low", "medium", "high", "urgent"]),
   projectId: zod.number(),
   departmentId: zod.number().nullable(),
-  parentTaskId: zod.number().nullable(),
-  subtaskCount: zod.number(),
   assigneeId: zod.number().nullable(),
   assignerId: zod.number().nullable(),
   followerIds: zod.array(zod.number()),
@@ -868,10 +915,7 @@ export const GetTaskRelationsResponseItem = zod.object({
   timerRunning: zod.boolean(),
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
-  safetyFlag: zod.string().nullable(),
-  qualityResult: zod.string().nullable(),
-  deliveryStatus: zod.string().nullable(),
-  costMaterialNotes: zod.string().nullable(),
+  notes: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -976,14 +1020,18 @@ export const GetKanbanColumnsQueryParams = zod.object({
 export const GetKanbanColumnsResponseItem = zod.object({
   status: zod.string(),
   label: zod.string(),
-  hexColor: zod.string(),
-  sortOrder: zod.number(),
   tasks: zod.array(
     zod.object({
       id: zod.number(),
       title: zod.string(),
       description: zod.string().nullable(),
-      status: zod.string(),
+      status: zod.enum([
+        "backlog",
+        "in_progress",
+        "in_review",
+        "blocked",
+        "complete",
+      ]),
       priority: zod.enum(["low", "medium", "high", "urgent"]),
       projectId: zod.number(),
       departmentId: zod.number().nullable(),
@@ -997,6 +1045,7 @@ export const GetKanbanColumnsResponseItem = zod.object({
       timerRunning: zod.boolean(),
       timerStartedAt: zod.string().nullable(),
       completedAt: zod.string().nullable(),
+      notes: zod.string().nullable(),
       createdAt: zod.string(),
       updatedAt: zod.string(),
       assignee: zod
@@ -1027,24 +1076,54 @@ export const GetKanbanColumnsResponseItem = zod.object({
 });
 export const GetKanbanColumnsResponse = zod.array(GetKanbanColumnsResponseItem);
 
-export const KanbanColumnConfig = zod.object({
+/**
+ * @summary Get configurable kanban columns
+ */
+export const GetKanbanColumnConfigsResponseItem = zod.object({
   id: zod.number(),
   statusKey: zod.string(),
   label: zod.string(),
   hexColor: zod.string(),
   sortOrder: zod.number(),
 });
-export const GetKanbanColumnConfigsResponse = zod.array(KanbanColumnConfig);
+export const GetKanbanColumnConfigsResponse = zod.array(
+  GetKanbanColumnConfigsResponseItem,
+);
 
+/**
+ * @summary Create a kanban column
+ */
 export const CreateKanbanColumnBody = zod.object({
   label: zod.string(),
   hexColor: zod.string(),
+});
+
+/**
+ * @summary Update a kanban column
+ */
+export const UpdateKanbanColumnParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 export const UpdateKanbanColumnBody = zod.object({
   label: zod.string().optional(),
   hexColor: zod.string().optional(),
   sortOrder: zod.number().optional(),
+});
+
+export const UpdateKanbanColumnResponse = zod.object({
+  id: zod.number(),
+  statusKey: zod.string(),
+  label: zod.string(),
+  hexColor: zod.string(),
+  sortOrder: zod.number(),
+});
+
+/**
+ * @summary Delete a kanban column
+ */
+export const DeleteKanbanColumnParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
@@ -1067,7 +1146,6 @@ export const GetCalendarEventsResponseItem = zod.object({
   expectedHours: zod.number().nullable(),
   elapsedSeconds: zod.number(),
   timerRunning: zod.boolean(),
-  timerStartedAt: zod.string().nullable(),
   projectId: zod.number(),
   projectName: zod.string(),
   departmentId: zod.number().nullable(),
@@ -1075,8 +1153,6 @@ export const GetCalendarEventsResponseItem = zod.object({
   departmentColor: zod.string().nullable(),
   assigneeId: zod.number().nullable(),
   assigneeName: zod.string().nullable(),
-  assigneeAvatarUrl: zod.string().nullable(),
-  priority: zod.enum(["low", "medium", "high", "urgent"]),
 });
 export const GetCalendarEventsResponse = zod.array(
   GetCalendarEventsResponseItem,
@@ -1092,8 +1168,6 @@ export const GetDashboardSummaryResponse = zod.object({
   overdueTasks: zod.number(),
   tasksInProgress: zod.number(),
   tasksCompleted: zod.number(),
-  totalSubtasks: zod.number(),
-  subtasksCompleted: zod.number(),
   myTasks: zod.number(),
   myOverdueTasks: zod.number(),
 });
@@ -1103,7 +1177,6 @@ export const GetDashboardSummaryResponse = zod.object({
  */
 export const GetActivityFeedQueryParams = zod.object({
   limit: zod.coerce.number().nullish(),
-  offset: zod.coerce.number().nullish(),
 });
 
 export const GetActivityFeedResponseItem = zod.object({
@@ -1114,14 +1187,9 @@ export const GetActivityFeedResponseItem = zod.object({
   action: zod.string(),
   actorId: zod.number(),
   actorName: zod.string(),
-  actorAvatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
 });
 export const GetActivityFeedResponse = zod.array(GetActivityFeedResponseItem);
-
-export const GetActivityFeedTotalResponse = zod.object({
-  total: zod.number(),
-});
 
 /**
  * @summary List notifications for current user
@@ -1185,6 +1253,7 @@ export const RequestUploadUrlBody = zod.object({
   size: zod.number(),
   contentType: zod.string(),
   taskId: zod.number().optional(),
+  projectId: zod.number().optional(),
 });
 
 export const RequestUploadUrlResponse = zod.object({
@@ -1197,49 +1266,4 @@ export const RequestUploadUrlResponse = zod.object({
  */
 export const GetObjectParams = zod.object({
   objectPath: zod.coerce.string(),
-});
-
-export const ProjectAttachmentItem = zod.object({
-  id: zod.number(),
-  projectId: zod.number(),
-  fileName: zod.string(),
-  objectPath: zod.string(),
-  fileSize: zod.number().nullable(),
-  mimeType: zod.string().nullable(),
-  isPinned: zod.boolean(),
-  uploadedById: zod.number(),
-  createdAt: zod.string(),
-});
-
-export const ListProjectAttachmentsResponse = zod.array(ProjectAttachmentItem);
-
-export const AddProjectAttachmentBody = zod.object({
-  fileName: zod.string(),
-  objectPath: zod.string(),
-  fileSize: zod.number().nullish(),
-  mimeType: zod.string().nullish(),
-  isPinned: zod.boolean().optional(),
-});
-
-export const ProjectAllAttachmentsTaskGroup = zod.object({
-  taskId: zod.number(),
-  taskTitle: zod.string(),
-  isSubtask: zod.boolean(),
-  parentTaskId: zod.number().nullable(),
-  parentTaskTitle: zod.string().nullable(),
-  attachments: zod.array(zod.object({
-    id: zod.number(),
-    taskId: zod.number(),
-    fileName: zod.string(),
-    objectPath: zod.string(),
-    fileSize: zod.number().nullable(),
-    mimeType: zod.string().nullable(),
-    uploadedById: zod.number(),
-    createdAt: zod.string(),
-  })),
-});
-
-export const GetProjectAllAttachmentsResponse = zod.object({
-  projectAttachments: ListProjectAttachmentsResponse,
-  taskGroups: zod.array(ProjectAllAttachmentsTaskGroup),
 });

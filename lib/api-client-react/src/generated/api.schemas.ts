@@ -57,20 +57,8 @@ export interface Project {
   /** @nullable */
   description: string | null;
   /** @nullable */
-  fullDescription: string | null;
-  /** @nullable */
   startDate: string | null;
   status: ProjectStatus;
-  /** @nullable */
-  address: string | null;
-  /** @nullable */
-  contactName: string | null;
-  /** @nullable */
-  contactPhone: string | null;
-  /** @nullable */
-  contactEmail: string | null;
-  /** @nullable */
-  totalPrice: string | null;
   createdById: number;
   createdAt: string;
   updatedAt: string;
@@ -86,11 +74,6 @@ export const CreateProjectBodyStatus = {
   cancelled: "cancelled",
 } as const;
 
-export interface ParsedTaskItem {
-  title: string;
-  description?: string;
-}
-
 export interface CreateProjectBody {
   name: string;
   company: string;
@@ -98,21 +81,8 @@ export interface CreateProjectBody {
   /** @nullable */
   description?: string | null;
   /** @nullable */
-  fullDescription?: string | null;
-  /** @nullable */
   startDate?: string | null;
   status?: CreateProjectBodyStatus;
-  /** @nullable */
-  address?: string | null;
-  /** @nullable */
-  contactName?: string | null;
-  /** @nullable */
-  contactPhone?: string | null;
-  /** @nullable */
-  contactEmail?: string | null;
-  /** @nullable */
-  totalPrice?: string | null;
-  parsedTasks?: ParsedTaskItem[];
 }
 
 export type UpdateProjectBodyStatus =
@@ -132,20 +102,8 @@ export interface UpdateProjectBody {
   /** @nullable */
   description?: string | null;
   /** @nullable */
-  fullDescription?: string | null;
-  /** @nullable */
   startDate?: string | null;
   status?: UpdateProjectBodyStatus;
-  /** @nullable */
-  address?: string | null;
-  /** @nullable */
-  contactName?: string | null;
-  /** @nullable */
-  contactPhone?: string | null;
-  /** @nullable */
-  contactEmail?: string | null;
-  /** @nullable */
-  totalPrice?: string | null;
 }
 
 export interface ParsedPdfData {
@@ -153,14 +111,7 @@ export interface ParsedPdfData {
   name: string;
   projectId: string;
   description: string;
-  fullDescription: string;
   startDate: string;
-  address: string;
-  contactName: string;
-  contactPhone: string;
-  contactEmail: string;
-  totalPrice: string;
-  parsedTasks: ParsedTaskItem[];
 }
 
 export type ProjectSummaryTasksByStatusItem = {
@@ -187,8 +138,7 @@ export interface Department {
   name: string;
   /** @nullable */
   color: string | null;
-  /** @nullable */
-  projectId: number | null;
+  projectId: number;
   createdAt: string;
 }
 
@@ -196,8 +146,7 @@ export interface CreateDepartmentBody {
   name: string;
   /** @nullable */
   color?: string | null;
-  /** @nullable */
-  projectId?: number | null;
+  projectId: number;
 }
 
 export interface UpdateDepartmentBody {
@@ -252,9 +201,6 @@ export interface Task {
   /** @nullable */
   departmentId: number | null;
   /** @nullable */
-  parentTaskId: number | null;
-  subtaskCount: number;
-  /** @nullable */
   assigneeId: number | null;
   /** @nullable */
   assignerId: number | null;
@@ -271,6 +217,8 @@ export interface Task {
   timerStartedAt: string | null;
   /** @nullable */
   completedAt: string | null;
+  /** @nullable */
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
   assignee: UserProfileMini | null;
@@ -316,6 +264,8 @@ export interface CreateTaskBody {
   dueDate?: string | null;
   /** @nullable */
   startDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export type UpdateTaskBodyStatus =
@@ -355,6 +305,8 @@ export interface UpdateTaskBody {
   dueDate?: string | null;
   /** @nullable */
   startDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export interface EditTimerBody {
@@ -378,6 +330,15 @@ export interface TaskAttachment {
   createdAt: string;
 }
 
+export interface AddAttachmentBody {
+  fileName: string;
+  objectPath: string;
+  /** @nullable */
+  fileSize?: number | null;
+  /** @nullable */
+  mimeType?: string | null;
+}
+
 export interface ProjectAttachment {
   id: number;
   projectId: number;
@@ -390,6 +351,16 @@ export interface ProjectAttachment {
   isPinned: boolean;
   uploadedById: number;
   createdAt: string;
+}
+
+export interface AddProjectAttachmentBody {
+  fileName: string;
+  objectPath: string;
+  /** @nullable */
+  fileSize?: number | null;
+  /** @nullable */
+  mimeType?: string | null;
+  isPinned?: boolean;
 }
 
 export interface ProjectAllAttachmentsTaskGroup {
@@ -408,13 +379,23 @@ export interface ProjectAllAttachments {
   taskGroups: ProjectAllAttachmentsTaskGroup[];
 }
 
-export interface AddAttachmentBody {
-  fileName: string;
-  objectPath: string;
-  /** @nullable */
-  fileSize?: number | null;
-  /** @nullable */
-  mimeType?: string | null;
+export interface KanbanColumnConfig {
+  id: number;
+  statusKey: string;
+  label: string;
+  hexColor: string;
+  sortOrder: number;
+}
+
+export interface CreateKanbanColumnBody {
+  label: string;
+  hexColor: string;
+}
+
+export interface UpdateKanbanColumnBody {
+  label?: string;
+  hexColor?: string;
+  sortOrder?: number;
 }
 
 export interface KanbanColumn {
@@ -435,8 +416,6 @@ export interface CalendarEvent {
   expectedHours: number | null;
   elapsedSeconds: number;
   timerRunning: boolean;
-  /** @nullable */
-  timerStartedAt: string | null;
   projectId: number;
   projectName: string;
   /** @nullable */
@@ -449,9 +428,6 @@ export interface CalendarEvent {
   assigneeId: number | null;
   /** @nullable */
   assigneeName: string | null;
-  /** @nullable */
-  assigneeAvatarUrl: string | null;
-  priority: "low" | "medium" | "high" | "urgent";
 }
 
 export interface DashboardSummary {
@@ -461,8 +437,6 @@ export interface DashboardSummary {
   overdueTasks: number;
   tasksInProgress: number;
   tasksCompleted: number;
-  totalSubtasks: number;
-  subtasksCompleted: number;
   myTasks: number;
   myOverdueTasks: number;
 }
@@ -475,8 +449,6 @@ export interface ActivityItem {
   action: string;
   actorId: number;
   actorName: string;
-  /** @nullable */
-  actorAvatarUrl: string | null;
   createdAt: string;
 }
 
@@ -508,6 +480,7 @@ export interface RequestUploadUrlBody {
   size: number;
   contentType: string;
   taskId?: number;
+  projectId?: number;
 }
 
 export interface RequestUploadUrlResponse {

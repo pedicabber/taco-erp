@@ -1,6 +1,6 @@
 import { db, usersTable, departmentsTable, taskTemplatesTable, taskTemplateSubtasksTable, settingsTable } from "@workspace/db";
-import { inArray, isNull } from "drizzle-orm";
-import { TEMPLATE_TASKS } from "./templateTasks";
+import { asc, eq, inArray, isNull } from "drizzle-orm";
+import { DEPARTMENT_TASKS, TEMPLATE_TASKS } from "./templateTasks";
 
 export const BOOTSTRAP_ADMINS = [
   "davidjohnfrazier@gmail.com",
@@ -9,18 +9,7 @@ export const BOOTSTRAP_ADMINS = [
   "jayf6304@gmail.com",
 ];
 
-const GLOBAL_DEPARTMENTS = [
-  { name: "Mechanical Engineering", color: "#3B82F6" },
-  { name: "Electrical Engineering", color: "#F59E0B" },
-  { name: "Controls & Software", color: "#8B5CF6" },
-  { name: "Project Management", color: "#10B981" },
-  { name: "Manufacturing", color: "#EF4444" },
-  { name: "Quality Assurance", color: "#06B6D4" },
-  { name: "Design & Drafting", color: "#EC4899" },
-  { name: "Field Services", color: "#F97316" },
-  { name: "Safety & Compliance", color: "#84CC16" },
-  { name: "Procurement", color: "#A78BFA" },
-];
+const GLOBAL_DEPARTMENTS = DEPARTMENT_TASKS.map(d => ({ name: d.dept, color: d.color }));
 
 export async function bootstrapAdmins() {
   try {
@@ -34,11 +23,32 @@ export async function bootstrapAdmins() {
 
 export async function bootstrapDepartments() {
   try {
-    const existing = await db.select().from(departmentsTable).where(isNull(departmentsTable.projectId));
-    if (existing.length === 0) {
-      await db.insert(departmentsTable).values(
-        GLOBAL_DEPARTMENTS.map(d => ({ name: d.name, color: d.color, projectId: null }))
-      );
+    const existing = await db
+      .select()
+      .from(departmentsTable)
+      .where(isNull(departmentsTable.projectId))
+      .orderBy(asc(departmentsTable.id));
+    const byName = new Map(existing.map(d => [d.name.toUpperCase(), d]));
+    const reusable = existing.filter(d => !GLOBAL_DEPARTMENTS.some(g => g.name === d.name));
+
+    for (let i = 0; i < GLOBAL_DEPARTMENTS.length; i++) {
+      const dept = GLOBAL_DEPARTMENTS[i];
+      const match = byName.get(dept.name);
+      if (match) {
+        if (match.color !== dept.color) {
+          await db.update(departmentsTable).set({ color: dept.color }).where(eq(departmentsTable.id, match.id));
+        }
+        continue;
+      }
+
+      const slot = reusable.shift();
+      if (slot) {
+        await db.update(departmentsTable)
+          .set({ name: dept.name, color: dept.color })
+          .where(eq(departmentsTable.id, slot.id));
+      } else {
+        await db.insert(departmentsTable).values({ name: dept.name, color: dept.color, projectId: null });
+      }
     }
   } catch {
     // silently skip if table not ready yet

@@ -184,6 +184,7 @@ export default function ProjectAttachmentsPanel({ projectId }: Props) {
         name: file.name,
         size: file.size,
         contentType: file.type || "application/octet-stream",
+        projectId,
       });
       const { uploadURL, objectPath } = urlRes.data;
 

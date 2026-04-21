@@ -219,6 +219,89 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProjectSummary"
 
+  /projects/{projectId}/attachments:
+    get:
+      operationId: listProjectAttachments
+      tags: [projects]
+      summary: List project attachments
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of project attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectAttachment"
+    post:
+      operationId: addProjectAttachment
+      tags: [projects]
+      summary: Add a project attachment
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddProjectAttachmentBody"
+      responses:
+        "201":
+          description: Project attachment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectAttachment"
+
+  /projects/{projectId}/attachments/{attachmentId}:
+    delete:
+      operationId: deleteProjectAttachment
+      tags: [projects]
+      summary: Delete a project attachment
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /projects/{projectId}/all-attachments:
+    get:
+      operationId: getProjectAllAttachments
+      tags: [projects]
+      summary: Get project and task attachments grouped for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: All project attachments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectAllAttachments"
+
   /projects/parse-pdf:
     post:
       operationId: parsePdf
@@ -691,6 +774,76 @@ paths:
                 items:
                   $ref: "#/components/schemas/KanbanColumn"
 
+  /kanban/columns:
+    get:
+      operationId: getKanbanColumnConfigs
+      tags: [tasks]
+      summary: Get configurable kanban columns
+      responses:
+        "200":
+          description: Kanban column configs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KanbanColumnConfig"
+    post:
+      operationId: createKanbanColumn
+      tags: [tasks]
+      summary: Create a kanban column
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKanbanColumnBody"
+      responses:
+        "201":
+          description: Created kanban column
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KanbanColumnConfig"
+
+  /kanban/columns/{id}:
+    patch:
+      operationId: updateKanbanColumn
+      tags: [tasks]
+      summary: Update a kanban column
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateKanbanColumnBody"
+      responses:
+        "200":
+          description: Updated kanban column
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KanbanColumnConfig"
+    delete:
+      operationId: deleteKanbanColumn
+      tags: [tasks]
+      summary: Delete a kanban column
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   # ─── Calendar ────────────────────────────────────────────────────────────────
 
   /calendar/events:
@@ -1126,6 +1279,8 @@ components:
           type: ["string", "null"]
         completedAt:
           type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -1157,6 +1312,7 @@ components:
         - timerRunning
         - timerStartedAt
         - completedAt
+        - notes
         - createdAt
         - updatedAt
         - assignee
@@ -1219,6 +1375,8 @@ components:
           type: ["string", "null"]
         startDate:
           type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
       required:
         - title
         - projectId
@@ -1245,6 +1403,8 @@ components:
         dueDate:
           type: ["string", "null"]
         startDate:
+          type: ["string", "null"]
+        notes:
           type: ["string", "null"]
 
     EditTimerBody:
@@ -1306,6 +1466,136 @@ components:
       required:
         - fileName
         - objectPath
+
+    ProjectAttachment:
+      type: object
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        fileName:
+          type: string
+        objectPath:
+          type: string
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+        isPinned:
+          type: boolean
+        uploadedById:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - projectId
+        - fileName
+        - objectPath
+        - fileSize
+        - mimeType
+        - isPinned
+        - uploadedById
+        - createdAt
+
+    AddProjectAttachmentBody:
+      type: object
+      properties:
+        fileName:
+          type: string
+        objectPath:
+          type: string
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+        isPinned:
+          type: boolean
+      required:
+        - fileName
+        - objectPath
+
+    ProjectAllAttachmentsTaskGroup:
+      type: object
+      properties:
+        taskId:
+          type: integer
+        taskTitle:
+          type: string
+        isSubtask:
+          type: boolean
+        parentTaskId:
+          type: ["integer", "null"]
+        parentTaskTitle:
+          type: ["string", "null"]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskAttachment"
+      required:
+        - taskId
+        - taskTitle
+        - isSubtask
+        - parentTaskId
+        - parentTaskTitle
+        - attachments
+
+    ProjectAllAttachments:
+      type: object
+      properties:
+        projectAttachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectAttachment"
+        taskGroups:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectAllAttachmentsTaskGroup"
+      required:
+        - projectAttachments
+        - taskGroups
+
+    KanbanColumnConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+        statusKey:
+          type: string
+        label:
+          type: string
+        hexColor:
+          type: string
+        sortOrder:
+          type: integer
+      required:
+        - id
+        - statusKey
+        - label
+        - hexColor
+        - sortOrder
+
+    CreateKanbanColumnBody:
+      type: object
+      properties:
+        label:
+          type: string
+        hexColor:
+          type: string
+      required:
+        - label
+        - hexColor
+
+    UpdateKanbanColumnBody:
+      type: object
+      properties:
+        label:
+          type: string
+        hexColor:
+          type: string
+        sortOrder:
+          type: integer
 
     KanbanColumn:
       type: object
@@ -1467,6 +1757,10 @@ components:
           type: integer
         contentType:
           type: string
+        taskId:
+          type: integer
+        projectId:
+          type: integer
       required:
         - name
         - size

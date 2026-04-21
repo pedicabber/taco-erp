@@ -36,6 +36,7 @@ import {
   ChevronDown,
   Pin,
   Image,
+  StickyNote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -192,6 +193,20 @@ function SqdcNotesInput({
   );
 }
 
+interface TimerSession {
+  id: number;
+  taskId: number;
+  startedById: number;
+  startedBy: {
+    id: number;
+    name: string;
+    avatarUrl: string | null;
+  };
+  startedAt: string;
+  stoppedAt: string | null;
+  durationSeconds: number | null;
+}
+
 export default function TaskDetailPage() {
   const params = useParams<{ taskId: string }>();
   const taskId = parseInt(params.taskId, 10);
@@ -223,6 +238,7 @@ export default function TaskDetailPage() {
   } | null>(null);
   const [sqdcError, setSqdcError] = useState(false);
   const sqdcCardRef = useRef<HTMLDivElement>(null);
+  const [notesDraft, setNotesDraft] = useState("");
 
   function getFileUrl(objectPath: string) {
     return `/api/storage/objects${objectPath.replace(/^\/objects/, "")}`;
@@ -275,6 +291,17 @@ export default function TaskDetailPage() {
       apiClient.get("/departments?global=true").then((r) => r.data),
   });
 
+  const { data: timerSessions = [] } = useQuery<TimerSession[]>({
+    queryKey: ["task-timer-sessions", taskId],
+    queryFn: () =>
+      apiClient.get(`/tasks/${taskId}/timer/sessions`).then((r) => r.data),
+    enabled: Number.isFinite(taskId),
+  });
+
+  useEffect(() => {
+    setNotesDraft(task?.notes ?? "");
+  }, [task?.notes]);
+
   const elapsed = useLiveTimer(
     task?.elapsedSeconds ?? 0,
     task?.timerRunning ?? false,
@@ -292,6 +319,7 @@ export default function TaskDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["task", taskId] });
       qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["task-timer-sessions", taskId] });
       toast({ title: "Timer started" });
     },
   });
@@ -302,8 +330,20 @@ export default function TaskDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["task", taskId] });
       qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["task-timer-sessions", taskId] });
       toast({ title: "Timer stopped" });
     },
+  });
+
+  const notesMutation = useMutation({
+    mutationFn: (notes: string) =>
+      apiClient.patch(`/tasks/${taskId}`, { notes }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task", taskId] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: () =>
+      toast({ title: "Failed to save notes", variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
@@ -840,6 +880,75 @@ export default function TaskDetailPage() {
               )}
 
               <TimerBar elapsed={elapsed} expectedHours={task.expectedHours} />
+
+              {timerSessions.length > 0 && (
+                <div className="mt-4 border-t pt-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">
+                    Clock-in log
+                  </p>
+                  <div className="space-y-2">
+                    {timerSessions.slice(0, 5).map((session) => {
+                      const duration =
+                        session.durationSeconds ??
+                        Math.max(
+                          0,
+                          Math.floor(
+                            (Date.now() - new Date(session.startedAt).getTime()) /
+                              1000,
+                          ),
+                        );
+                      return (
+                        <div
+                          key={session.id}
+                          className="flex items-center justify-between gap-3 text-sm"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="truncate">
+                                {session.startedBy.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(session.startedAt), "MMM d, h:mm a")}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="flex-shrink-0">
+                            {session.stoppedAt ? formatSeconds(duration) : "Running"}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Notes */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <StickyNote className="w-4 h-4" />
+                Notes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                onBlur={() => {
+                  const next = notesDraft.trim();
+                  const current = task.notes ?? "";
+                  if (next !== current) notesMutation.mutate(next);
+                }}
+                placeholder="Add task notes, shop updates, customer details, or anything the team needs to know..."
+                rows={5}
+                className="resize-y"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Notes save automatically when you leave this field.
+              </p>
             </CardContent>
           </Card>
 

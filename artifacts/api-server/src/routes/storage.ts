@@ -6,7 +6,7 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
-import { db, taskAttachmentsTable, tasksTable, usersTable } from "@workspace/db";
+import { db, projectAttachmentsTable, taskAttachmentsTable, tasksTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -28,10 +28,10 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
   }
 
   try {
-    const { name, size, contentType, taskId } = parsed.data;
+    const { name, size, contentType, taskId, projectId } = parsed.data;
 
     // Organise uploads by task so each ticket has its own folder
-    const subDir = taskId ? `uploads/tasks/${taskId}` : "uploads";
+    const subDir = taskId ? `uploads/tasks/${taskId}` : projectId ? `uploads/projects/${projectId}` : "uploads";
     const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL(subDir);
 
     req.log.info({ objectPath }, "Generated upload URL");
@@ -112,28 +112,35 @@ router.get("/storage/objects/*path", requireAuth, async (req: AuthenticatedReque
     }
 
     if (dbUser.role !== "admin") {
-      const [attachment] = await db
+      const [projectAttachment] = await db
+        .select({ uploadedById: projectAttachmentsTable.uploadedById })
+        .from(projectAttachmentsTable)
+        .where(eq(projectAttachmentsTable.objectPath, objectPath));
+
+      if (!projectAttachment) {
+        const [attachment] = await db
         .select({ uploadedById: taskAttachmentsTable.uploadedById, taskId: taskAttachmentsTable.taskId })
         .from(taskAttachmentsTable)
         .where(eq(taskAttachmentsTable.objectPath, objectPath));
 
-      if (!attachment) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-      }
-
-      if (attachment.uploadedById !== dbUser.id) {
-        const [task] = await db
-          .select({ assigneeId: tasksTable.assigneeId, followerIds: tasksTable.followerIds })
-          .from(tasksTable)
-          .where(eq(tasksTable.id, attachment.taskId));
-
-        const isAssignee = task?.assigneeId === dbUser.id;
-        const isFollower = task?.followerIds?.includes(dbUser.id) ?? false;
-
-        if (!isAssignee && !isFollower) {
+        if (!attachment) {
           res.status(403).json({ error: "Forbidden" });
           return;
+        }
+
+        if (attachment.uploadedById !== dbUser.id) {
+          const [task] = await db
+            .select({ assigneeId: tasksTable.assigneeId, followerIds: tasksTable.followerIds })
+            .from(tasksTable)
+            .where(eq(tasksTable.id, attachment.taskId));
+
+          const isAssignee = task?.assigneeId === dbUser.id;
+          const isFollower = task?.followerIds?.includes(dbUser.id) ?? false;
+
+          if (!isAssignee && !isFollower) {
+            res.status(403).json({ error: "Forbidden" });
+            return;
+          }
         }
       }
     }

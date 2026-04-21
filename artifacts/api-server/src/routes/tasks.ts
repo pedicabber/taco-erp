@@ -22,15 +22,39 @@ import {
   ListTaskAttachmentsResponse,
   AddTaskAttachmentBody,
   GetKanbanColumnsResponse,
-  GetKanbanColumnConfigsResponse,
-  CreateKanbanColumnBody,
-  UpdateKanbanColumnBody,
   GetCalendarEventsResponse,
   GetDashboardSummaryResponse,
   GetActivityFeedResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+function parseCreateKanbanColumnBody(body: unknown) {
+  if (!body || typeof body !== "object") return null;
+  const data = body as Record<string, unknown>;
+  if (typeof data.label !== "string" || data.label.trim() === "") return null;
+  if (typeof data.hexColor !== "string" || data.hexColor.trim() === "") return null;
+  return { label: data.label, hexColor: data.hexColor };
+}
+
+function parseUpdateKanbanColumnBody(body: unknown) {
+  if (!body || typeof body !== "object") return null;
+  const data = body as Record<string, unknown>;
+  const parsed: Partial<{ label: string; hexColor: string; sortOrder: number }> = {};
+  if (data.label !== undefined) {
+    if (typeof data.label !== "string" || data.label.trim() === "") return null;
+    parsed.label = data.label;
+  }
+  if (data.hexColor !== undefined) {
+    if (typeof data.hexColor !== "string" || data.hexColor.trim() === "") return null;
+    parsed.hexColor = data.hexColor;
+  }
+  if (data.sortOrder !== undefined) {
+    if (typeof data.sortOrder !== "number") return null;
+    parsed.sortOrder = data.sortOrder;
+  }
+  return parsed;
+}
 
 const DEFAULT_COLUMNS = [
   { statusKey: "backlog",     label: "Backlog",      hexColor: "#94a3b8", sortOrder: 0 },
@@ -140,6 +164,7 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
     qualityResult: task.qualityResult ?? null,
     deliveryStatus: task.deliveryStatus ?? null,
     costMaterialNotes: task.costMaterialNotes ?? null,
+    notes: task.notes ?? null,
     createdAt: task.createdAt.toISOString(),
     updatedAt: task.updatedAt.toISOString(),
     assignee,
@@ -431,6 +456,44 @@ router.patch("/tasks/:taskId/timer/edit", requireAuth, async (req: Authenticated
   res.json(EditTaskTimerResponse.parse(built));
 });
 
+router.get("/tasks/:taskId/timer/sessions", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid task ID" });
+    return;
+  }
+
+  const rows = await db
+    .select({
+      id: taskTimerSessionsTable.id,
+      taskId: taskTimerSessionsTable.taskId,
+      startedById: taskTimerSessionsTable.startedById,
+      startedAt: taskTimerSessionsTable.startedAt,
+      stoppedAt: taskTimerSessionsTable.stoppedAt,
+      durationSeconds: taskTimerSessionsTable.durationSeconds,
+      startedByName: usersTable.name,
+      startedByAvatarUrl: usersTable.avatarUrl,
+    })
+    .from(taskTimerSessionsTable)
+    .leftJoin(usersTable, eq(usersTable.id, taskTimerSessionsTable.startedById))
+    .where(eq(taskTimerSessionsTable.taskId, id))
+    .orderBy(desc(taskTimerSessionsTable.startedAt));
+
+  res.json(rows.map(row => ({
+    id: row.id,
+    taskId: row.taskId,
+    startedById: row.startedById,
+    startedBy: {
+      id: row.startedById,
+      name: row.startedByName ?? "Unknown user",
+      avatarUrl: row.startedByAvatarUrl ?? null,
+    },
+    startedAt: row.startedAt.toISOString(),
+    stoppedAt: row.stoppedAt?.toISOString() ?? null,
+    durationSeconds: row.durationSeconds,
+  })));
+});
+
 router.post("/tasks/:taskId/followers", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
   const user = await syncUserFromClerk(req);
   if (!user) {
@@ -670,31 +733,31 @@ router.delete("/tasks/:taskId/attachments/:attachmentId", requireAuth, async (re
 // Kanban column CRUD
 router.get("/kanban/columns", requireAuth, async (_req, res): Promise<void> => {
   const cols = await db.select().from(kanbanColumnsTable).orderBy(asc(kanbanColumnsTable.sortOrder));
-  res.json(GetKanbanColumnConfigsResponse.parse(cols.map(c => ({
+  res.json(cols.map(c => ({
     id: c.id, statusKey: c.statusKey, label: c.label, hexColor: c.hexColor, sortOrder: c.sortOrder,
-  }))));
+  })));
 });
 
 router.post("/kanban/columns", requireAuth, async (req, res): Promise<void> => {
-  const body = CreateKanbanColumnBody.safeParse(req.body);
-  if (!body.success) { res.status(400).json({ error: "Invalid body" }); return; }
+  const body = parseCreateKanbanColumnBody(req.body);
+  if (!body) { res.status(400).json({ error: "Invalid body" }); return; }
   const existing = await db.select().from(kanbanColumnsTable).orderBy(asc(kanbanColumnsTable.sortOrder));
   const statusKey = `col_${Date.now()}`;
   const sortOrder = existing.length > 0 ? existing[existing.length - 1].sortOrder + 1 : 0;
   const [col] = await db.insert(kanbanColumnsTable)
-    .values({ statusKey, label: body.data.label, hexColor: body.data.hexColor, sortOrder })
+    .values({ statusKey, label: body.label, hexColor: body.hexColor, sortOrder })
     .returning();
   res.status(201).json({ id: col.id, statusKey: col.statusKey, label: col.label, hexColor: col.hexColor, sortOrder: col.sortOrder });
 });
 
 router.patch("/kanban/columns/:id", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
-  const body = UpdateKanbanColumnBody.safeParse(req.body);
-  if (!body.success) { res.status(400).json({ error: "Invalid body" }); return; }
+  const body = parseUpdateKanbanColumnBody(req.body);
+  if (!body) { res.status(400).json({ error: "Invalid body" }); return; }
   const updates: Partial<{ label: string; hexColor: string; sortOrder: number }> = {};
-  if (body.data.label !== undefined) updates.label = body.data.label;
-  if (body.data.hexColor !== undefined) updates.hexColor = body.data.hexColor;
-  if (body.data.sortOrder !== undefined) updates.sortOrder = body.data.sortOrder;
+  if (body.label !== undefined) updates.label = body.label;
+  if (body.hexColor !== undefined) updates.hexColor = body.hexColor;
+  if (body.sortOrder !== undefined) updates.sortOrder = body.sortOrder;
   const [col] = await db.update(kanbanColumnsTable).set(updates).where(eq(kanbanColumnsTable.id, id)).returning();
   if (!col) { res.status(404).json({ error: "Column not found" }); return; }
   res.json({ id: col.id, statusKey: col.statusKey, label: col.label, hexColor: col.hexColor, sortOrder: col.sortOrder });

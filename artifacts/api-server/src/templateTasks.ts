@@ -7,6 +7,81 @@ export interface TemplateTask {
   subtasks: TemplateSub[];
 }
 
+export interface DepartmentTaskTemplate {
+  dept: string;
+  color: string;
+  tasks: string[];
+}
+
+export const DEPARTMENT_TASKS: DepartmentTaskTemplate[] = [
+  {
+    dept: "ENGINEERING",
+    color: "#3b82f6",
+    tasks: [
+      "Review quote, scope, and customer requirements",
+      "Create system layout and mechanical design",
+      "Complete electrical design and IO requirements",
+      "Finalize BOM and purchased component list",
+      "Release engineering package to manufacturing",
+    ],
+  },
+  {
+    dept: "MANUFACTURING",
+    color: "#f59e0b",
+    tasks: [
+      "Review released drawings and build plan",
+      "Fabricate required mechanical components",
+      "Assemble frame, guarding, conveyors, and fixtures",
+      "Build and wire control panels",
+      "Complete shop readiness checklist",
+    ],
+  },
+  {
+    dept: "CONTROLS",
+    color: "#a855f7",
+    tasks: [
+      "Develop PLC program and IO mapping",
+      "Develop HMI screens and operator workflow",
+      "Program robot motion and process logic",
+      "Integrate safety, alarms, and fault handling",
+      "Debug system and validate controls performance",
+    ],
+  },
+  {
+    dept: "INSTALL",
+    color: "#ef4444",
+    tasks: [
+      "Prepare install plan, tools, and travel logistics",
+      "Ship system and verify site readiness",
+      "Install equipment at customer site",
+      "Complete site startup and commissioning",
+      "Train operators and capture punch-list items",
+    ],
+  },
+  {
+    dept: "PROJECT MANAGEMENT",
+    color: "#10b981",
+    tasks: [
+      "Confirm kickoff details, schedule, and owners",
+      "Maintain project timeline and milestone updates",
+      "Coordinate customer communication and approvals",
+      "Track risks, changes, and open issues",
+      "Close project and confirm final acceptance",
+    ],
+  },
+  {
+    dept: "OFFICE/ADMIN",
+    color: "#64748b",
+    tasks: [
+      "Set up project folder, job number, and records",
+      "Issue purchase orders and track vendor paperwork",
+      "Process customer documents and change orders",
+      "Prepare invoices and payment tracking",
+      "Archive closeout documents and project records",
+    ],
+  },
+];
+
 export const TEMPLATE_TASKS: TemplateTask[] = [
   {
     title: "Project Kickoff & Requirements",

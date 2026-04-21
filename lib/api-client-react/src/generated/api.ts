@@ -19,9 +19,11 @@ import type {
 import type {
   ActivityItem,
   AddAttachmentBody,
+  AddProjectAttachmentBody,
   AddTaskRelationBody,
   CalendarEvent,
   CreateDepartmentBody,
+  CreateKanbanColumnBody,
   CreateProjectBody,
   CreateTaskBody,
   DashboardSummary,
@@ -32,18 +34,22 @@ import type {
   GetKanbanColumnsParams,
   HealthStatus,
   KanbanColumn,
+  KanbanColumnConfig,
   ListTasksParams,
   MarkAllNotificationsRead200,
   Notification,
   ParsePdfBody,
   ParsedPdfData,
   Project,
+  ProjectAllAttachments,
+  ProjectAttachment,
   ProjectSummary,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
   Task,
   TaskAttachment,
   UpdateDepartmentBody,
+  UpdateKanbanColumnBody,
   UpdateMeBody,
   UpdateProjectBody,
   UpdateTaskBody,
@@ -927,6 +933,375 @@ export function useGetProjectSummary<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetProjectSummaryQueryOptions(projectId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List project attachments
+ */
+export const getListProjectAttachmentsUrl = (projectId: number) => {
+  return `/api/projects/${projectId}/attachments`;
+};
+
+export const listProjectAttachments = async (
+  projectId: number,
+  options?: RequestInit,
+): Promise<ProjectAttachment[]> => {
+  return customFetch<ProjectAttachment[]>(
+    getListProjectAttachmentsUrl(projectId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListProjectAttachmentsQueryKey = (projectId: number) => {
+  return [`/api/projects/${projectId}/attachments`] as const;
+};
+
+export const getListProjectAttachmentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProjectAttachments>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProjectAttachments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListProjectAttachmentsQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProjectAttachments>>
+  > = ({ signal }) =>
+    listProjectAttachments(projectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProjectAttachments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListProjectAttachmentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProjectAttachments>>
+>;
+export type ListProjectAttachmentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List project attachments
+ */
+
+export function useListProjectAttachments<
+  TData = Awaited<ReturnType<typeof listProjectAttachments>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listProjectAttachments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListProjectAttachmentsQueryOptions(
+    projectId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a project attachment
+ */
+export const getAddProjectAttachmentUrl = (projectId: number) => {
+  return `/api/projects/${projectId}/attachments`;
+};
+
+export const addProjectAttachment = async (
+  projectId: number,
+  addProjectAttachmentBody: AddProjectAttachmentBody,
+  options?: RequestInit,
+): Promise<ProjectAttachment> => {
+  return customFetch<ProjectAttachment>(getAddProjectAttachmentUrl(projectId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addProjectAttachmentBody),
+  });
+};
+
+export const getAddProjectAttachmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProjectAttachment>>,
+    TError,
+    { projectId: number; data: BodyType<AddProjectAttachmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addProjectAttachment>>,
+  TError,
+  { projectId: number; data: BodyType<AddProjectAttachmentBody> },
+  TContext
+> => {
+  const mutationKey = ["addProjectAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addProjectAttachment>>,
+    { projectId: number; data: BodyType<AddProjectAttachmentBody> }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return addProjectAttachment(projectId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddProjectAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addProjectAttachment>>
+>;
+export type AddProjectAttachmentMutationBody =
+  BodyType<AddProjectAttachmentBody>;
+export type AddProjectAttachmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a project attachment
+ */
+export const useAddProjectAttachment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProjectAttachment>>,
+    TError,
+    { projectId: number; data: BodyType<AddProjectAttachmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addProjectAttachment>>,
+  TError,
+  { projectId: number; data: BodyType<AddProjectAttachmentBody> },
+  TContext
+> => {
+  return useMutation(getAddProjectAttachmentMutationOptions(options));
+};
+
+/**
+ * @summary Delete a project attachment
+ */
+export const getDeleteProjectAttachmentUrl = (
+  projectId: number,
+  attachmentId: number,
+) => {
+  return `/api/projects/${projectId}/attachments/${attachmentId}`;
+};
+
+export const deleteProjectAttachment = async (
+  projectId: number,
+  attachmentId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(
+    getDeleteProjectAttachmentUrl(projectId, attachmentId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteProjectAttachmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProjectAttachment>>,
+    TError,
+    { projectId: number; attachmentId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteProjectAttachment>>,
+  TError,
+  { projectId: number; attachmentId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteProjectAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteProjectAttachment>>,
+    { projectId: number; attachmentId: number }
+  > = (props) => {
+    const { projectId, attachmentId } = props ?? {};
+
+    return deleteProjectAttachment(projectId, attachmentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteProjectAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteProjectAttachment>>
+>;
+
+export type DeleteProjectAttachmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a project attachment
+ */
+export const useDeleteProjectAttachment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProjectAttachment>>,
+    TError,
+    { projectId: number; attachmentId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteProjectAttachment>>,
+  TError,
+  { projectId: number; attachmentId: number },
+  TContext
+> => {
+  return useMutation(getDeleteProjectAttachmentMutationOptions(options));
+};
+
+/**
+ * @summary Get project and task attachments grouped for a project
+ */
+export const getGetProjectAllAttachmentsUrl = (projectId: number) => {
+  return `/api/projects/${projectId}/all-attachments`;
+};
+
+export const getProjectAllAttachments = async (
+  projectId: number,
+  options?: RequestInit,
+): Promise<ProjectAllAttachments> => {
+  return customFetch<ProjectAllAttachments>(
+    getGetProjectAllAttachmentsUrl(projectId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProjectAllAttachmentsQueryKey = (projectId: number) => {
+  return [`/api/projects/${projectId}/all-attachments`] as const;
+};
+
+export const getGetProjectAllAttachmentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProjectAllAttachments>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProjectAllAttachments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProjectAllAttachmentsQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProjectAllAttachments>>
+  > = ({ signal }) =>
+    getProjectAllAttachments(projectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProjectAllAttachments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProjectAllAttachmentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProjectAllAttachments>>
+>;
+export type GetProjectAllAttachmentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get project and task attachments grouped for a project
+ */
+
+export function useGetProjectAllAttachments<
+  TData = Awaited<ReturnType<typeof getProjectAllAttachments>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProjectAllAttachments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProjectAllAttachmentsQueryOptions(
+    projectId,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -2916,6 +3291,339 @@ export function useGetKanbanColumns<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get configurable kanban columns
+ */
+export const getGetKanbanColumnConfigsUrl = () => {
+  return `/api/kanban/columns`;
+};
+
+export const getKanbanColumnConfigs = async (
+  options?: RequestInit,
+): Promise<KanbanColumnConfig[]> => {
+  return customFetch<KanbanColumnConfig[]>(getGetKanbanColumnConfigsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetKanbanColumnConfigsQueryKey = () => {
+  return [`/api/kanban/columns`] as const;
+};
+
+export const getGetKanbanColumnConfigsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getKanbanColumnConfigs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getKanbanColumnConfigs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetKanbanColumnConfigsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getKanbanColumnConfigs>>
+  > = ({ signal }) => getKanbanColumnConfigs({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getKanbanColumnConfigs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetKanbanColumnConfigsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getKanbanColumnConfigs>>
+>;
+export type GetKanbanColumnConfigsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get configurable kanban columns
+ */
+
+export function useGetKanbanColumnConfigs<
+  TData = Awaited<ReturnType<typeof getKanbanColumnConfigs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getKanbanColumnConfigs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetKanbanColumnConfigsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a kanban column
+ */
+export const getCreateKanbanColumnUrl = () => {
+  return `/api/kanban/columns`;
+};
+
+export const createKanbanColumn = async (
+  createKanbanColumnBody: CreateKanbanColumnBody,
+  options?: RequestInit,
+): Promise<KanbanColumnConfig> => {
+  return customFetch<KanbanColumnConfig>(getCreateKanbanColumnUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createKanbanColumnBody),
+  });
+};
+
+export const getCreateKanbanColumnMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createKanbanColumn>>,
+    TError,
+    { data: BodyType<CreateKanbanColumnBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createKanbanColumn>>,
+  TError,
+  { data: BodyType<CreateKanbanColumnBody> },
+  TContext
+> => {
+  const mutationKey = ["createKanbanColumn"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createKanbanColumn>>,
+    { data: BodyType<CreateKanbanColumnBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createKanbanColumn(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateKanbanColumnMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createKanbanColumn>>
+>;
+export type CreateKanbanColumnMutationBody = BodyType<CreateKanbanColumnBody>;
+export type CreateKanbanColumnMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a kanban column
+ */
+export const useCreateKanbanColumn = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createKanbanColumn>>,
+    TError,
+    { data: BodyType<CreateKanbanColumnBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createKanbanColumn>>,
+  TError,
+  { data: BodyType<CreateKanbanColumnBody> },
+  TContext
+> => {
+  return useMutation(getCreateKanbanColumnMutationOptions(options));
+};
+
+/**
+ * @summary Update a kanban column
+ */
+export const getUpdateKanbanColumnUrl = (id: number) => {
+  return `/api/kanban/columns/${id}`;
+};
+
+export const updateKanbanColumn = async (
+  id: number,
+  updateKanbanColumnBody: UpdateKanbanColumnBody,
+  options?: RequestInit,
+): Promise<KanbanColumnConfig> => {
+  return customFetch<KanbanColumnConfig>(getUpdateKanbanColumnUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateKanbanColumnBody),
+  });
+};
+
+export const getUpdateKanbanColumnMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateKanbanColumn>>,
+    TError,
+    { id: number; data: BodyType<UpdateKanbanColumnBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateKanbanColumn>>,
+  TError,
+  { id: number; data: BodyType<UpdateKanbanColumnBody> },
+  TContext
+> => {
+  const mutationKey = ["updateKanbanColumn"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateKanbanColumn>>,
+    { id: number; data: BodyType<UpdateKanbanColumnBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateKanbanColumn(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateKanbanColumnMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateKanbanColumn>>
+>;
+export type UpdateKanbanColumnMutationBody = BodyType<UpdateKanbanColumnBody>;
+export type UpdateKanbanColumnMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a kanban column
+ */
+export const useUpdateKanbanColumn = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateKanbanColumn>>,
+    TError,
+    { id: number; data: BodyType<UpdateKanbanColumnBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateKanbanColumn>>,
+  TError,
+  { id: number; data: BodyType<UpdateKanbanColumnBody> },
+  TContext
+> => {
+  return useMutation(getUpdateKanbanColumnMutationOptions(options));
+};
+
+/**
+ * @summary Delete a kanban column
+ */
+export const getDeleteKanbanColumnUrl = (id: number) => {
+  return `/api/kanban/columns/${id}`;
+};
+
+export const deleteKanbanColumn = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteKanbanColumnUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteKanbanColumnMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteKanbanColumn>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteKanbanColumn>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteKanbanColumn"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteKanbanColumn>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteKanbanColumn(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteKanbanColumnMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteKanbanColumn>>
+>;
+
+export type DeleteKanbanColumnMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a kanban column
+ */
+export const useDeleteKanbanColumn = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteKanbanColumn>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteKanbanColumn>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteKanbanColumnMutationOptions(options));
+};
 
 /**
  * @summary Get calendar events (tasks with dates) for Gantt view
