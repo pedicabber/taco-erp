@@ -126,7 +126,8 @@ export type ProjectSummaryTasksByDepartmentItem = {
 };
 
 export interface ProjectSummary {
-  projectId: number;
+  /** @nullable */
+  projectId: number | null;
   totalTasks: number;
   tasksByStatus: ProjectSummaryTasksByStatusItem[];
   tasksByDepartment: ProjectSummaryTasksByDepartmentItem[];

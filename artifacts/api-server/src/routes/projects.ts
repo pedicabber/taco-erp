@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { parsePdfText } from "../lib/pdfParseAdapter";
-import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable, projectAttachmentsTable, usersTable, settingsTable } from "@workspace/db";
+import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable, projectAttachmentsTable, usersTable, settingsTable, inventoryAllocationsTable } from "@workspace/db";
 import { eq, inArray, isNull } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -738,6 +738,8 @@ router.delete("/projects/:projectId", requireAdmin, async (req, res): Promise<vo
   await db.delete(tasksTable).where(eq(tasksTable.projectId, id));
   // Delete all departments for the project
   await db.delete(departmentsTable).where(eq(departmentsTable.projectId, id));
+  // Delete inventory allocations so released parts become available again
+  await db.delete(inventoryAllocationsTable).where(eq(inventoryAllocationsTable.projectId, id));
   // Delete the project itself
   await db.delete(projectsTable).where(eq(projectsTable.id, id));
   res.sendStatus(204);

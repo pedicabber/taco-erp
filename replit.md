@@ -51,6 +51,7 @@ REST API server.
 - `task_attachments` — Object storage file references
 - `notifications` — User notifications (overdue/assigned/timer_alert/etc.)
 - `activity_log` — Audit log of task actions
+- `inventory_items` / `inventory_allocations` — Inventory quantities and project allocations; allocations are removed when a project is deleted so parts become available again
 
 ## Key Commands
 
@@ -71,6 +72,7 @@ REST API server.
 - **Notifications**: Overdue, assigned, timer alerts; mark read/all read
 - **File Uploads**: Attach files to tasks via object storage presigned URLs
 - **Project Attachments**: Project-level files, including quote PDFs, stored via object storage and visible alongside task attachments
+- **Inventory**: Allocations are computed from live allocation rows and released automatically when projects are deleted
 - **Followers**: Follow tasks to receive notifications
 - **Activity Feed**: Recent actions dashboard
 

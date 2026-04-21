@@ -178,7 +178,7 @@ export const GetProjectSummaryParams = zod.object({
 });
 
 export const GetProjectSummaryResponse = zod.object({
-  projectId: zod.number(),
+  projectId: zod.number().nullable(),
   totalTasks: zod.number(),
   tasksByStatus: zod.array(
     zod.object({

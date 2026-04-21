@@ -9,7 +9,8 @@ import type { ProjectSummaryTasksByDepartmentItem } from "./projectSummaryTasksB
 import type { ProjectSummaryTasksByStatusItem } from "./projectSummaryTasksByStatusItem";
 
 export interface ProjectSummary {
-  projectId: number;
+  /** @nullable */
+  projectId: number | null;
   totalTasks: number;
   tasksByStatus: ProjectSummaryTasksByStatusItem[];
   tasksByDepartment: ProjectSummaryTasksByDepartmentItem[];

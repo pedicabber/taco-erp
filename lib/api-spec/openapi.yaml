@@ -1158,7 +1158,7 @@ components:
       type: object
       properties:
         projectId:
-          type: integer
+          type: ["integer", "null"]
         totalTasks:
           type: integer
         tasksByStatus:
