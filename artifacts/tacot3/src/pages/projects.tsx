@@ -125,7 +125,7 @@ function NewProjectDialog({
     const fd = new FormData();
     fd.append("file", file);
     try {
-      const r = await apiClient.post("/projects/parse-pdf", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const r = await apiClient.post("/projects/parse-pdf", fd);
       const data = r.data;
       setForm(prev => ({
         ...prev,
