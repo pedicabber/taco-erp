@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
-import type { Project } from "@/lib/types";
+import type { Project, Department } from "@/lib/types";
 import {
   Plus, FolderKanban, FileText, Search, Loader2, ChevronRight,
   Building2, Calendar, Eraser, Info, DollarSign,
-  ChevronUp, ChevronDown, Minus, Zap, X,
+  ChevronUp, ChevronDown, Minus, Zap, X, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,14 @@ const EMPTY_FORM = {
   deliveryDate: "", scopeOfWork: "",
 };
 
+interface TemplateTask {
+  id: number;
+  title: string;
+  sortOrder: number;
+  departmentId: number;
+  createdAt: string;
+}
+
 // ── New Project Dialog ──────────────────────────────────────────────────────
 function NewProjectDialog({
   open,
@@ -66,10 +74,43 @@ function NewProjectDialog({
   const [form, setForm] = useState(EMPTY_FORM);
   const [file, setFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set());
+  const [expandedDepts, setExpandedDepts] = useState<Set<number>>(new Set());
+
+  const { data: settings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["settings"],
+    queryFn: () => apiClient.get("/settings").then(r => r.data),
+    enabled: open,
+  });
+
+  const { data: departments = [] } = useQuery<Department[]>({
+    queryKey: ["departments", "global"],
+    queryFn: () => apiClient.get("/departments?global=true").then(r => r.data),
+    enabled: open,
+  });
+
+  const { data: templates = [] } = useQuery<TemplateTask[]>({
+    queryKey: ["task-templates"],
+    queryFn: () => apiClient.get("/task-templates").then(r => r.data),
+    enabled: open,
+  });
+
+  const autoPopulate = settings["auto_populate_tasks"] !== "false";
+
+  // Group templates by departmentId
+  const templatesByDept = new Map<number, TemplateTask[]>();
+  for (const t of templates) {
+    if (!templatesByDept.has(t.departmentId)) templatesByDept.set(t.departmentId, []);
+    templatesByDept.get(t.departmentId)!.push(t);
+  }
 
   function clearForm() {
     setForm(EMPTY_FORM);
     setFile(null);
+    setStep(1);
+    setSelectedTaskIds(new Set());
+    setExpandedDepts(new Set());
   }
 
   function handleClose(v: boolean) {
@@ -77,13 +118,52 @@ function NewProjectDialog({
     onOpenChange(v);
   }
 
+  function initStep2() {
+    // Pre-select all tasks
+    setSelectedTaskIds(new Set(templates.map(t => t.id)));
+    // Expand all departments
+    setExpandedDepts(new Set(departments.map(d => d.id)));
+    setStep(2);
+  }
+
+  function toggleTask(id: number) {
+    setSelectedTaskIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleDept(deptId: number) {
+    const deptTaskIds = (templatesByDept.get(deptId) ?? []).map(t => t.id);
+    const allSelected = deptTaskIds.every(id => selectedTaskIds.has(id));
+    setSelectedTaskIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        deptTaskIds.forEach(id => next.delete(id));
+      } else {
+        deptTaskIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  }
+
+  function toggleExpandDept(deptId: number) {
+    setExpandedDepts(prev => {
+      const next = new Set(prev);
+      if (next.has(deptId)) next.delete(deptId);
+      else next.add(deptId);
+      return next;
+    });
+  }
+
   const mutation = useMutation({
-    mutationFn: (data: typeof form) =>
-      apiClient.post("/projects", data).then(r => r.data),
+    mutationFn: (payload: typeof form & { selectedTaskIds?: number[] }) =>
+      apiClient.post("/projects", payload).then(r => r.data),
     onSuccess: async (data) => {
       qc.invalidateQueries({ queryKey: ["projects"] });
 
-      // Auto-pin the PDF that was used to create this project
       if (file && file.type === "application/pdf") {
         try {
           const urlRes = await apiClient.post("/storage/uploads/request-url", {
@@ -107,7 +187,7 @@ function NewProjectDialog({
             });
           }
         } catch {
-          // Non-critical — project still created, just skip attachment
+          // Non-critical — project still created, skip attachment
         }
       }
 
@@ -118,6 +198,14 @@ function NewProjectDialog({
     },
     onError: () => toast({ title: "Failed to create project", variant: "destructive" }),
   });
+
+  function handleSubmit() {
+    if (autoPopulate) {
+      mutation.mutate({ ...form });
+    } else {
+      mutation.mutate({ ...form, selectedTaskIds: Array.from(selectedTaskIds) });
+    }
+  }
 
   async function handlePdfParse() {
     if (!file) return;
@@ -146,106 +234,205 @@ function NewProjectDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderKanban className="w-5 h-5" />
-            New Project
+            {step === 1 ? "New Project" : "Select Tasks"}
           </DialogTitle>
         </DialogHeader>
-        <ScrollArea className="flex-1 -mx-1 px-1">
-          <div className="space-y-4 pt-2 pb-2">
-            {/* PDF import */}
-            <div className="flex items-center gap-2 p-3 rounded-lg border-2 border-dashed border-border bg-muted/30">
-              <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <input
-                  type="file"
-                  accept=".pdf"
-                  className="w-full text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-primary file:text-primary-foreground cursor-pointer"
-                  onChange={e => setFile(e.target.files?.[0] ?? null)}
-                />
+
+        {step === 1 ? (
+          <>
+            <ScrollArea className="flex-1 -mx-1 px-1">
+              <div className="space-y-4 pt-2 pb-2">
+                {/* PDF import */}
+                <div className="flex items-center gap-2 p-3 rounded-lg border-2 border-dashed border-border bg-muted/30">
+                  <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="w-full text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-primary file:text-primary-foreground cursor-pointer"
+                      onChange={e => setFile(e.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                  <Button size="sm" variant="outline" onClick={handlePdfParse} disabled={!file || parsing}>
+                    {parsing ? <Loader2 className="w-3 h-3 animate-spin" /> : "Parse PDF"}
+                  </Button>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div className="col-span-full">
+                    <Label>Project Name *</Label>
+                    <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Custom Welding Fixture" />
+                  </div>
+                  <div>
+                    <Label>Company</Label>
+                    <Input value={form.company} onChange={e => setForm(p => ({ ...p, company: e.target.value }))} placeholder="Acme Manufacturing Co." />
+                  </div>
+                  <div>
+                    <Label>Quote / Project ID</Label>
+                    <Input value={form.projectId} onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))} placeholder="QT-2024-0042" />
+                  </div>
+                  <div className="col-span-full">
+                    <Label>Address</Label>
+                    <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="742 Evergreen Terrace, Springfield, CA 90210" />
+                  </div>
+                  <div>
+                    <Label>Contact Name</Label>
+                    <Input value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} placeholder="Jane Smith" />
+                  </div>
+                  <div>
+                    <Label>Contact Phone</Label>
+                    <Input value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} placeholder="555-867-5309" />
+                  </div>
+                  <div>
+                    <Label>Contact Email</Label>
+                    <Input value={form.contactEmail} onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))} placeholder="jsmith@acmemfg.com" />
+                  </div>
+                  <div>
+                    <Label>Total Price</Label>
+                    <Input value={form.totalPrice} onChange={e => setForm(p => ({ ...p, totalPrice: e.target.value }))} placeholder="$85,000.00" />
+                  </div>
+                  <div>
+                    <Label>Start Date</Label>
+                    <Input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label>Delivery Date</Label>
+                    <Input type="date" value={form.deliveryDate} onChange={e => setForm(p => ({ ...p, deliveryDate: e.target.value }))} />
+                  </div>
+                  <div className="col-span-full">
+                    <Label>Brief Description</Label>
+                    <Textarea
+                      value={form.description}
+                      onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                      placeholder="High-level description shown on project card..."
+                      rows={2}
+                    />
+                  </div>
+                  <div className="col-span-full">
+                    <Label>Scope of Work</Label>
+                    <Textarea
+                      value={form.scopeOfWork}
+                      onChange={e => setForm(p => ({ ...p, scopeOfWork: e.target.value }))}
+                      placeholder="Detailed scope parsed from the quote (line items, bullet points)..."
+                      rows={4}
+                    />
+                  </div>
+                </div>
               </div>
-              <Button size="sm" variant="outline" onClick={handlePdfParse} disabled={!file || parsing}>
-                {parsing ? <Loader2 className="w-3 h-3 animate-spin" /> : "Parse PDF"}
+            </ScrollArea>
+
+            <div className="flex items-center justify-between pt-3 border-t">
+              <Button variant="ghost" size="sm" onClick={clearForm} className="text-muted-foreground">
+                <Eraser className="w-4 h-4 mr-1.5" />
+                Clear
               </Button>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="col-span-full">
-                <Label>Project Name *</Label>
-                <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Custom Welding Fixture" />
-              </div>
-              <div>
-                <Label>Company</Label>
-                <Input value={form.company} onChange={e => setForm(p => ({ ...p, company: e.target.value }))} placeholder="Acme Manufacturing Co." />
-              </div>
-              <div>
-                <Label>Quote / Project ID</Label>
-                <Input value={form.projectId} onChange={e => setForm(p => ({ ...p, projectId: e.target.value }))} placeholder="QT-2024-0042" />
-              </div>
-              <div className="col-span-full">
-                <Label>Address</Label>
-                <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="742 Evergreen Terrace, Springfield, CA 90210" />
-              </div>
-              <div>
-                <Label>Contact Name</Label>
-                <Input value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} placeholder="Jane Smith" />
-              </div>
-              <div>
-                <Label>Contact Phone</Label>
-                <Input value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} placeholder="555-867-5309" />
-              </div>
-              <div>
-                <Label>Contact Email</Label>
-                <Input value={form.contactEmail} onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))} placeholder="jsmith@acmemfg.com" />
-              </div>
-              <div>
-                <Label>Total Price</Label>
-                <Input value={form.totalPrice} onChange={e => setForm(p => ({ ...p, totalPrice: e.target.value }))} placeholder="$85,000.00" />
-              </div>
-              <div>
-                <Label>Start Date</Label>
-                <Input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Delivery Date</Label>
-                <Input type="date" value={form.deliveryDate} onChange={e => setForm(p => ({ ...p, deliveryDate: e.target.value }))} />
-              </div>
-              <div className="col-span-full">
-                <Label>Brief Description</Label>
-                <Textarea
-                  value={form.description}
-                  onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                  placeholder="High-level description shown on project card..."
-                  rows={2}
-                />
-              </div>
-              <div className="col-span-full">
-                <Label>Scope of Work</Label>
-                <Textarea
-                  value={form.scopeOfWork}
-                  onChange={e => setForm(p => ({ ...p, scopeOfWork: e.target.value }))}
-                  placeholder="Detailed scope parsed from the quote (line items, bullet points)..."
-                  rows={4}
-                />
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+                {autoPopulate ? (
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={!form.name || mutation.isPending}
+                  >
+                    {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Create Project
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={initStep2}
+                    disabled={!form.name}
+                  >
+                    Select Tasks
+                    <ChevronRight className="w-4 h-4 ml-1.5" />
+                  </Button>
+                )}
               </div>
             </div>
-          </div>
-        </ScrollArea>
+          </>
+        ) : (
+          <>
+            <div className="text-xs text-muted-foreground pb-1">
+              Choose which tasks to create for this project. All tasks are pre-selected.
+            </div>
+            <ScrollArea className="flex-1 -mx-1 px-1">
+              <div className="space-y-2 pt-1 pb-2">
+                {departments.map(dept => {
+                  const deptTasks = templatesByDept.get(dept.id) ?? [];
+                  if (deptTasks.length === 0) return null;
+                  const allChecked = deptTasks.every(t => selectedTaskIds.has(t.id));
+                  const someChecked = deptTasks.some(t => selectedTaskIds.has(t.id));
+                  const isExpanded = expandedDepts.has(dept.id);
 
-        <div className="flex items-center justify-between pt-3 border-t">
-          <Button variant="ghost" size="sm" onClick={clearForm} className="text-muted-foreground">
-            <Eraser className="w-4 h-4 mr-1.5" />
-            Clear
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
-            <Button
-              onClick={() => mutation.mutate({ ...form })}
-              disabled={!form.name || mutation.isPending}
-            >
-              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Create Project
-            </Button>
-          </div>
-        </div>
+                  return (
+                    <div key={dept.id} className="rounded-lg border overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/40">
+                        <input
+                          type="checkbox"
+                          checked={allChecked}
+                          ref={el => { if (el) el.indeterminate = someChecked && !allChecked; }}
+                          onChange={() => toggleDept(dept.id)}
+                          className="h-4 w-4 rounded border-border cursor-pointer"
+                        />
+                        <div
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: dept.color ?? "#64748b" }}
+                        />
+                        <span className="text-sm font-semibold flex-1">{dept.name}</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 mr-1">
+                          {deptTasks.filter(t => selectedTaskIds.has(t.id)).length}/{deptTasks.length}
+                        </Badge>
+                        <button
+                          onClick={() => toggleExpandDept(dept.id)}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <ChevronRight className={cn("w-4 h-4 transition-transform", isExpanded && "rotate-90")} />
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div className="divide-y divide-border">
+                          {deptTasks.map(task => (
+                            <label
+                              key={task.id}
+                              className="flex items-center gap-3 px-4 py-2 hover:bg-muted/20 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedTaskIds.has(task.id)}
+                                onChange={() => toggleTask(task.id)}
+                                className="h-4 w-4 rounded border-border flex-shrink-0"
+                              />
+                              <span className="text-sm">{task.title}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+
+            <div className="flex items-center justify-between pt-3 border-t">
+              <Button variant="ghost" size="sm" onClick={() => setStep(1)} className="text-muted-foreground">
+                Back
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={mutation.isPending}
+                >
+                  {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Create Project
+                  {selectedTaskIds.size > 0 && (
+                    <Badge variant="secondary" className="ml-2 text-[10px] h-4 px-1.5">
+                      {selectedTaskIds.size} tasks
+                    </Badge>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

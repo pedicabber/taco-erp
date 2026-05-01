@@ -1,12 +1,11 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { parsePdfText } from "../lib/pdfParseAdapter";
-import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable, projectAttachmentsTable, usersTable, settingsTable, inventoryAllocationsTable } from "@workspace/db";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { db, projectsTable, departmentsTable, tasksTable, taskAttachmentsTable, taskRelationsTable, projectAttachmentsTable, usersTable, settingsTable, inventoryAllocationsTable, taskTemplatesTable } from "@workspace/db";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
-import { DEPARTMENT_TASKS } from "../templateTasks";
 import {
   CreateProjectBody,
   GetProjectResponse,
@@ -124,47 +123,55 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
     createdById: user.id,
   }).returning();
 
-  // Fetch all global (non-project-specific) departments once
-  const globalDepts = await db
+  // Read auto_populate_tasks setting
+  const settingsRows = await db.select().from(settingsTable);
+  const autoPopulate = !settingsRows.some(s => s.key === "auto_populate_tasks" && s.value === "false");
+
+  // Fetch all templates from DB
+  const allTemplates = await db
     .select()
-    .from(departmentsTable)
-    .where(isNull(departmentsTable.projectId));
+    .from(taskTemplatesTable)
+    .orderBy(asc(taskTemplatesTable.sortOrder));
 
-  const deptMap = new Map(globalDepts.map(d => [d.name, d]));
+  // Determine which templates to apply
+  const { selectedTaskIds } = req.body as { selectedTaskIds?: number[] };
+  const templatesToApply = autoPopulate
+    ? allTemplates
+    : Array.isArray(selectedTaskIds) && selectedTaskIds.length > 0
+      ? allTemplates.filter(t => selectedTaskIds.includes(t.id))
+      : [];
 
-  for (const { dept: deptName, color, tasks } of DEPARTMENT_TASKS) {
-    // Find or create the global department
-    let deptRecord = deptMap.get(deptName);
-    if (!deptRecord) {
-      const [created] = await db.insert(departmentsTable).values({
-        name: deptName,
-        color,
-        projectId: null,
-      }).returning();
-      deptRecord = created;
-      deptMap.set(deptName, created);
-    } else if (deptRecord.color !== color) {
-      const [updatedDept] = await db.update(departmentsTable)
-        .set({ color })
-        .where(eq(departmentsTable.id, deptRecord.id))
-        .returning();
-      deptRecord = updatedDept;
-      deptMap.set(deptName, updatedDept);
+  if (templatesToApply.length > 0) {
+    const globalDepts = await db
+      .select()
+      .from(departmentsTable)
+      .where(isNull(departmentsTable.projectId));
+    const deptById = new Map(globalDepts.map(d => [d.id, d]));
+
+    // Group templates by departmentId
+    const byDept = new Map<number, typeof templatesToApply>();
+    for (const t of templatesToApply) {
+      if (!byDept.has(t.departmentId)) byDept.set(t.departmentId, []);
+      byDept.get(t.departmentId)!.push(t);
     }
 
-    for (const title of tasks) {
-      const timing = getDepartmentTaskTiming(project, deptName);
-      await db.insert(tasksTable).values({
-        title,
-        status: "backlog",
-        priority: "medium",
-        projectId: project.id,
-        departmentId: deptRecord.id,
-        assignerId: user.id,
-        elapsedSeconds: 0,
-        timerRunning: false,
-        ...timing,
-      });
+    for (const [deptId, tasks] of byDept.entries()) {
+      const deptRecord = deptById.get(deptId);
+      if (!deptRecord) continue;
+      for (const task of tasks) {
+        const timing = getDepartmentTaskTiming(project, deptRecord.name);
+        await db.insert(tasksTable).values({
+          title: task.title,
+          status: "backlog",
+          priority: "medium",
+          projectId: project.id,
+          departmentId: deptRecord.id,
+          assignerId: user.id,
+          elapsedSeconds: 0,
+          timerRunning: false,
+          ...timing,
+        });
+      }
     }
   }
 
