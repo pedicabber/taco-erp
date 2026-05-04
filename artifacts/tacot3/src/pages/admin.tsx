@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useUpload } from "@workspace/object-storage-web";
 import { getApiUrl } from "@/lib/apiClient";
 import { Upload } from "lucide-react";
 
@@ -76,17 +75,9 @@ function AvatarUploadField({
 }) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const { uploadFile, isUploading } = useUpload({
-    basePath: getApiUrl("/storage"),
-    onSuccess: response => {
-      onUploaded(`${getApiUrl("/storage")}${response.objectPath}`);
-    },
-    onError: err => {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-    },
-  });
+  const [isUploading, setIsUploading] = useState(false);
 
-  function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -108,7 +99,39 @@ function AvatarUploadField({
       return;
     }
 
-    void uploadFile(file);
+    setIsUploading(true);
+    try {
+      // Step 1: request a presigned URL via apiClient so Clerk session
+      // cookies are included (withCredentials: true).
+      const { data } = await apiClient.post<{
+        uploadURL: string;
+        objectPath: string;
+      }>("/storage/uploads/request-url", {
+        name: file.name,
+        size: file.size,
+        contentType: file.type || "application/octet-stream",
+      });
+
+      // Step 2: PUT the file bytes directly to the presigned URL.
+      // Cross-origin to the storage provider — must NOT send credentials.
+      const putRes = await fetch(data.uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+      });
+      if (!putRes.ok) {
+        throw new Error(`Storage upload failed (${putRes.status})`);
+      }
+
+      onUploaded(`${getApiUrl("/storage")}${data.objectPath}`);
+    } catch (err) {
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        ?? (err instanceof Error ? err.message : "Upload failed");
+      toast({ title: "Upload failed", description: message, variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   return (
