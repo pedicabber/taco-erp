@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { apiClient } from "@/lib/apiClient";
@@ -33,6 +33,12 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useUpload } from "@workspace/object-storage-web";
+import { getApiUrl } from "@/lib/apiClient";
+import { Upload } from "lucide-react";
+
+const AVATAR_ACCEPT = "image/jpeg,image/png,image/webp";
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 
 interface UserRow {
   id: number;
@@ -57,6 +63,94 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   on_hold: "outline",
   cancelled: "destructive",
 };
+
+// ── Avatar Upload Field ──────────────────────────────────────────────────────
+function AvatarUploadField({
+  avatarUrl,
+  name,
+  onUploaded,
+}: {
+  avatarUrl: string;
+  name: string;
+  onUploaded: (url: string) => void;
+}) {
+  const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { uploadFile, isUploading } = useUpload({
+    basePath: getApiUrl("/storage"),
+    onSuccess: response => {
+      onUploaded(`${getApiUrl("/storage")}${response.objectPath}`);
+    },
+    onError: err => {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (!AVATAR_ACCEPT.split(",").includes(file.type)) {
+      toast({
+        title: "Unsupported file type",
+        description: "Please choose a JPG, PNG, or WebP image.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (file.size > AVATAR_MAX_BYTES) {
+      toast({
+        title: "File too large",
+        description: "Maximum size is 5 MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    void uploadFile(file);
+  }
+
+  return (
+    <div>
+      <Label className="text-xs text-muted-foreground mb-2 block">Avatar</Label>
+      <div className="flex items-center gap-3">
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={name}
+            className="w-16 h-16 rounded-full object-cover flex-shrink-0 border"
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 text-lg font-semibold text-primary border">
+            {name?.[0]?.toUpperCase() ?? "?"}
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <input
+            ref={fileRef}
+            type="file"
+            accept={AVATAR_ACCEPT}
+            className="hidden"
+            onChange={handlePick}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isUploading}
+            onClick={() => fileRef.current?.click()}
+          >
+            {isUploading
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading…</>
+              : <><Upload className="w-4 h-4 mr-2" /> Upload Image</>}
+          </Button>
+          <p className="text-[10px] text-muted-foreground mt-1.5">JPG, PNG, or WebP — max 5 MB</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Edit User Dialog ──────────────────────────────────────────────────────────
 function EditUserDialog({
@@ -187,14 +281,11 @@ function EditUserDialog({
               </Select>
             </div>
 
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">Avatar URL</Label>
-              <Input
-                value={avatarUrl}
-                onChange={e => setAvatarUrl(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
+            <AvatarUploadField
+              avatarUrl={avatarUrl}
+              name={name}
+              onUploaded={url => setAvatarUrl(url)}
+            />
 
             <div>
               <Label className="text-xs text-muted-foreground mb-2 block">

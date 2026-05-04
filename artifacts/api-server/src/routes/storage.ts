@@ -30,8 +30,13 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
   try {
     const { name, size, contentType, taskId, projectId } = parsed.data;
 
-    // Organise uploads by task so each ticket has its own folder
-    const subDir = taskId ? `uploads/tasks/${taskId}` : projectId ? `uploads/projects/${projectId}` : "uploads";
+    // Organise uploads by context so each domain has its own folder.
+    // No task/project context => avatar upload (only other caller of this endpoint).
+    const subDir = taskId
+      ? `uploads/tasks/${taskId}`
+      : projectId
+        ? `uploads/projects/${projectId}`
+        : "uploads/avatars";
     const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL(subDir);
 
     req.log.info({ objectPath }, "Generated upload URL");
@@ -108,8 +113,27 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
         .where(eq(taskAttachmentsTable.objectPath, objectPath));
 
       if (!attachment) {
-        res.status(404).json({ error: "Object not found" });
-        return;
+        // Avatar fallback: only allow if the object lives in the dedicated
+        // avatars namespace. This prevents a user from forging avatarUrl to
+        // point at an arbitrary private object and gaining access through
+        // this fallback path.
+        if (!objectPath.startsWith("/objects/uploads/avatars/")) {
+          res.status(404).json({ error: "Object not found" });
+          return;
+        }
+
+        // Match by suffix so the check is independent of any path prefix
+        // (e.g. when the artifact is mounted under a sub-path in production).
+        const servingSuffix = `/storage${objectPath}`;
+        const candidates = await db
+          .select({ id: usersTable.id, avatarUrl: usersTable.avatarUrl })
+          .from(usersTable);
+        const owns = candidates.some(u => u.avatarUrl?.endsWith(servingSuffix));
+
+        if (!owns) {
+          res.status(404).json({ error: "Object not found" });
+          return;
+        }
       }
     }
 

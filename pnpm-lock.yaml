@@ -427,6 +427,21 @@ importers:
       '@clerk/react':
         specifier: ^6.2.0
         version: 6.2.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@uppy/aws-s3':
+        specifier: ^5.1.0
+        version: 5.1.0(@uppy/core@5.2.0)
+      '@uppy/core':
+        specifier: ^5.2.0
+        version: 5.2.0
+      '@uppy/dashboard':
+        specifier: ^5.1.1
+        version: 5.1.1(@uppy/core@5.2.0)
+      '@uppy/react':
+        specifier: ^5.2.0
+        version: 5.2.0(@uppy/core@5.2.0)(@uppy/dashboard@5.1.1(@uppy/core@5.2.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@workspace/object-storage-web':
+        specifier: workspace:*
+        version: link:../../lib/object-storage-web
       axios:
         specifier: ^1.15.0
         version: 1.15.0

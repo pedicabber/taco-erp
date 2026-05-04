@@ -8,6 +8,20 @@ import { UpdateMeBody, UpdateMeResponse, ListUsersResponse, GetUserResponse } fr
 
 const router: IRouter = Router();
 
+/**
+ * Avatar URLs may be either:
+ *   - empty/null (cleared)
+ *   - a path produced by our object storage avatar upload flow, which always
+ *     contains "/storage/objects/uploads/avatars/" regardless of any artifact
+ *     base-path prefix.
+ * Anything else is rejected to prevent users pointing avatarUrl at arbitrary
+ * private objects and bypassing the storage serve authorization.
+ */
+function isAllowedAvatarUrl(url: string | null | undefined): boolean {
+  if (!url) return true;
+  return url.includes("/storage/objects/uploads/avatars/");
+}
+
 function buildUserProfile(
   user: typeof usersTable.$inferSelect,
   departmentName: string | null,
@@ -64,6 +78,11 @@ router.patch("/users/me", requireAuth, async (req: AuthenticatedRequest, res): P
   const parsed = UpdateMeBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  if (parsed.data.avatarUrl !== undefined && !isAllowedAvatarUrl(parsed.data.avatarUrl)) {
+    res.status(400).json({ error: "Invalid avatar URL." });
     return;
   }
 
@@ -126,6 +145,11 @@ router.patch("/users/:userId", requireAdmin, async (req, res): Promise<void> => 
     avatarUrl?: string | null;
     departmentIds?: number[];
   };
+
+  if (avatarUrl !== undefined && !isAllowedAvatarUrl(avatarUrl)) {
+    res.status(400).json({ error: "Invalid avatar URL." });
+    return;
+  }
 
   const updates: Partial<typeof usersTable.$inferInsert> = {};
   if (role !== undefined) updates.role = role;
