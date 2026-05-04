@@ -76,6 +76,12 @@ function AvatarUploadField({
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  // Local blob preview used immediately after upload, before the avatarUrl
+  // is persisted to the DB. The served URL only becomes readable once the
+  // user row's avatarUrl is saved (the storage serve handler authorizes
+  // reads by matching against users.avatarUrl).
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const displayUrl = localPreview ?? avatarUrl;
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -123,6 +129,10 @@ function AvatarUploadField({
         throw new Error(`Storage upload failed (${putRes.status})`);
       }
 
+      // Show the just-uploaded image instantly using a local blob URL —
+      // the served URL only works after Save persists avatarUrl to the DB.
+      if (localPreview) URL.revokeObjectURL(localPreview);
+      setLocalPreview(URL.createObjectURL(file));
       onUploaded(`${getApiUrl("/storage")}${data.objectPath}`);
     } catch (err) {
       const message =
@@ -138,9 +148,9 @@ function AvatarUploadField({
     <div>
       <Label className="text-xs text-muted-foreground mb-2 block">Avatar</Label>
       <div className="flex items-center gap-3">
-        {avatarUrl ? (
+        {displayUrl ? (
           <img
-            src={avatarUrl}
+            src={displayUrl}
             alt={name}
             className="w-16 h-16 rounded-full object-cover flex-shrink-0 border"
           />
