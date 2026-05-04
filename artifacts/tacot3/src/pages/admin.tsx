@@ -28,6 +28,11 @@ import { cn, formatQuoteNum } from "@/lib/utils";
 import { Redirect } from "wouter";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface UserRow {
   id: number;
@@ -36,6 +41,7 @@ interface UserRow {
   role: string;
   departmentId: number | null;
   departmentName: string | null;
+  departmentIds: number[];
   avatarUrl: string | null;
   createdAt: string;
 }
@@ -52,43 +58,240 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   cancelled: "destructive",
 };
 
-// ── Users Tab ────────────────────────────────────────────────────────────────
-function UsersTab({ departments }: { departments: Department[] }) {
+// ── Edit User Dialog ──────────────────────────────────────────────────────────
+function EditUserDialog({
+  user,
+  departments,
+  currentUserId,
+  open,
+  onOpenChange,
+}: {
+  user: UserRow;
+  departments: Department[];
+  currentUserId: number | undefined;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  const [name, setName] = useState(user.name);
+  const [role, setRole] = useState(user.role);
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? "");
+  const [selectedDeptIds, setSelectedDeptIds] = useState<Set<number>>(new Set(user.departmentIds));
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const isSelf = currentUserId !== undefined && user.id === currentUserId;
+
+  const patchMutation = useMutation({
+    mutationFn: (patch: { name: string; role: string; avatarUrl: string | null; departmentIds: number[] }) =>
+      apiClient.patch(`/users/${user.id}`, patch).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      qc.invalidateQueries({ queryKey: ["current-user"] });
+      toast({ title: "User updated" });
+      onOpenChange(false);
+    },
+    onError: () => toast({ title: "Failed to update user", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiClient.delete(`/users/${user.id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({ title: "User removed" });
+      setDeleteConfirmOpen(false);
+      onOpenChange(false);
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to delete user";
+      toast({ title: msg, variant: "destructive" });
+    },
+  });
+
+  function toggleDept(deptId: number) {
+    setSelectedDeptIds(prev => {
+      const next = new Set(prev);
+      if (next.has(deptId)) next.delete(deptId);
+      else next.add(deptId);
+      return next;
+    });
+  }
+
+  function handleSave() {
+    patchMutation.mutate({
+      name: name.trim() || user.name,
+      role,
+      avatarUrl: avatarUrl.trim() || null,
+      departmentIds: Array.from(selectedDeptIds),
+    });
+  }
+
+  const deptMap = new Map(departments.map(d => [d.id, d]));
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 text-sm font-semibold text-primary">
+                    {name?.[0]?.toUpperCase() ?? "?"}
+                  </div>
+                )}
+                <DialogTitle className="text-base truncate">{user.name}</DialogTitle>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-destructive"
+                disabled={isSelf}
+                title={isSelf ? "You cannot delete your own account" : "Delete user"}
+                onClick={() => setDeleteConfirmOpen(true)}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">Name</Label>
+              <Input value={name} onChange={e => setName(e.target.value)} />
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">Email</Label>
+              <Input value={user.email} disabled className="bg-muted/40 cursor-not-allowed" />
+              <p className="text-[10px] text-muted-foreground mt-1">Managed by authentication provider</p>
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">Role</Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">
+                    <div className="flex items-center gap-1.5">
+                      <Shield className="w-3 h-3 text-red-500" /> Admin
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">Avatar URL</Label>
+              <Input
+                value={avatarUrl}
+                onChange={e => setAvatarUrl(e.target.value)}
+                placeholder="https://..."
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground mb-2 block">
+                Departments
+                {selectedDeptIds.size > 0 && (
+                  <span className="ml-1.5 text-foreground font-medium">
+                    ({selectedDeptIds.size} selected)
+                  </span>
+                )}
+              </Label>
+              {departments.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No departments configured.</p>
+              ) : (
+                <ScrollArea className="h-40 rounded-md border p-2">
+                  <div className="space-y-1">
+                    {departments.map(d => (
+                      <label
+                        key={d.id}
+                        className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-muted cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={selectedDeptIds.has(d.id)}
+                          onCheckedChange={() => toggleDept(d.id)}
+                          id={`dept-${d.id}`}
+                        />
+                        {d.color && (
+                          <span
+                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: d.color }}
+                          />
+                        )}
+                        <span className="text-sm">{d.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={patchMutation.isPending}>
+              {patchMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              Remove "{user.name}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this user's ERP record and all associated data.
+              Their login account will not be affected. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Remove User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+// ── Users Tab ────────────────────────────────────────────────────────────────
+function UsersTab({ departments }: { departments: Department[] }) {
+  const { data: currentUser } = useCurrentUser();
   const [search, setSearch] = useState("");
-  const [saving, setSaving] = useState<number | null>(null);
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
 
   const { data: users = [], isLoading } = useQuery<UserRow[]>({
     queryKey: ["admin-users"],
     queryFn: () => apiClient.get("/users").then(r => r.data),
   });
 
-  const patchUser = useMutation({
-    mutationFn: ({ id, patch }: { id: number; patch: { role?: string; departmentId?: number | null } }) =>
-      apiClient.patch(`/users/${id}`, patch).then(r => r.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-users"] });
-      qc.invalidateQueries({ queryKey: ["current-user"] });
-      toast({ title: "User updated" });
-    },
-    onError: () => toast({ title: "Failed to update user", variant: "destructive" }),
-    onSettled: () => setSaving(null),
-  });
-
   const filtered = users.filter(u =>
     [u.name, u.email, u.role].some(v => v?.toLowerCase().includes(search.toLowerCase()))
   );
 
-  function handleRoleChange(userId: number, role: string) {
-    setSaving(userId);
-    patchUser.mutate({ id: userId, patch: { role } });
-  }
-
-  function handleDeptChange(userId: number, departmentId: number | null) {
-    setSaving(userId);
-    patchUser.mutate({ id: userId, patch: { departmentId } });
-  }
+  const deptMap = new Map(departments.map(d => [d.id, d]));
 
   if (isLoading) {
     return (
@@ -119,81 +322,55 @@ function UsersTab({ departments }: { departments: Department[] }) {
             <tr>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Role</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Department</th>
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Departments</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Joined</th>
-              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {filtered.map(u => (
-              <tr key={u.id} className="hover:bg-muted/30 transition-colors">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    {u.avatarUrl ? (
-                      <img src={u.avatarUrl} alt={u.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-primary">
-                        {u.name?.[0]?.toUpperCase() ?? "?"}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{u.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">{u.email}</div>
-                    </div>
-                  </div>
-                </td>
+            {filtered.map(u => {
+              const deptIds = u.departmentIds ?? [];
+              const deptNames = deptIds.length > 0
+                ? deptIds.map(id => deptMap.get(id)?.name ?? "").filter(Boolean).join(", ")
+                : u.departmentName ?? "—";
 
-                <td className="px-4 py-3">
-                  <Select
-                    value={u.role}
-                    onValueChange={v => handleRoleChange(u.id, v)}
-                    disabled={saving === u.id}
-                  >
-                    <SelectTrigger className="h-8 w-28 text-xs">
-                      {saving === u.id
-                        ? <Loader2 className="w-3 h-3 animate-spin" />
-                        : <SelectValue />}
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">
-                        <div className="flex items-center gap-1.5">
-                          <Shield className="w-3 h-3 text-red-500" /> Admin
+              return (
+                <tr
+                  key={u.id}
+                  className="hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => setEditingUser(u)}
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      {u.avatarUrl ? (
+                        <img src={u.avatarUrl} alt={u.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-primary">
+                          {u.name?.[0]?.toUpperCase() ?? "?"}
                         </div>
-                      </SelectItem>
-                      <SelectItem value="member">Member</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </td>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{u.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                      </div>
+                    </div>
+                  </td>
 
-                <td className="px-4 py-3 hidden md:table-cell">
-                  <Select
-                    value={u.departmentId?.toString() ?? "none"}
-                    onValueChange={v => handleDeptChange(u.id, v === "none" ? null : parseInt(v, 10))}
-                    disabled={saving === u.id}
-                  >
-                    <SelectTrigger className="h-8 w-36 text-xs">
-                      <SelectValue placeholder="No dept" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No department</SelectItem>
-                      {departments.map(d => (
-                        <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </td>
+                  <td className="px-4 py-3">
+                    <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium capitalize", ROLE_BADGE[u.role] ?? ROLE_BADGE.member)}>
+                      {u.role}
+                    </span>
+                  </td>
 
-                <td className="px-4 py-3 text-xs text-muted-foreground hidden lg:table-cell whitespace-nowrap">
-                  {format(new Date(u.createdAt), "MMM d, yyyy")}
-                </td>
+                  <td className="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground">
+                    {deptNames}
+                  </td>
 
-                <td className="px-4 py-3">
-                  <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium capitalize", ROLE_BADGE[u.role] ?? ROLE_BADGE.member)}>
-                    {u.role}
-                  </span>
-                </td>
-              </tr>
-            ))}
+                  <td className="px-4 py-3 text-xs text-muted-foreground hidden lg:table-cell whitespace-nowrap">
+                    {format(new Date(u.createdAt), "MMM d, yyyy")}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
@@ -201,6 +378,16 @@ function UsersTab({ departments }: { departments: Department[] }) {
           <div className="py-12 text-center text-muted-foreground text-sm">No users match your search.</div>
         )}
       </div>
+
+      {editingUser && (
+        <EditUserDialog
+          user={editingUser}
+          departments={departments}
+          currentUserId={currentUser?.id}
+          open={!!editingUser}
+          onOpenChange={open => { if (!open) setEditingUser(null); }}
+        />
+      )}
     </div>
   );
 }

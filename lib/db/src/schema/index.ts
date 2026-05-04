@@ -12,3 +12,4 @@ export * from "./kanban_columns";
 export * from "./task_templates";
 export * from "./settings";
 export * from "./inventory";
+export * from "./user_departments";

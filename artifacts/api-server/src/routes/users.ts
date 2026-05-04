@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, departmentsTable } from "@workspace/db";
+import { db, usersTable, departmentsTable, userDepartmentsTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
@@ -8,7 +8,11 @@ import { UpdateMeBody, UpdateMeResponse, ListUsersResponse, GetUserResponse } fr
 
 const router: IRouter = Router();
 
-function buildUserProfile(user: typeof usersTable.$inferSelect, departmentName: string | null) {
+function buildUserProfile(
+  user: typeof usersTable.$inferSelect,
+  departmentName: string | null,
+  departmentIds: number[] = [],
+) {
   return {
     id: user.id,
     clerkId: user.clerkId,
@@ -17,9 +21,18 @@ function buildUserProfile(user: typeof usersTable.$inferSelect, departmentName: 
     role: user.role,
     departmentId: user.departmentId,
     departmentName,
+    departmentIds,
     avatarUrl: user.avatarUrl,
     createdAt: user.createdAt.toISOString(),
   };
+}
+
+async function getDeptIdsForUser(userId: number): Promise<number[]> {
+  const rows = await db
+    .select({ departmentId: userDepartmentsTable.departmentId })
+    .from(userDepartmentsTable)
+    .where(eq(userDepartmentsTable.userId, userId));
+  return rows.map(r => r.departmentId);
 }
 
 router.get("/users/me", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
@@ -35,8 +48,10 @@ router.get("/users/me", requireAuth, async (req: AuthenticatedRequest, res): Pro
     departmentName = dept?.name ?? null;
   }
 
+  const departmentIds = await getDeptIdsForUser(user.id);
+
   res.set("Cache-Control", "no-store");
-  res.json(buildUserProfile(user, departmentName));
+  res.json(buildUserProfile(user, departmentName, departmentIds));
 });
 
 router.patch("/users/me", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
@@ -65,43 +80,109 @@ router.patch("/users/me", requireAuth, async (req: AuthenticatedRequest, res): P
     departmentName = dept?.name ?? null;
   }
 
-  res.json(UpdateMeResponse.parse(buildUserProfile(updated, departmentName)));
+  const departmentIds = await getDeptIdsForUser(updated.id);
+
+  res.json(UpdateMeResponse.parse(buildUserProfile(updated, departmentName, departmentIds)));
 });
 
 router.get("/users", requireAuth, async (_req, res): Promise<void> => {
   const users = await db.select().from(usersTable);
-  const deptIds = [...new Set(users.map(u => u.departmentId).filter(Boolean))] as number[];
 
+  const deptIds = [...new Set(users.map(u => u.departmentId).filter(Boolean))] as number[];
   const depts = deptIds.length > 0
     ? await db.select().from(departmentsTable).where(inArray(departmentsTable.id, deptIds))
     : [];
-
   const deptMap = new Map(depts.map(d => [d.id, d.name]));
 
-  res.json(ListUsersResponse.parse(users.map(u => buildUserProfile(u, u.departmentId ? deptMap.get(u.departmentId) ?? null : null))));
+  const userIds = users.map(u => u.id);
+  const allUserDepts = userIds.length > 0
+    ? await db.select().from(userDepartmentsTable).where(inArray(userDepartmentsTable.userId, userIds))
+    : [];
+  const userDeptsMap = new Map<number, number[]>();
+  for (const row of allUserDepts) {
+    if (!userDeptsMap.has(row.userId)) userDeptsMap.set(row.userId, []);
+    userDeptsMap.get(row.userId)!.push(row.departmentId);
+  }
+
+  res.json(
+    users.map(u =>
+      buildUserProfile(
+        u,
+        u.departmentId ? deptMap.get(u.departmentId) ?? null : null,
+        userDeptsMap.get(u.id) ?? [],
+      )
+    )
+  );
 });
 
-// Admin-only: update any user's role or department
 router.patch("/users/:userId", requireAdmin, async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid user ID" }); return; }
 
-  const { role, departmentId } = req.body as { role?: string; departmentId?: number | null };
+  const { role, departmentId, name, avatarUrl, departmentIds } = req.body as {
+    role?: string;
+    departmentId?: number | null;
+    name?: string;
+    avatarUrl?: string | null;
+    departmentIds?: number[];
+  };
+
   const updates: Partial<typeof usersTable.$inferInsert> = {};
   if (role !== undefined) updates.role = role;
-  if (departmentId !== undefined) updates.departmentId = departmentId;
+  if (name !== undefined) updates.name = name;
+  if (avatarUrl !== undefined) updates.avatarUrl = avatarUrl;
 
-  if (Object.keys(updates).length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
+  if (departmentIds !== undefined) {
+    updates.departmentId = departmentIds.length > 0 ? departmentIds[0] : null;
+  } else if (departmentId !== undefined) {
+    updates.departmentId = departmentId;
+  }
+
+  if (Object.keys(updates).length === 0 && departmentIds === undefined) {
+    res.status(400).json({ error: "Nothing to update" });
+    return;
+  }
 
   const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning();
   if (!updated) { res.status(404).json({ error: "User not found" }); return; }
+
+  if (departmentIds !== undefined) {
+    await db.delete(userDepartmentsTable).where(eq(userDepartmentsTable.userId, id));
+    if (departmentIds.length > 0) {
+      await db.insert(userDepartmentsTable).values(
+        departmentIds.map(dId => ({ userId: id, departmentId: dId }))
+      );
+    }
+  }
 
   let departmentName: string | null = null;
   if (updated.departmentId) {
     const [dept] = await db.select().from(departmentsTable).where(eq(departmentsTable.id, updated.departmentId));
     departmentName = dept?.name ?? null;
   }
-  res.json(buildUserProfile(updated, departmentName));
+
+  const finalDeptIds = await getDeptIdsForUser(id);
+
+  res.json(buildUserProfile(updated, departmentName, finalDeptIds));
+});
+
+router.delete("/users/:userId", requireAdmin, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid user ID" }); return; }
+
+  const requestingUser = await syncUserFromClerk(req);
+  if (requestingUser && requestingUser.id === id) {
+    res.status(403).json({ error: "You cannot delete your own account." });
+    return;
+  }
+
+  const [target] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+  if (!target) { res.status(404).json({ error: "User not found" }); return; }
+
+  await db.delete(userDepartmentsTable).where(eq(userDepartmentsTable.userId, id));
+  await db.delete(usersTable).where(eq(usersTable.id, id));
+
+  res.status(204).end();
 });
 
 router.get("/users/:userId", requireAuth, async (req, res): Promise<void> => {
@@ -123,7 +204,9 @@ router.get("/users/:userId", requireAuth, async (req, res): Promise<void> => {
     departmentName = dept?.name ?? null;
   }
 
-  res.json(GetUserResponse.parse(buildUserProfile(user, departmentName)));
+  const departmentIds = await getDeptIdsForUser(id);
+
+  res.json(GetUserResponse.parse(buildUserProfile(user, departmentName, departmentIds)));
 });
 
 export default router;
