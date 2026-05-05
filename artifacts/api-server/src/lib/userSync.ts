@@ -22,6 +22,25 @@ export async function syncUserFromClerk(req: Request): Promise<typeof usersTable
 
     const role = BOOTSTRAP_ADMINS.includes(email) ? "admin" : "member";
 
+    if (email) {
+      const byEmail = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+      if (byEmail.length > 0) {
+        const updates: Partial<typeof usersTable.$inferInsert> = { clerkId };
+        if (!byEmail[0].name || byEmail[0].name === byEmail[0].email) {
+          updates.name = name;
+        }
+        if (!byEmail[0].avatarUrl && avatarUrl) {
+          updates.avatarUrl = avatarUrl;
+        }
+        const [updated] = await db
+          .update(usersTable)
+          .set(updates)
+          .where(eq(usersTable.id, byEmail[0].id))
+          .returning();
+        return updated;
+      }
+    }
+
     const [newUser] = await db.insert(usersTable).values({
       clerkId,
       name,
