@@ -51,9 +51,9 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           {/* Avatar + name */}
           <div className="flex items-center gap-4">
-            {clerkUser?.imageUrl ? (
+            {currentUser?.avatarUrl ? (
               <img
-                src={clerkUser.imageUrl}
+                src={currentUser.avatarUrl}
                 alt={currentUser?.name ?? "Avatar"}
                 className="w-16 h-16 rounded-full object-cover border border-border"
               />

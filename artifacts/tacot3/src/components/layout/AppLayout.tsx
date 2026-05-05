@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useUser, UserButton } from "@clerk/react";
+import { useUser, useClerk } from "@clerk/react";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -54,6 +54,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
   const [location] = useLocation();
   const { user } = useUser();
+  const { openUserProfile, signOut } = useClerk();
   const { theme, setTheme } = useTheme();
   const { data: currentUser } = useCurrentUser();
 
@@ -197,24 +198,48 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div
-            className={cn(
-              "flex items-center gap-2 px-2 py-1 rounded-lg",
-              !sidebarOpen && "justify-center",
-            )}
-          >
-            <UserButton />
-            {sidebarOpen && (
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium truncate">
-                  {currentUser?.name ?? user?.fullName ?? "User"}
-                </div>
-                <div className="text-[10px] text-muted-foreground truncate capitalize">
-                  {currentUser?.role ?? "member"}
-                </div>
-              </div>
-            )}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1 rounded-lg w-full text-left hover:bg-muted transition-colors",
+                  !sidebarOpen && "justify-center",
+                )}
+                title={currentUser?.name ?? user?.fullName ?? "Account"}
+              >
+                {currentUser?.avatarUrl ? (
+                  <img
+                    src={currentUser.avatarUrl}
+                    alt={currentUser?.name ?? "Avatar"}
+                    className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-border"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0 border border-border">
+                    {(currentUser?.name ?? user?.fullName ?? "?")[0]?.toUpperCase()}
+                  </div>
+                )}
+                {sidebarOpen && (
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate">
+                      {currentUser?.name ?? user?.fullName ?? "User"}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground truncate capitalize">
+                      {currentUser?.role ?? "member"}
+                    </div>
+                  </div>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" align="end">
+              <DropdownMenuItem onClick={() => openUserProfile()}>
+                Manage account
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => signOut()}>
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
 
