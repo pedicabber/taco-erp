@@ -5,6 +5,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk, getOrCreateUser } from "../lib/userSync";
 import { UpdateMeBody, UpdateMeResponse, ListUsersResponse, GetUserResponse } from "@workspace/api-zod";
+import { getOADepartmentId, seedOATasksForUser } from "../lib/officeAdmin";
 
 const router: IRouter = Router();
 
@@ -134,9 +135,11 @@ router.get("/users", requireAuth, async (_req, res): Promise<void> => {
   );
 });
 
-router.patch("/users/:userId", requireAdmin, async (req, res): Promise<void> => {
+router.patch("/users/:userId", requireAdmin, async (req: AuthenticatedRequest, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid user ID" }); return; }
+
+  const actingUser = await syncUserFromClerk(req);
 
   const { role, departmentId, name, avatarUrl, departmentIds } = req.body as {
     role?: string;
@@ -167,6 +170,14 @@ router.patch("/users/:userId", requireAdmin, async (req, res): Promise<void> => 
     return;
   }
 
+  // Capture prior OA membership BEFORE writing user_departments so we only
+  // seed on a strict false→true transition (and not on every PATCH that
+  // happens to include OA in the dept list).
+  const oaDeptId = await getOADepartmentId();
+  const wasInOA = oaDeptId !== null
+    ? (await getDeptIdsForUser(id)).includes(oaDeptId)
+    : false;
+
   const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, id)).returning();
   if (!updated) { res.status(404).json({ error: "User not found" }); return; }
 
@@ -176,6 +187,15 @@ router.patch("/users/:userId", requireAdmin, async (req, res): Promise<void> => 
       await db.insert(userDepartmentsTable).values(
         departmentIds.map(dId => ({ userId: id, departmentId: dId }))
       );
+    }
+
+    // Seed Office/Admin tasks only on a strict not-in-OA → in-OA transition.
+    // The seed is also idempotent as a defensive backstop, so an extra call
+    // here can never duplicate rows — but transition-gating keeps semantics
+    // clean and avoids unrelated PATCH calls re-running the work.
+    const nowInOA = oaDeptId !== null && departmentIds.includes(oaDeptId);
+    if (oaDeptId !== null && nowInOA && !wasInOA) {
+      await seedOATasksForUser(id, actingUser?.id ?? updated.id);
     }
   }
 

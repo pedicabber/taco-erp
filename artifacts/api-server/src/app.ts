@@ -6,14 +6,18 @@ import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middlewares/clerkProxy
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { bootstrapAdmins, bootstrapDepartments, bootstrapTaskTemplates } from "./bootstrapAdmins";
+import { bootstrapOAContainerProject } from "./lib/officeAdmin";
 import { existsSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 
-bootstrapAdmins();
-bootstrapDepartments();
-bootstrapTaskTemplates();
+(async () => {
+  await bootstrapAdmins();
+  await bootstrapDepartments();
+  await bootstrapTaskTemplates();
+  await bootstrapOAContainerProject();
+})();
 
 const app: Express = express();
 

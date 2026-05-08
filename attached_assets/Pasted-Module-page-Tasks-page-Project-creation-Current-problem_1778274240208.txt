@@ -1,0 +1,62 @@
+Module/page:
+Tasks page / Project creation
+
+Current problem:
+The "Office/Admin" department and its associated tasks are currently being added automatically to every project during project creation.
+
+This causes:
+
+Irrelevant tasks to appear inside projects
+Noise in project task lists
+Mixing of global/admin tasks with project-specific work
+Desired behavior:
+The "Office/Admin" department should NOT be included in project creation.
+
+Instead:
+
+Office/Admin tasks should exist independently of projects
+These tasks should only be visible in the Tasks tab
+Visibility should be based on user department membership
+UI requirements:
+No changes to the Project creation UI
+No changes to the Task Templates admin UI
+No changes to how departments are displayed
+In the Tasks tab:
+Users assigned to "Office/Admin" should see Office/Admin tasks
+Tasks should appear grouped under the Office/Admin department (same as other departments)
+No Office/Admin tasks should appear inside project task lists
+Database involved:
+task_templates (where Office/Admin tasks already exist)
+tasks (for generated instances)
+user_departments (to determine who sees Office/Admin tasks)
+projects (must NOT receive Office/Admin tasks on creation)
+No schema changes required.
+
+What must NOT change:
+Do NOT delete or modify existing Office/Admin templates
+Do NOT modify existing departments
+Do NOT alter any other department’s behavior
+Do NOT change project creation flow except excluding Office/Admin
+Do NOT change task template structure
+Do NOT introduce new tables
+Do NOT affect existing project tasks already created
+Workflow step-by-step:
+Project creation:
+
+User creates a new project
+System reads task_templates
+System excludes any templates where department = "Office/Admin"
+Only non-Office/Admin tasks are created under the project
+Tasks tab (Office/Admin users):
+
+User logs in
+System determines user's departments via user_departments
+If user belongs to Office/Admin:
+System loads Office/Admin tasks
+Tasks are shown in the Tasks tab under Office/Admin section
+These tasks are NOT tied to any project
+Tasks appear daily just like other assigned tasks
+Result:
+
+Project tasks = project-specific only
+Office/Admin tasks = global, department-based, user-specific

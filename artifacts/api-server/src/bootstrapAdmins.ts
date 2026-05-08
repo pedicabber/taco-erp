@@ -11,7 +11,7 @@ export const BOOTSTRAP_ADMINS = [
 
 const GLOBAL_DEPARTMENTS = DEPARTMENT_TASKS.map(d => ({ name: d.dept, color: d.color }));
 
-export async function bootstrapAdmins() {
+export async function bootstrapAdmins(): Promise<void> {
   try {
     await db.update(usersTable)
       .set({ role: "admin" })
@@ -21,7 +21,7 @@ export async function bootstrapAdmins() {
   }
 }
 
-export async function bootstrapDepartments() {
+export async function bootstrapDepartments(): Promise<void> {
   try {
     const existing = await db
       .select()
@@ -55,7 +55,7 @@ export async function bootstrapDepartments() {
   }
 }
 
-export async function bootstrapTaskTemplates() {
+export async function bootstrapTaskTemplates(): Promise<void> {
   try {
     const existing = await db.select().from(taskTemplatesTable);
     if (existing.length === 0) {

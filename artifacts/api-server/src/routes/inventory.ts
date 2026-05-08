@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, inventoryItemsTable, inventoryAllocationsTable, projectsTable, usersTable } from "@workspace/db";
+import { rejectIfHiddenProject, isHiddenProjectId } from "../lib/officeAdmin";
 import { eq, and, sql } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -126,6 +127,10 @@ router.post("/inventory/:id/allocate", requireAuth, async (req: AuthenticatedReq
     res.status(400).json({ error: "projectId and positive quantity required" });
     return;
   }
+  if (await isHiddenProjectId(projectId)) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
 
   const dbUser = await syncUserFromClerk(req);
 
@@ -167,6 +172,7 @@ router.delete("/inventory/allocations/:allocId", requireAuth, async (req, res): 
 // ── Get allocations for a project ────────────────────────────────────────────
 router.get("/projects/:projectId/inventory", requireAuth, async (req, res): Promise<void> => {
   const projectId = parseInt(req.params.projectId, 10);
+  if (await rejectIfHiddenProject(res, projectId)) return;
 
   const rows = await db
     .select({

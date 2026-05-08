@@ -15,6 +15,11 @@ import {
   GetProjectSummaryResponse,
   ParsePdfResponse,
 } from "@workspace/api-zod";
+import {
+  excludeOAContainerProject,
+  getOADepartmentId,
+  rejectIfHiddenProject,
+} from "../lib/officeAdmin";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -98,7 +103,11 @@ function getDepartmentTaskTiming(project: typeof projectsTable.$inferSelect, dep
 }
 
 router.get("/projects", requireAuth, async (_req, res): Promise<void> => {
-  const projects = await db.select().from(projectsTable).orderBy(projectsTable.createdAt);
+  const projects = await db
+    .select()
+    .from(projectsTable)
+    .where(excludeOAContainerProject)
+    .orderBy(projectsTable.createdAt);
   res.json(ListProjectsResponse.parse(projects.map(buildProject)));
 });
 
@@ -133,12 +142,20 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
     .from(taskTemplatesTable)
     .orderBy(asc(taskTemplatesTable.sortOrder));
 
+  // Office/Admin templates must never seed into a real project. They are
+  // user-scoped and live under the hidden Office/Admin container project,
+  // surfaced via the seed-on-membership flow in users.ts.
+  const oaDeptId = await getOADepartmentId();
+  const projectEligibleTemplates = oaDeptId === null
+    ? allTemplates
+    : allTemplates.filter(t => t.departmentId !== oaDeptId);
+
   // Determine which templates to apply
   const { selectedTaskIds } = req.body as { selectedTaskIds?: number[] };
   const templatesToApply = autoPopulate
-    ? allTemplates
+    ? projectEligibleTemplates
     : Array.isArray(selectedTaskIds) && selectedTaskIds.length > 0
-      ? allTemplates.filter(t => selectedTaskIds.includes(t.id))
+      ? projectEligibleTemplates.filter(t => selectedTaskIds.includes(t.id))
       : [];
 
   if (templatesToApply.length > 0) {
@@ -733,6 +750,7 @@ router.get("/projects/:projectId", requireAuth, async (req, res): Promise<void> 
     res.status(400).json({ error: "Invalid project ID" });
     return;
   }
+  if (await rejectIfHiddenProject(res, id)) return;
 
   const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
   if (!project) {
@@ -749,6 +767,7 @@ router.patch("/projects/:projectId", requireAuth, async (req, res): Promise<void
     res.status(400).json({ error: "Invalid project ID" });
     return;
   }
+  if (await rejectIfHiddenProject(res, id)) return;
 
   const parsed = UpdateProjectBody.safeParse(req.body);
   if (!parsed.success) {
@@ -771,6 +790,7 @@ router.delete("/projects/:projectId", requireAdmin, async (req, res): Promise<vo
     res.status(400).json({ error: "Invalid project ID" });
     return;
   }
+  if (await rejectIfHiddenProject(res, id)) return;
 
   // Get all task IDs under this project for child-record cleanup
   const projectTasks = await db
@@ -802,6 +822,7 @@ router.get("/projects/:projectId/summary", requireAuth, async (req, res): Promis
     res.status(400).json({ error: "Invalid project ID" });
     return;
   }
+  if (await rejectIfHiddenProject(res, id)) return;
 
   const tasks = await db.select().from(tasksTable).where(eq(tasksTable.projectId, id));
   const depts = await db.select().from(departmentsTable).where(eq(departmentsTable.projectId, id));
@@ -857,6 +878,7 @@ function buildProjectAttachment(a: typeof projectAttachmentsTable.$inferSelect) 
 router.get("/projects/:projectId/attachments", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.projectId, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid project ID" }); return; }
+  if (await rejectIfHiddenProject(res, id)) return;
 
   const attachments = await db.select().from(projectAttachmentsTable)
     .where(eq(projectAttachmentsTable.projectId, id))
@@ -871,6 +893,7 @@ router.post("/projects/:projectId/attachments", requireAuth, async (req: Authent
 
   const id = parseInt(req.params.projectId, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid project ID" }); return; }
+  if (await rejectIfHiddenProject(res, id)) return;
 
   const parsed = parseProjectAttachmentBody(req.body);
   if (!parsed) { res.status(400).json({ error: "Invalid attachment body" }); return; }
@@ -903,6 +926,7 @@ router.delete("/projects/:projectId/attachments/:attachmentId", requireAuth, asy
   const projectId = parseInt(req.params.projectId, 10);
   const attachmentId = parseInt(req.params.attachmentId, 10);
   const clerkId = req.userId;
+  if (await rejectIfHiddenProject(res, projectId)) return;
 
   if (!clerkId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
@@ -930,6 +954,7 @@ router.delete("/projects/:projectId/attachments/:attachmentId", requireAuth, asy
 router.get("/projects/:projectId/all-attachments", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.projectId, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid project ID" }); return; }
+  if (await rejectIfHiddenProject(res, id)) return;
 
   const [projectAttachments, projectTasks] = await Promise.all([
     db.select().from(projectAttachmentsTable)

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, tasksTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, notificationsTable, activityLogTable, projectsTable, kanbanColumnsTable } from "@workspace/db";
-import { eq, and, inArray, or, isNull, desc, gte, lte, count, asc } from "drizzle-orm";
+import { excludeOAContainerProject, excludeForeignOAContainerTasks, isOAContainerProjectName, OA_DISPLAY_LABEL, getOAContainerProjectId } from "../lib/officeAdmin";
+import { eq, and, inArray, or, isNull, ne, desc, gte, lte, count, asc } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -208,7 +209,8 @@ async function logActivity(taskId: number, actorId: number, action: string): Pro
   await db.insert(activityLogTable).values({ taskId, actorId, action });
 }
 
-router.get("/tasks", requireAuth, async (req, res): Promise<void> => {
+router.get("/tasks", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   let query = db.select().from(tasksTable).$dynamic();
 
   const { projectId, departmentId, assigneeId, status, parentTaskId, topLevelOnly } = req.query;
@@ -220,6 +222,11 @@ router.get("/tasks", requireAuth, async (req, res): Promise<void> => {
   if (status) conditions.push(eq(tasksTable.status, String(status)));
   if (parentTaskId) conditions.push(eq(tasksTable.parentTaskId, Number(parentTaskId)));
   if (topLevelOnly === "true") conditions.push(isNull(tasksTable.parentTaskId));
+
+  // Hide Office/Admin container tasks from anyone who is not their assignee
+  // so the hidden container can never be discovered via task `projectId`s.
+  const oaGuard = await excludeForeignOAContainerTasks(me?.id ?? null);
+  if (oaGuard) conditions.push(oaGuard);
 
   if (conditions.length > 0) {
     query = query.where(and(...conditions));
@@ -777,11 +784,14 @@ router.delete("/kanban/columns/:id", requireAuth, async (req, res): Promise<void
 });
 
 // Kanban view
-router.get("/kanban", requireAuth, async (req, res): Promise<void> => {
+router.get("/kanban", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   let query = db.select().from(tasksTable).$dynamic();
-  const conditions = [isNull(tasksTable.parentTaskId)];
+  const conditions: any[] = [isNull(tasksTable.parentTaskId)];
   if (req.query.projectId) conditions.push(eq(tasksTable.projectId, Number(req.query.projectId)));
   if (req.query.departmentId) conditions.push(eq(tasksTable.departmentId, Number(req.query.departmentId)));
+  const oaGuard = await excludeForeignOAContainerTasks(me?.id ?? null);
+  if (oaGuard) conditions.push(oaGuard);
   if (conditions.length > 0) query = query.where(and(...conditions));
 
   const [dbCols, tasks] = await Promise.all([
@@ -802,9 +812,12 @@ router.get("/kanban", requireAuth, async (req, res): Promise<void> => {
 });
 
 // Calendar events
-router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
+router.get("/calendar/events", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   let query = db.select().from(tasksTable).$dynamic();
-  const conditions = [isNull(tasksTable.parentTaskId)];
+  const conditions: any[] = [isNull(tasksTable.parentTaskId)];
+  const oaGuard = await excludeForeignOAContainerTasks(me?.id ?? null);
+  if (oaGuard) conditions.push(oaGuard);
   if (req.query.projectId) conditions.push(eq(tasksTable.projectId, Number(req.query.projectId)));
   if (req.query.departmentId) conditions.push(eq(tasksTable.departmentId, Number(req.query.departmentId)));
   if (req.query.assigneeId) conditions.push(eq(tasksTable.assigneeId, Number(req.query.assigneeId)));
@@ -837,7 +850,13 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
   const projects = projectIds.length > 0 ? await db.select().from(projectsTable).where(inArray(projectsTable.id, projectIds)) : [];
   const depts = deptIds.length > 0 ? await db.select().from(departmentsTable).where(inArray(departmentsTable.id, deptIds)) : [];
 
-  const projectMap = new Map(projects.map(p => [p.id, p]));
+  // Never expose the hidden Office/Admin container's sentinel name. Relabel
+  // any task under the container with a friendly display label so the OA
+  // user's tasks still surface in the calendar without leaking the sentinel.
+  const projectMap = new Map(projects.map(p => [
+    p.id,
+    isOAContainerProjectName(p.name) ? { ...p, name: OA_DISPLAY_LABEL } : p,
+  ]));
   const deptMap = new Map(depts.map(d => [d.id, d]));
 
   const events = tasks.map(task => {
@@ -878,8 +897,13 @@ router.get("/calendar/events", requireAuth, async (req, res): Promise<void> => {
 router.get("/dashboard/summary", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
   const user = await syncUserFromClerk(req);
 
-  const tasks = await db.select().from(tasksTable);
-  const projects = await db.select().from(projectsTable);
+  // Exclude OA-container tasks from cross-cutting counts unless they belong
+  // to the requesting user (so non-OA users never see them in their totals).
+  const oaTaskGuard = await excludeForeignOAContainerTasks(user?.id ?? null);
+  const tasks = oaTaskGuard
+    ? await db.select().from(tasksTable).where(oaTaskGuard)
+    : await db.select().from(tasksTable);
+  const projects = await db.select().from(projectsTable).where(excludeOAContainerProject);
   const now = new Date();
 
   const topLevelTasks = tasks.filter(t => t.parentTaskId === null);
@@ -916,20 +940,48 @@ router.get("/dashboard/summary", requireAuth, async (req: AuthenticatedRequest, 
 });
 
 // Activity feed
-router.get("/activity", requireAuth, async (req, res): Promise<void> => {
+router.get("/activity", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   const limit = Math.min(parseInt(req.query.limit as string ?? "20", 10), 100);
   const offset = parseInt(req.query.offset as string ?? "0", 10);
 
-  const [{ count: totalCount }] = await db
-    .select({ count: count() })
-    .from(activityLogTable);
+  // Apply the same Office/Admin visibility filter to BOTH the page slice and
+  // the total count so a non-OA user can't infer the hidden container's
+  // existence by comparing X-Total-Count to the visible row count. We do this
+  // with a join + WHERE clause shared between the count query and the data
+  // query, and a LEFT JOIN so activity entries whose task row was deleted are
+  // still visible (matching the prior unfiltered behavior).
+  const containerId = await getOAContainerProjectId();
+  const visibilityCondition = containerId === null
+    ? undefined
+    : me != null
+      ? or(
+          isNull(tasksTable.id),
+          ne(tasksTable.projectId, containerId),
+          eq(tasksTable.assigneeId, me.id),
+        )
+      : or(isNull(tasksTable.id), ne(tasksTable.projectId, containerId));
 
-  const logs = await db
-    .select()
+  const baseTotal = db
+    .select({ count: count() })
     .from(activityLogTable)
+    .leftJoin(tasksTable, eq(activityLogTable.taskId, tasksTable.id))
+    .$dynamic();
+  const baseList = db
+    .select({ log: activityLogTable })
+    .from(activityLogTable)
+    .leftJoin(tasksTable, eq(activityLogTable.taskId, tasksTable.id))
+    .$dynamic();
+
+  const [{ count: totalCount }] = await (visibilityCondition
+    ? baseTotal.where(visibilityCondition)
+    : baseTotal);
+
+  const listQuery = visibilityCondition ? baseList.where(visibilityCondition) : baseList;
+  const logs = (await listQuery
     .orderBy(desc(activityLogTable.createdAt))
     .limit(isNaN(limit) ? 20 : limit)
-    .offset(isNaN(offset) ? 0 : offset);
+    .offset(isNaN(offset) ? 0 : offset)).map(r => r.log);
 
   const taskIds = [...new Set(logs.map(l => l.taskId))];
   const actorIds = [...new Set(logs.map(l => l.actorId))];
@@ -942,7 +994,10 @@ router.get("/activity", requireAuth, async (req, res): Promise<void> => {
 
   const taskMap = new Map(tasks.map(t => [t.id, t]));
   const actorMap = new Map(actors.map(a => [a.id, a]));
-  const projectMap = new Map(taskProjects.map(p => [p.id, p]));
+  const projectMap = new Map(taskProjects.map(p => [
+    p.id,
+    isOAContainerProjectName(p.name) ? { ...p, name: OA_DISPLAY_LABEL } : p,
+  ]));
 
   const feed = logs.map(log => {
     const task = taskMap.get(log.taskId);
