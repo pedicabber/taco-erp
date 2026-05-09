@@ -131,7 +131,7 @@ function NewTaskDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {(projects as Project[]).map(p => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                    <SelectItem key={p.id} value={String(p.id)}>{p.company} - {p.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -361,7 +361,7 @@ export default function TasksPage() {
           <SelectContent>
             <SelectItem value="all">All projects</SelectItem>
             {(projects as Project[]).map(p => (
-              <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+              <SelectItem key={p.id} value={String(p.id)}>{p.company} - {p.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>

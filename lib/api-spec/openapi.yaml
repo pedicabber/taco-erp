@@ -1259,6 +1259,14 @@ components:
           type: ["integer", "null"]
         assigneeId:
           type: ["integer", "null"]
+        assigneeIds:
+          type: array
+          items:
+            type: integer
+        assignees:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserProfileMini"
         assignerId:
           type: ["integer", "null"]
         followerIds:
@@ -1303,6 +1311,8 @@ components:
         - projectId
         - departmentId
         - assigneeId
+        - assigneeIds
+        - assignees
         - assignerId
         - followerIds
         - expectedHours
@@ -1369,6 +1379,10 @@ components:
           type: ["integer", "null"]
         assigneeId:
           type: ["integer", "null"]
+        assigneeIds:
+          type: array
+          items:
+            type: integer
         expectedHours:
           type: ["number", "null"]
         dueDate:
@@ -1398,6 +1412,10 @@ components:
           type: ["integer", "null"]
         assigneeId:
           type: ["integer", "null"]
+        assigneeIds:
+          type: array
+          items:
+            type: integer
         expectedHours:
           type: ["number", "null"]
         dueDate:

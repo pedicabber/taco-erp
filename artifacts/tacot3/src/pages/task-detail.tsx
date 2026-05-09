@@ -7,6 +7,7 @@ import type {
   TaskAttachment,
   ProjectAttachment,
   Department,
+  Project,
 } from "@/lib/types";
 import {
   ArrowLeft,
@@ -219,7 +220,8 @@ export default function TaskDetailPage() {
     description: string;
     status: string;
     priority: string;
-    assigneeId: string;
+    /** Ordered assignee user-ids; index 0 is the primary assignee. */
+    assigneeIds: number[];
     departmentId: string;
     expectedHours: string;
     startDate: string;
@@ -290,6 +292,14 @@ export default function TaskDetailPage() {
     queryKey: ["departments", "global"],
     queryFn: () =>
       apiClient.get("/departments?global=true").then((r) => r.data),
+  });
+
+  // Loads the parent project so we can render the small "Company • Project •
+  // Code" context strip near the top of the task-detail page.
+  const { data: project } = useQuery<Project>({
+    queryKey: ["project", projectId],
+    queryFn: () => apiClient.get(`/projects/${projectId}`).then((r) => r.data),
+    enabled: !!projectId,
   });
 
   const { data: timerSessions = [] } = useQuery<TimerSession[]>({
@@ -458,12 +468,18 @@ export default function TaskDetailPage() {
 
   function startEdit() {
     if (!task) return;
+    // Prefer the multi-assignee field when present (primary first, then
+    // secondaries), but fall back to the legacy single-assignee field for
+    // tasks created before the multi-assignee column was introduced.
+    const ids: number[] = Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0
+      ? [...task.assigneeIds]
+      : task.assigneeId != null ? [task.assigneeId] : [];
     setEditForm({
       title: task.title,
       description: task.description ?? "",
       status: task.status,
       priority: task.priority,
-      assigneeId: task.assigneeId ? String(task.assigneeId) : "none",
+      assigneeIds: ids,
       departmentId: task.departmentId ? String(task.departmentId) : "none",
       expectedHours: task.expectedHours ? String(task.expectedHours) : "",
       dueDate: task.dueDate ?? "",
@@ -479,8 +495,9 @@ export default function TaskDetailPage() {
       description: editForm.description || undefined,
       status: editForm.status,
       priority: editForm.priority,
-      assigneeId:
-        editForm.assigneeId !== "none" ? Number(editForm.assigneeId) : null,
+      // Send the ordered list; the server treats index 0 as the primary
+      // assignee and writes the rest to the join table.
+      assigneeIds: editForm.assigneeIds,
       departmentId:
         editForm.departmentId !== "none" ? Number(editForm.departmentId) : null,
       expectedHours: editForm.expectedHours
@@ -523,11 +540,37 @@ export default function TaskDetailPage() {
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       {/* Back */}
       <Link href="/tasks">
-        <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
+        <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-2">
           <ArrowLeft className="w-4 h-4" />
           Tasks
         </button>
       </Link>
+
+      {/* Thin project context strip: company • project name • project code.
+          Rendered above the task header so the user always knows which
+          project a task belongs to without needing to scroll or open another
+          page. We intentionally keep this single-line and unobtrusive — no
+          card chrome — so the existing detail layout is unchanged. */}
+      {project && (
+        <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground mb-4">
+          <Building2 className="w-3.5 h-3.5" />
+          <Link href={`/projects/${project.id}`}>
+            <span className="hover:text-foreground hover:underline cursor-pointer">
+              <span className="font-medium">{project.company}</span>
+              <span className="mx-1.5 opacity-60">•</span>
+              <span>{project.name}</span>
+            </span>
+          </Link>
+          {project.projectId && (
+            <>
+              <span className="opacity-60">•</span>
+              <code className="px-1 py-0.5 rounded bg-muted text-[11px] font-mono">
+                {project.projectId}
+              </code>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Main content */}
@@ -597,23 +640,84 @@ export default function TaskDetailPage() {
                         </Select>
                       </div>
                       <div>
-                        <Label>Assignee</Label>
+                        <Label>Assignees</Label>
+                        {/* Multi-assignee chip list: each chip removes the
+                            user; the picker below adds another. The FIRST
+                            chip is the primary assignee (kept on
+                            tasks.assignee_id by the server). */}
+                        <div className="flex flex-wrap gap-1.5 mb-2 min-h-[1.75rem]">
+                          {editForm.assigneeIds.length === 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              Unassigned
+                            </span>
+                          )}
+                          {editForm.assigneeIds.map((uid, idx) => {
+                            const u = (users as UserProfileMini[]).find(
+                              (x) => x.id === uid,
+                            );
+                            return (
+                              <Badge
+                                key={uid}
+                                variant={idx === 0 ? "default" : "secondary"}
+                                className="gap-1"
+                              >
+                                {idx === 0 && (
+                                  <span className="text-[10px] uppercase opacity-70">
+                                    Primary
+                                  </span>
+                                )}
+                                {u?.name ?? `User #${uid}`}
+                                <button
+                                  type="button"
+                                  className="ml-0.5 opacity-70 hover:opacity-100"
+                                  onClick={() =>
+                                    setEditForm(
+                                      (p) =>
+                                        p && {
+                                          ...p,
+                                          assigneeIds: p.assigneeIds.filter(
+                                            (x) => x !== uid,
+                                          ),
+                                        },
+                                    )
+                                  }
+                                  aria-label={`Remove ${u?.name ?? "user"}`}
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </Badge>
+                            );
+                          })}
+                        </div>
                         <Select
-                          value={editForm.assigneeId}
-                          onValueChange={(v) =>
-                            setEditForm((p) => p && { ...p, assigneeId: v })
-                          }
+                          value=""
+                          onValueChange={(v) => {
+                            const id = Number(v);
+                            if (!Number.isFinite(id)) return;
+                            setEditForm(
+                              (p) =>
+                                p && {
+                                  ...p,
+                                  assigneeIds: p.assigneeIds.includes(id)
+                                    ? p.assigneeIds
+                                    : [...p.assigneeIds, id],
+                                },
+                            );
+                          }}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Unassigned" />
+                            <SelectValue placeholder="Add assignee..." />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="none">Unassigned</SelectItem>
-                            {(users as UserProfileMini[]).map((u) => (
-                              <SelectItem key={u.id} value={String(u.id)}>
-                                {u.name}
-                              </SelectItem>
-                            ))}
+                            {(users as UserProfileMini[])
+                              .filter(
+                                (u) => !editForm.assigneeIds.includes(u.id),
+                              )
+                              .map((u) => (
+                                <SelectItem key={u.id} value={String(u.id)}>
+                                  {u.name}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>

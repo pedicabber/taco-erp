@@ -3,10 +3,11 @@ import {
   projectsTable,
   departmentsTable,
   tasksTable,
+  taskAssigneesTable,
   taskTemplatesTable,
   usersTable,
 } from "@workspace/db";
-import { and, eq, isNull, ne, or, type SQL } from "drizzle-orm";
+import { and, eq, isNull, ne, or, exists, type SQL } from "drizzle-orm";
 import type { Response } from "express";
 
 /**
@@ -80,7 +81,53 @@ export async function excludeForeignOAContainerTasks(
   if (userId == null) {
     return ne(tasksTable.projectId, cid);
   }
-  return or(ne(tasksTable.projectId, cid), eq(tasksTable.assigneeId, userId));
+  return or(
+    ne(tasksTable.projectId, cid),
+    eq(tasksTable.assigneeId, userId),
+    exists(
+      db
+        .select({ one: taskAssigneesTable.userId })
+        .from(taskAssigneesTable)
+        .where(
+          and(
+            eq(taskAssigneesTable.taskId, tasksTable.id),
+            eq(taskAssigneesTable.userId, userId),
+          ),
+        ),
+    ),
+  );
+}
+
+/**
+ * Single-task visibility guard for the hidden Office/Admin container.
+ *
+ * Returns true if the given task is inside the hidden container AND the user
+ * is NOT one of its assignees (primary or secondary). Callers should treat
+ * a true result like a 404 — not a 403 — so the existence of the hidden
+ * container can never be inferred from the response code.
+ *
+ * Pass `null` for `userId` for unauthenticated requests.
+ */
+export async function isHiddenOATaskFromUser(
+  task: { id: number; projectId: number; assigneeId: number | null },
+  userId: number | null | undefined,
+): Promise<boolean> {
+  const cid = await getOAContainerProjectId();
+  if (cid === null) return false;
+  if (task.projectId !== cid) return false;
+  if (userId == null) return true;
+  if (task.assigneeId === userId) return false;
+  const [row] = await db
+    .select({ one: taskAssigneesTable.userId })
+    .from(taskAssigneesTable)
+    .where(
+      and(
+        eq(taskAssigneesTable.taskId, task.id),
+        eq(taskAssigneesTable.userId, userId),
+      ),
+    )
+    .limit(1);
+  return !row;
 }
 
 /**

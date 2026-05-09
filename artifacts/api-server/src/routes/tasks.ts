@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, tasksTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, notificationsTable, activityLogTable, projectsTable, kanbanColumnsTable } from "@workspace/db";
-import { excludeOAContainerProject, excludeForeignOAContainerTasks, isOAContainerProjectName, OA_DISPLAY_LABEL, getOAContainerProjectId } from "../lib/officeAdmin";
-import { eq, and, inArray, or, isNull, ne, desc, gte, lte, count, asc } from "drizzle-orm";
+import { db, tasksTable, taskAssigneesTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, notificationsTable, activityLogTable, projectsTable, kanbanColumnsTable } from "@workspace/db";
+import { excludeOAContainerProject, excludeForeignOAContainerTasks, isHiddenOATaskFromUser, isOAContainerProjectName, OA_DISPLAY_LABEL, getOAContainerProjectId } from "../lib/officeAdmin";
+import { eq, and, inArray, or, isNull, ne, desc, gte, lte, count, asc, exists } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
@@ -98,9 +98,69 @@ async function seedDefaultColumns() {
 
 seedDefaultColumns();
 
+type UserMini = { id: number; name: string; avatarUrl: string | null; departmentName: string | null };
+
+async function loadUserMini(userId: number): Promise<UserMini | null> {
+  const [u] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!u) return null;
+  let deptName: string | null = null;
+  if (u.departmentId) {
+    const [d] = await db.select().from(departmentsTable).where(eq(departmentsTable.id, u.departmentId));
+    if (d) deptName = d.name;
+  }
+  return { id: u.id, name: u.name, avatarUrl: u.avatarUrl, departmentName: deptName };
+}
+
+/**
+ * Returns the secondary assignee user ids for a task, ordered by created_at.
+ * The PRIMARY assignee (`tasks.assignee_id`) is NOT included.
+ */
+async function getSecondaryAssigneeIds(taskId: number): Promise<number[]> {
+  const rows = await db
+    .select({ userId: taskAssigneesTable.userId })
+    .from(taskAssigneesTable)
+    .where(eq(taskAssigneesTable.taskId, taskId))
+    .orderBy(asc(taskAssigneesTable.createdAt));
+  return rows.map(r => r.userId);
+}
+
+/**
+ * Replaces the secondary assignee set for a task. The PRIMARY id is removed
+ * from the desired set so it is never duplicated in the join table. Returns
+ * the (deduped) net-new user ids that were just added (for notifications).
+ */
+async function syncSecondaryAssignees(
+  taskId: number,
+  primaryId: number | null,
+  desired: number[],
+): Promise<number[]> {
+  const deduped: number[] = [];
+  const seen = new Set<number>();
+  for (const uid of desired) {
+    if (uid === primaryId) continue;
+    if (seen.has(uid)) continue;
+    seen.add(uid);
+    deduped.push(uid);
+  }
+  const existing = new Set(await getSecondaryAssigneeIds(taskId));
+  const toAdd = deduped.filter(id => !existing.has(id));
+  const toRemove = [...existing].filter(id => !deduped.includes(id));
+  if (toRemove.length > 0) {
+    await db.delete(taskAssigneesTable).where(
+      and(eq(taskAssigneesTable.taskId, taskId), inArray(taskAssigneesTable.userId, toRemove)),
+    );
+  }
+  if (toAdd.length > 0) {
+    await db.insert(taskAssigneesTable).values(
+      toAdd.map(uid => ({ taskId, userId: uid })),
+    );
+  }
+  return toAdd;
+}
+
 async function buildTask(task: typeof tasksTable.$inferSelect) {
-  let assignee = null;
-  let assigner = null;
+  let assignee: UserMini | null = null;
+  let assigner: UserMini | null = null;
   let department = null;
   let assigneeDept: { id: number; name: string; color: string | null } | null = null;
 
@@ -141,6 +201,21 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
   const [subtaskRow] = await db.select({ cnt: count() }).from(tasksTable).where(eq(tasksTable.parentTaskId, task.id));
   const subtaskCount = Number(subtaskRow?.cnt ?? 0);
 
+  // Multi-assignee: primary id first, then secondaries ordered by added time.
+  const secondaryIds = await getSecondaryAssigneeIds(task.id);
+  const assigneeIds: number[] = [];
+  const assignees: UserMini[] = [];
+  if (task.assigneeId != null) {
+    assigneeIds.push(task.assigneeId);
+    if (assignee) assignees.push(assignee);
+  }
+  for (const uid of secondaryIds) {
+    if (assigneeIds.includes(uid)) continue; // safety dedupe
+    assigneeIds.push(uid);
+    const u = await loadUserMini(uid);
+    if (u) assignees.push(u);
+  }
+
   return {
     id: task.id,
     title: task.title,
@@ -152,6 +227,8 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
     parentTaskId: task.parentTaskId ?? null,
     subtaskCount,
     assigneeId: task.assigneeId,
+    assigneeIds,
+    assignees,
     assignerId: task.assignerId,
     followerIds: task.followerIds ?? [],
     expectedHours: task.expectedHours,
@@ -174,14 +251,40 @@ async function buildTask(task: typeof tasksTable.$inferSelect) {
   };
 }
 
+/**
+ * Returns a SQL predicate that matches tasks where `userId` is either the
+ * primary assignee on the task row or appears in the task_assignees join
+ * table as a secondary assignee. Use anywhere we previously filtered by
+ * `eq(tasksTable.assigneeId, userId)` to honor multi-assignee visibility.
+ */
+function userIsAssignedPredicate(userId: number) {
+  return or(
+    eq(tasksTable.assigneeId, userId),
+    exists(
+      db
+        .select({ one: taskAssigneesTable.userId })
+        .from(taskAssigneesTable)
+        .where(
+          and(
+            eq(taskAssigneesTable.taskId, tasksTable.id),
+            eq(taskAssigneesTable.userId, userId),
+          ),
+        ),
+    ),
+  );
+}
+
 async function checkOverdueAndNotify(task: typeof tasksTable.$inferSelect): Promise<void> {
   if (!task.dueDate || task.status === "complete") return;
+
+  const secondaryIds = await getSecondaryAssigneeIds(task.id);
 
   const dueDate = new Date(task.dueDate);
   const now = new Date();
   if (dueDate < now) {
     const notifyIds = new Set<number>();
     if (task.assigneeId) notifyIds.add(task.assigneeId);
+    for (const sId of secondaryIds) notifyIds.add(sId);
     if (task.assignerId) notifyIds.add(task.assignerId);
     for (const fId of task.followerIds ?? []) notifyIds.add(fId);
 
@@ -194,6 +297,7 @@ async function checkOverdueAndNotify(task: typeof tasksTable.$inferSelect): Prom
     const elapsed = (task.elapsedSeconds / 3600).toFixed(1);
     const notifyIds = new Set<number>();
     if (task.assigneeId) notifyIds.add(task.assigneeId);
+    for (const sId of secondaryIds) notifyIds.add(sId);
     if (task.assignerId) notifyIds.add(task.assignerId);
     for (const fId of task.followerIds ?? []) notifyIds.add(fId);
 
@@ -209,6 +313,31 @@ async function logActivity(taskId: number, actorId: number, action: string): Pro
   await db.insert(activityLogTable).values({ taskId, actorId, action });
 }
 
+/**
+ * Loads a task by id and enforces both "task exists" and the hidden-container
+ * visibility rule in one place. Returns the task on success; on failure it
+ * has already written a 404 to `res` and returns null so the caller can just
+ * `return`. We always send 404 (never 403) for hidden-container hits so the
+ * caller can never distinguish "doesn't exist" from "exists but you can't see
+ * it" — that's how the OA container stays hidden from non-assignees.
+ */
+async function loadVisibleTask(
+  taskId: number,
+  userId: number | null | undefined,
+  res: import("express").Response,
+): Promise<typeof tasksTable.$inferSelect | null> {
+  const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, taskId));
+  if (!task) {
+    res.status(404).json({ error: "Task not found" });
+    return null;
+  }
+  if (await isHiddenOATaskFromUser(task, userId ?? null)) {
+    res.status(404).json({ error: "Task not found" });
+    return null;
+  }
+  return task;
+}
+
 router.get("/tasks", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
   const me = await syncUserFromClerk(req);
   let query = db.select().from(tasksTable).$dynamic();
@@ -218,7 +347,7 @@ router.get("/tasks", requireAuth, async (req: AuthenticatedRequest, res): Promis
   const conditions = [];
   if (projectId) conditions.push(eq(tasksTable.projectId, Number(projectId)));
   if (departmentId) conditions.push(eq(tasksTable.departmentId, Number(departmentId)));
-  if (assigneeId) conditions.push(eq(tasksTable.assigneeId, Number(assigneeId)));
+  if (assigneeId) conditions.push(userIsAssignedPredicate(Number(assigneeId)));
   if (status) conditions.push(eq(tasksTable.status, String(status)));
   if (parentTaskId) conditions.push(eq(tasksTable.parentTaskId, Number(parentTaskId)));
   if (topLevelOnly === "true") conditions.push(isNull(tasksTable.parentTaskId));
@@ -250,8 +379,19 @@ router.post("/tasks", requireAuth, async (req: AuthenticatedRequest, res): Promi
     return;
   }
 
+  // If `assigneeIds` was provided, the FIRST id is the primary assignee
+  // (kept on `tasks.assignee_id`) and the rest become secondary rows in
+  // `task_assignees`. Falls back to `assigneeId` for backward compatibility.
+  const assigneeIdsBody = parsed.data.assigneeIds ?? [];
+  const primaryAssigneeId = assigneeIdsBody.length > 0
+    ? assigneeIdsBody[0]
+    : (parsed.data.assigneeId ?? null);
+  const secondaryDesired = assigneeIdsBody.slice(1);
+
+  const { assigneeIds: _ignore, ...insertData } = parsed.data;
   const [task] = await db.insert(tasksTable).values({
-    ...parsed.data,
+    ...insertData,
+    assigneeId: primaryAssigneeId,
     status: parsed.data.status ?? "backlog",
     priority: parsed.data.priority ?? "medium",
     assignerId: user.id,
@@ -262,26 +402,30 @@ router.post("/tasks", requireAuth, async (req: AuthenticatedRequest, res): Promi
 
   await logActivity(task.id, user.id, "created task");
 
-  if (parsed.data.assigneeId && parsed.data.assigneeId !== user.id) {
-    await createNotification(parsed.data.assigneeId, task.id, "assigned", `You have been assigned to "${task.title}"`);
+  const addedSecondaries = await syncSecondaryAssignees(task.id, primaryAssigneeId, secondaryDesired);
+
+  // Notify everyone who was newly assigned, except the actor themselves.
+  const notifyAssignees = new Set<number>();
+  if (primaryAssigneeId && primaryAssigneeId !== user.id) notifyAssignees.add(primaryAssigneeId);
+  for (const uid of addedSecondaries) if (uid !== user.id) notifyAssignees.add(uid);
+  for (const uid of notifyAssignees) {
+    await createNotification(uid, task.id, "assigned", `You have been assigned to "${task.title}"`);
   }
 
   const built = await buildTask(task);
   res.status(201).json(GetTaskResponse.parse(built));
 });
 
-router.get("/tasks/:taskId", requireAuth, async (req, res): Promise<void> => {
+router.get("/tasks/:taskId", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid task ID" });
     return;
   }
 
-  const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
-  if (!task) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
+  const task = await loadVisibleTask(id, me?.id, res);
+  if (!task) return;
 
   const built = await buildTask(task);
   res.json(GetTaskResponse.parse(built));
@@ -301,21 +445,44 @@ router.patch("/tasks/:taskId", requireAuth, async (req: AuthenticatedRequest, re
     return;
   }
 
-  const updates: Partial<typeof tasksTable.$inferInsert> = { ...parsed.data };
+  // Visibility guard: must be done before any read/write so hidden-container
+  // tasks can't be probed or mutated by non-assigned users.
+  const current = await loadVisibleTask(id, user?.id, res);
+  if (!current) return;
+
+  // Capture pre-update assignee state so we can notify ONLY net-new assignees
+  // (no spurious "you were assigned" pings on every save).
+  const oldPrimary = current.assigneeId;
+  const oldSecondaries = await getSecondaryAssigneeIds(id);
+  const oldAssignees = new Set<number>([
+    ...(oldPrimary !== null ? [oldPrimary] : []),
+    ...oldSecondaries,
+  ]);
+
+  // Multi-assignee handling: if `assigneeIds` is present, the first id wins
+  // primary status and the rest sync into the join table. We strip
+  // `assigneeIds` from the column updates since it isn't a real column.
+  const { assigneeIds: assigneeIdsBody, ...rest } = parsed.data;
+  const updates: Partial<typeof tasksTable.$inferInsert> = { ...rest };
+  let primaryAssigneeId: number | null | undefined = parsed.data.assigneeId;
+  let secondaryDesired: number[] | undefined = undefined;
+  if (assigneeIdsBody !== undefined) {
+    primaryAssigneeId = assigneeIdsBody.length > 0 ? assigneeIdsBody[0] : null;
+    secondaryDesired = assigneeIdsBody.slice(1);
+    updates.assigneeId = primaryAssigneeId;
+  }
 
   if (parsed.data.status === "complete") {
     updates.completedAt = new Date();
     updates.timerRunning = false;
-    const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
-    if (current?.timerRunning && current.timerStartedAt) {
+    if (current.timerRunning && current.timerStartedAt) {
       const extraSeconds = Math.floor((Date.now() - current.timerStartedAt.getTime()) / 1000);
       updates.elapsedSeconds = (current.elapsedSeconds ?? 0) + extraSeconds;
       updates.timerStartedAt = null;
     }
   } else if (parsed.data.status && parsed.data.status !== "complete") {
     // If moving away from complete, clear the completedAt timestamp
-    const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
-    if (current?.status === "complete") {
+    if (current.status === "complete") {
       updates.completedAt = null;
     }
   }
@@ -327,10 +494,48 @@ router.patch("/tasks/:taskId", requireAuth, async (req: AuthenticatedRequest, re
   }
 
   if (user) await logActivity(id, user.id, `updated task status to ${updated.status}`);
+
+  // Sync secondary assignees BEFORE buildTask + overdue notifications so the
+  // emitted Task object and the notification recipient set both reflect the
+  // final state. We notify only the NET-NEW assignees (skip the actor).
+  let addedSecondaries: number[] = [];
+  if (secondaryDesired !== undefined) {
+    addedSecondaries = await syncSecondaryAssignees(id, primaryAssigneeId ?? null, secondaryDesired);
+  } else if (
+    parsed.data.assigneeId !== undefined &&
+    parsed.data.assigneeId !== null
+  ) {
+    // Legacy path: caller sent only `assigneeId`. If that user happens to be
+    // sitting in the join table as a secondary, drop the row so the same user
+    // is never stored twice for one task.
+    await db
+      .delete(taskAssigneesTable)
+      .where(
+        and(
+          eq(taskAssigneesTable.taskId, id),
+          eq(taskAssigneesTable.userId, parsed.data.assigneeId),
+        ),
+      );
+  }
   await checkOverdueAndNotify(updated);
 
-  if (parsed.data.assigneeId && user && parsed.data.assigneeId !== user.id) {
-    await createNotification(parsed.data.assigneeId, id, "assigned", `You have been assigned to "${updated.title}"`);
+  // Notify ONLY assignees who weren't already on this task (and never the
+  // actor). Primary is included only when it actually changed/was added.
+  const notifyAssignees = new Set<number>();
+  if (
+    primaryAssigneeId &&
+    !oldAssignees.has(primaryAssigneeId) &&
+    (!user || primaryAssigneeId !== user.id)
+  ) {
+    notifyAssignees.add(primaryAssigneeId);
+  }
+  for (const uid of addedSecondaries) {
+    if (!oldAssignees.has(uid) && (!user || uid !== user.id)) {
+      notifyAssignees.add(uid);
+    }
+  }
+  for (const uid of notifyAssignees) {
+    await createNotification(uid, id, "assigned", `You have been assigned to "${updated.title}"`);
   }
 
   const built = await buildTask(updated);
@@ -356,11 +561,8 @@ router.post("/tasks/:taskId/timer/start", requireAuth, async (req: Authenticated
     return;
   }
 
-  const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
-  if (!current) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
+  const current = await loadVisibleTask(id, user?.id, res);
+  if (!current) return;
 
   if (current.timerRunning) {
     const built = await buildTask(current);
@@ -396,11 +598,8 @@ router.post("/tasks/:taskId/timer/stop", requireAuth, async (req: AuthenticatedR
     return;
   }
 
-  const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
-  if (!current) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
+  const current = await loadVisibleTask(id, user?.id, res);
+  if (!current) return;
 
   if (!current.timerRunning || !current.timerStartedAt) {
     const built = await buildTask(current);
@@ -441,6 +640,9 @@ router.patch("/tasks/:taskId/timer/edit", requireAuth, async (req: Authenticated
     return;
   }
 
+  const guard = await loadVisibleTask(id, user?.id, res);
+  if (!guard) return;
+
   const parsed = EditTaskTimerBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -463,12 +665,16 @@ router.patch("/tasks/:taskId/timer/edit", requireAuth, async (req: Authenticated
   res.json(EditTaskTimerResponse.parse(built));
 });
 
-router.get("/tasks/:taskId/timer/sessions", requireAuth, async (req, res): Promise<void> => {
+router.get("/tasks/:taskId/timer/sessions", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid task ID" });
     return;
   }
+
+  const guard = await loadVisibleTask(id, me?.id, res);
+  if (!guard) return;
 
   const rows = await db
     .select({
@@ -514,11 +720,8 @@ router.post("/tasks/:taskId/followers", requireAuth, async (req: AuthenticatedRe
     return;
   }
 
-  const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
-  if (!current) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
+  const current = await loadVisibleTask(id, user.id, res);
+  if (!current) return;
 
   const followers = current.followerIds ?? [];
   if (!followers.includes(user.id)) {
@@ -544,11 +747,8 @@ router.delete("/tasks/:taskId/followers", requireAuth, async (req: Authenticated
     return;
   }
 
-  const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
-  if (!current) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
+  const current = await loadVisibleTask(id, user.id, res);
+  if (!current) return;
 
   const followers = (current.followerIds ?? []).filter(fId => fId !== user.id);
   await db.update(tasksTable).set({ followerIds: followers }).where(eq(tasksTable.id, id));
@@ -558,12 +758,16 @@ router.delete("/tasks/:taskId/followers", requireAuth, async (req: Authenticated
   res.json(UnfollowTaskResponse.parse(built));
 });
 
-router.get("/tasks/:taskId/relations", requireAuth, async (req, res): Promise<void> => {
+router.get("/tasks/:taskId/relations", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid task ID" });
     return;
   }
+
+  const guard = await loadVisibleTask(id, me?.id, res);
+  if (!guard) return;
 
   const relations = await db.select().from(taskRelationsTable).where(
     or(eq(taskRelationsTable.taskId, id), eq(taskRelationsTable.relatedTaskId, id))
@@ -575,40 +779,65 @@ router.get("/tasks/:taskId/relations", requireAuth, async (req, res): Promise<vo
     return;
   }
 
+  // Hide any related task that lives in the OA hidden container and isn't
+  // assigned to the requester. Same 404-style invisibility as direct fetches.
   const relatedTasks = await db.select().from(tasksTable).where(inArray(tasksTable.id, relatedIds));
-  const built = await Promise.all(relatedTasks.map(buildTask));
+  const visibleRelated: typeof relatedTasks = [];
+  for (const rt of relatedTasks) {
+    if (!(await isHiddenOATaskFromUser(rt, me?.id ?? null))) visibleRelated.push(rt);
+  }
+  const built = await Promise.all(visibleRelated.map(buildTask));
   res.json(GetTaskRelationsResponse.parse(built));
 });
 
-router.post("/tasks/:taskId/relations", requireAuth, async (req, res): Promise<void> => {
+router.post("/tasks/:taskId/relations", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid task ID" });
     return;
   }
 
+  const guard = await loadVisibleTask(id, me?.id, res);
+  if (!guard) return;
+
   const parsed = AddTaskRelationBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+
+  // The related task must also be visible to the caller — otherwise relations
+  // could be used to probe (or deliberately link into) hidden OA-container
+  // tasks. Same 404 semantics as a direct fetch.
+  const relatedGuard = await loadVisibleTask(parsed.data.relatedTaskId, me?.id, res);
+  if (!relatedGuard) return;
 
   await db.insert(taskRelationsTable).values({ taskId: id, relatedTaskId: parsed.data.relatedTaskId });
   res.sendStatus(201);
 });
 
-router.delete("/tasks/:taskId/relations", requireAuth, async (req, res): Promise<void> => {
+router.delete("/tasks/:taskId/relations", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid task ID" });
     return;
   }
 
+  const guard = await loadVisibleTask(id, me?.id, res);
+  if (!guard) return;
+
   const parsed = AddTaskRelationBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+
+  // Mirror the POST guard: the related task must be visible to the caller so
+  // hidden OA-container tasks can't be probed via DELETE either.
+  const relatedGuard = await loadVisibleTask(parsed.data.relatedTaskId, me?.id, res);
+  if (!relatedGuard) return;
 
   await db.delete(taskRelationsTable).where(
     or(
@@ -619,12 +848,16 @@ router.delete("/tasks/:taskId/relations", requireAuth, async (req, res): Promise
   res.sendStatus(204);
 });
 
-router.get("/tasks/:taskId/attachments", requireAuth, async (req, res): Promise<void> => {
+router.get("/tasks/:taskId/attachments", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid task ID" });
     return;
   }
+
+  const guard = await loadVisibleTask(id, me?.id, res);
+  if (!guard) return;
 
   const attachments = await db.select().from(taskAttachmentsTable).where(eq(taskAttachmentsTable.taskId, id)).orderBy(taskAttachmentsTable.createdAt);
 
@@ -652,6 +885,9 @@ router.post("/tasks/:taskId/attachments", requireAuth, async (req: Authenticated
     res.status(400).json({ error: "Invalid task ID" });
     return;
   }
+
+  const guard = await loadVisibleTask(id, user.id, res);
+  if (!guard) return;
 
   const parsed = AddTaskAttachmentBody.safeParse(req.body);
   if (!parsed.success) {
@@ -716,6 +952,9 @@ router.delete("/tasks/:taskId/attachments/:attachmentId", requireAuth, async (re
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+
+  const guard = await loadVisibleTask(taskId, dbUser.id, res);
+  if (!guard) return;
 
   const [attachment] = await db.select({ uploadedById: taskAttachmentsTable.uploadedById })
     .from(taskAttachmentsTable)
@@ -820,7 +1059,7 @@ router.get("/calendar/events", requireAuth, async (req: AuthenticatedRequest, re
   if (oaGuard) conditions.push(oaGuard);
   if (req.query.projectId) conditions.push(eq(tasksTable.projectId, Number(req.query.projectId)));
   if (req.query.departmentId) conditions.push(eq(tasksTable.departmentId, Number(req.query.departmentId)));
-  if (req.query.assigneeId) conditions.push(eq(tasksTable.assigneeId, Number(req.query.assigneeId)));
+  if (req.query.assigneeId) conditions.push(userIsAssignedPredicate(Number(req.query.assigneeId)));
   if (req.query.status && typeof req.query.status === "string") {
     conditions.push(eq(tasksTable.status, req.query.status));
   }
@@ -921,8 +1160,19 @@ router.get("/dashboard/summary", requireAuth, async (req: AuthenticatedRequest, 
   let myTasks = 0;
   let myOverdueTasks = 0;
   if (user) {
-    myTasks = topLevelTasks.filter(t => t.assigneeId === user.id).length;
-    myOverdueTasks = topLevelTasks.filter(t => t.assigneeId === user.id && t.dueDate && new Date(t.dueDate) < now && t.status !== "complete").length;
+    // "My tasks" includes both primary AND secondary assignments so the
+    // dashboard count matches what the user actually sees in Tasks/Calendar.
+    const secondaryRows = await db
+      .select({ taskId: taskAssigneesTable.taskId })
+      .from(taskAssigneesTable)
+      .where(eq(taskAssigneesTable.userId, user.id));
+    const secondarySet = new Set(secondaryRows.map(r => r.taskId));
+    const isMine = (t: typeof tasksTable.$inferSelect) =>
+      t.assigneeId === user.id || secondarySet.has(t.id);
+    myTasks = topLevelTasks.filter(isMine).length;
+    myOverdueTasks = topLevelTasks.filter(t =>
+      isMine(t) && t.dueDate && new Date(t.dueDate) < now && t.status !== "complete"
+    ).length;
   }
 
   res.json(GetDashboardSummaryResponse.parse({
@@ -959,6 +1209,17 @@ router.get("/activity", requireAuth, async (req: AuthenticatedRequest, res): Pro
           isNull(tasksTable.id),
           ne(tasksTable.projectId, containerId),
           eq(tasksTable.assigneeId, me.id),
+          exists(
+            db
+              .select({ one: taskAssigneesTable.userId })
+              .from(taskAssigneesTable)
+              .where(
+                and(
+                  eq(taskAssigneesTable.taskId, tasksTable.id),
+                  eq(taskAssigneesTable.userId, me.id),
+                ),
+              ),
+          ),
         )
       : or(isNull(tasksTable.id), ne(tasksTable.projectId, containerId));
 
@@ -1021,9 +1282,13 @@ router.get("/activity", requireAuth, async (req: AuthenticatedRequest, res): Pro
   res.json(GetActivityFeedResponse.parse(feed));
 });
 
-router.get("/tasks/:taskId/subtask-attachments", requireAuth, async (req, res): Promise<void> => {
+router.get("/tasks/:taskId/subtask-attachments", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
   const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid task ID" }); return; }
+
+  const guard = await loadVisibleTask(id, me?.id, res);
+  if (!guard) return;
 
   const subtasks = await db.select({ id: tasksTable.id, title: tasksTable.title })
     .from(tasksTable).where(eq(tasksTable.parentTaskId, id));

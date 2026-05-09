@@ -18,6 +18,7 @@ export interface UpdateTaskBody {
   departmentId?: number | null;
   /** @nullable */
   assigneeId?: number | null;
+  assigneeIds?: number[];
   /** @nullable */
   expectedHours?: number | null;
   /** @nullable */

@@ -1,0 +1,74 @@
+# Module/page:
+Tasks tab project dropdown and individual task detail view
+
+# Current problem:
+The Tasks tab project dropdown only shows the project name. This is confusing because users cannot easily tell which company/customer the project belongs to.
+
+Inside an individual task, there is not enough project context. Users cannot clearly see the overall project name, company/customer, or related project details.
+
+Also, a task can only be assigned to one person. Some tasks need multiple assigned users.
+
+# Desired behavior:
+In the Tasks tab project dropdown:
+- Display company/customer name followed by project name
+- Format: Company Name - Project Name
+
+Inside each task detail view:
+- Show the project/company context clearly at the top or top-side section
+- At minimum show:
+  - Company/customer name
+  - Project name
+  - Project code/number if available
+- All assigned users should see the same project details
+
+Task assignment:
+- Allow multiple users to be assigned to the same task
+- All assigned users should see the task in their Tasks tab
+- Existing single-assignee tasks should continue working
+
+# UI requirements:
+Tasks tab:
+- Keep the same overall Tasks tab layout
+- Keep existing project dropdown behavior
+- Only change the dropdown label format to:
+  Company Name - Project Name
+
+Task detail view:
+- Keep existing task detail layout/navigation
+- Add project details near the top of the task detail view
+- Do not redesign the whole task modal/page
+
+Assignees:
+- Replace or extend the existing assignee selector to support multiple users
+- Display multiple assigned users clearly
+- Do not remove existing assigned user behavior
+
+# Database involved:
+- projects table
+- tasks table
+- users table
+
+Likely needs review of current assignment structure:
+- If tasks currently only support one assignee_id, propose safest way to support multiple assignees.
+- Do not change schema until plan is reviewed and approved.
+
+# What must NOT change:
+- Do NOT change overall Tasks tab navigation
+- Do NOT change project creation flow
+- Do NOT redesign task cards or task detail layout
+- Do NOT break existing task filtering
+- Do NOT remove existing single-assignee compatibility
+- Do NOT affect existing tasks unless migration/backfill is explicitly approved
+
+# Workflow step-by-step:
+1. User opens Tasks tab
+2. User opens project filter dropdown
+3. Project options show as:
+   Company Name - Project Name
+4. User filters/selects tasks as usual
+5. User opens an individual task
+6. Task detail clearly shows project/company context near the top
+7. If multiple users are assigned to the task:
+   - each assigned user sees the task in their own Tasks tab
+   - task details remain the same for all assigned users
+8. Admin/user with permission can assign or remove multiple users from the task

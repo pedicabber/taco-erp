@@ -204,6 +204,8 @@ export interface Task {
   departmentId: number | null;
   /** @nullable */
   assigneeId: number | null;
+  assigneeIds: number[];
+  assignees: UserProfileMini[];
   /** @nullable */
   assignerId: number | null;
   followerIds: number[];
@@ -260,6 +262,7 @@ export interface CreateTaskBody {
   departmentId?: number | null;
   /** @nullable */
   assigneeId?: number | null;
+  assigneeIds?: number[];
   /** @nullable */
   expectedHours?: number | null;
   /** @nullable */
@@ -301,6 +304,7 @@ export interface UpdateTaskBody {
   departmentId?: number | null;
   /** @nullable */
   assigneeId?: number | null;
+  assigneeIds?: number[];
   /** @nullable */
   expectedHours?: number | null;
   /** @nullable */
