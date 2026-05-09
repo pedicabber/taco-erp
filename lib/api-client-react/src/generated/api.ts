@@ -23,6 +23,7 @@ import type {
   AddTaskRelationBody,
   CalendarEvent,
   CreateDepartmentBody,
+  CreateGeneralNotificationBody,
   CreateKanbanColumnBody,
   CreateProjectBody,
   CreateTaskBody,
@@ -46,6 +47,7 @@ import type {
   ProjectSummary,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
+  SentBroadcast,
   Task,
   TaskAttachment,
   UpdateDepartmentBody,
@@ -3958,6 +3960,168 @@ export function useListNotifications<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListNotificationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Send a general notification to one or more users (admin only)
+ */
+export const getCreateGeneralNotificationUrl = () => {
+  return `/api/notifications`;
+};
+
+export const createGeneralNotification = async (
+  createGeneralNotificationBody: CreateGeneralNotificationBody,
+  options?: RequestInit,
+): Promise<SentBroadcast> => {
+  return customFetch<SentBroadcast>(getCreateGeneralNotificationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createGeneralNotificationBody),
+  });
+};
+
+export const getCreateGeneralNotificationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createGeneralNotification>>,
+    TError,
+    { data: BodyType<CreateGeneralNotificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createGeneralNotification>>,
+  TError,
+  { data: BodyType<CreateGeneralNotificationBody> },
+  TContext
+> => {
+  const mutationKey = ["createGeneralNotification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createGeneralNotification>>,
+    { data: BodyType<CreateGeneralNotificationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createGeneralNotification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateGeneralNotificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createGeneralNotification>>
+>;
+export type CreateGeneralNotificationMutationBody =
+  BodyType<CreateGeneralNotificationBody>;
+export type CreateGeneralNotificationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a general notification to one or more users (admin only)
+ */
+export const useCreateGeneralNotification = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createGeneralNotification>>,
+    TError,
+    { data: BodyType<CreateGeneralNotificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createGeneralNotification>>,
+  TError,
+  { data: BodyType<CreateGeneralNotificationBody> },
+  TContext
+> => {
+  return useMutation(getCreateGeneralNotificationMutationOptions(options));
+};
+
+/**
+ * @summary List general notifications I have sent (admin only)
+ */
+export const getListSentNotificationsUrl = () => {
+  return `/api/notifications/sent`;
+};
+
+export const listSentNotifications = async (
+  options?: RequestInit,
+): Promise<SentBroadcast[]> => {
+  return customFetch<SentBroadcast[]>(getListSentNotificationsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSentNotificationsQueryKey = () => {
+  return [`/api/notifications/sent`] as const;
+};
+
+export const getListSentNotificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSentNotifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSentNotifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListSentNotificationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSentNotifications>>
+  > = ({ signal }) => listSentNotifications({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSentNotifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSentNotificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSentNotifications>>
+>;
+export type ListSentNotificationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List general notifications I have sent (admin only)
+ */
+
+export function useListSentNotifications<
+  TData = Awaited<ReturnType<typeof listSentNotifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSentNotifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSentNotificationsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

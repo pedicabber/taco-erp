@@ -1,25 +1,43 @@
 import { Router, type IRouter } from "express";
-import { db, notificationsTable, usersTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { db, notificationsTable, usersTable, departmentsTable } from "@workspace/db";
+import { eq, and, desc, inArray } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
+import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
 import {
   ListNotificationsResponse,
   MarkNotificationReadResponse,
   MarkAllNotificationsReadResponse,
+  CreateGeneralNotificationBody,
+  ListSentNotificationsResponse,
+  ListSentNotificationsResponseItem,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-function buildNotification(n: typeof notificationsTable.$inferSelect) {
+type NotificationRow = typeof notificationsTable.$inferSelect;
+
+function buildNotification(n: NotificationRow, senderName: string | null = null) {
   return {
     id: n.id,
     userId: n.userId,
     taskId: n.taskId,
-    type: n.type as "overdue" | "assigned" | "mentioned" | "status_changed" | "timer_alert" | "followed",
+    type: n.type as
+      | "overdue"
+      | "assigned"
+      | "mentioned"
+      | "status_changed"
+      | "timer_alert"
+      | "followed"
+      | "general",
     message: n.message,
     isRead: n.isRead,
     createdAt: n.createdAt.toISOString(),
+    senderId: n.senderId,
+    senderName,
+    title: n.title,
+    broadcastId: n.broadcastId,
   };
 }
 
@@ -30,13 +48,159 @@ router.get("/notifications", requireAuth, async (req: AuthenticatedRequest, res)
     return;
   }
 
-  const notifications = await db
-    .select()
+  const rows = await db
+    .select({
+      n: notificationsTable,
+      senderName: usersTable.name,
+    })
     .from(notificationsTable)
+    .leftJoin(usersTable, eq(usersTable.id, notificationsTable.senderId))
     .where(eq(notificationsTable.userId, user.id))
     .orderBy(desc(notificationsTable.createdAt));
 
-  res.json(ListNotificationsResponse.parse(notifications.map(buildNotification)));
+  res.json(ListNotificationsResponse.parse(rows.map(r => buildNotification(r.n, r.senderName ?? null))));
+});
+
+// Sent must be declared before /:notificationId/read so it isn't shadowed.
+router.get("/notifications/sent", requireAuth, requireAdmin, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const user = await syncUserFromClerk(req);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const rows = await db
+    .select({
+      id: notificationsTable.id,
+      broadcastId: notificationsTable.broadcastId,
+      title: notificationsTable.title,
+      message: notificationsTable.message,
+      createdAt: notificationsTable.createdAt,
+      recipientId: notificationsTable.userId,
+      recipientName: usersTable.name,
+      recipientAvatar: usersTable.avatarUrl,
+      recipientDeptName: departmentsTable.name,
+    })
+    .from(notificationsTable)
+    .leftJoin(usersTable, eq(usersTable.id, notificationsTable.userId))
+    .leftJoin(departmentsTable, eq(departmentsTable.id, usersTable.departmentId))
+    .where(and(eq(notificationsTable.senderId, user.id), eq(notificationsTable.type, "general")))
+    .orderBy(desc(notificationsTable.createdAt));
+
+  // Group by broadcastId. Rows without a broadcastId (legacy/edge case) are
+  // grouped per-row using their notification id as a synthetic key so they
+  // still render.
+  const groups = new Map<string, {
+    broadcastId: string;
+    title: string | null;
+    message: string;
+    createdAt: Date;
+    recipients: { id: number; name: string; avatarUrl: string | null; departmentName: string | null }[];
+  }>();
+
+  for (const r of rows) {
+    const key = r.broadcastId ?? `single:${r.id}`;
+    let g = groups.get(key);
+    if (!g) {
+      g = {
+        broadcastId: r.broadcastId ?? `single:${r.id}`,
+        title: r.title,
+        message: r.message,
+        createdAt: r.createdAt,
+        recipients: [],
+      };
+      groups.set(key, g);
+    }
+    g.recipients.push({
+      id: r.recipientId,
+      name: r.recipientName ?? "Unknown",
+      avatarUrl: r.recipientAvatar ?? null,
+      departmentName: r.recipientDeptName ?? null,
+    });
+  }
+
+  const broadcasts = Array.from(groups.values())
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .map(g => ({
+      broadcastId: g.broadcastId,
+      title: g.title,
+      message: g.message,
+      createdAt: g.createdAt.toISOString(),
+      recipientCount: g.recipients.length,
+      recipients: g.recipients,
+    }));
+
+  res.json(ListSentNotificationsResponse.parse(broadcasts));
+});
+
+router.post("/notifications", requireAuth, requireAdmin, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const sender = await syncUserFromClerk(req);
+  if (!sender) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const parsed = CreateGeneralNotificationBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request body", details: parsed.error.issues });
+    return;
+  }
+  const { title, message, recipientUserIds } = parsed.data;
+
+  // Dedupe + validate recipients exist.
+  const uniqueIds = Array.from(new Set(recipientUserIds));
+  if (uniqueIds.length === 0) {
+    res.status(400).json({ error: "At least one recipient is required" });
+    return;
+  }
+
+  const recipients = await db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+      avatarUrl: usersTable.avatarUrl,
+      departmentName: departmentsTable.name,
+    })
+    .from(usersTable)
+    .leftJoin(departmentsTable, eq(departmentsTable.id, usersTable.departmentId))
+    .where(inArray(usersTable.id, uniqueIds));
+
+  if (recipients.length === 0) {
+    res.status(400).json({ error: "No valid recipients found" });
+    return;
+  }
+
+  const broadcastId = randomUUID();
+  const now = new Date();
+
+  await db.insert(notificationsTable).values(
+    recipients.map(r => ({
+      userId: r.id,
+      taskId: null,
+      type: "general",
+      message,
+      isRead: false,
+      senderId: sender.id,
+      title: title ?? null,
+      broadcastId,
+    }))
+  );
+
+  res.status(201).json(
+    ListSentNotificationsResponseItem.parse({
+      broadcastId,
+      title: title ?? null,
+      message,
+      createdAt: now.toISOString(),
+      recipientCount: recipients.length,
+      recipients: recipients.map(r => ({
+        id: r.id,
+        name: r.name,
+        avatarUrl: r.avatarUrl ?? null,
+        departmentName: r.departmentName ?? null,
+      })),
+    })
+  );
 });
 
 router.patch("/notifications/:notificationId/read", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {

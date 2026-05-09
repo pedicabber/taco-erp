@@ -1,0 +1,60 @@
+1. Module/page:
+Notification center / Notifications page
+
+2. Current problem:
+The notification center only handles system/task-related notifications. There is no way to manually create a general notification to inform users about ERP updates, changes, or things they need to review.
+
+3. Desired behavior:
+Allow an authorized user to create a general notification and send it to selected users.
+
+This should be separate from existing task alerts and should not interfere with overdue/assigned task notifications.
+
+4. UI requirements:
+Notifications page should have:
+- Inbox tab
+- Sent tab
+- Create Notification button at the top
+
+Create Notification button opens a modal with:
+- Notification title / subject
+- Notification message/body
+- Multi-select user dropdown/list
+- Create/Send button
+
+Inbox tab:
+- Shows notifications received by the current user
+
+Sent tab:
+- Shows general notifications created/sent by the current user
+
+5. Database involved:
+Not sure.
+
+Likely existing notifications table can be extended/reused.
+If existing schema cannot support sender/recipient/general notification type, propose minimal additive DB changes only.
+
+6. What must NOT change:
+Do not change existing task notification behavior.
+Do not break overdue task notifications.
+Do not break assigned task notifications.
+Do not change how users currently receive task-related notifications.
+Do not redesign the full notification page.
+Do not modify unrelated ERP modules.
+
+7. Workflow step-by-step:
+User opens the Notifications page.
+User clicks Create Notification.
+Modal opens.
+User enters what the notification is about.
+User selects one or multiple users from the user list.
+User clicks Create/Send.
+Selected users receive the notification in their Inbox.
+The sender can view it later in the Sent tab.
+Existing task notifications continue working as they do now.
+
+Plan first:
+- inspect current notification schema/API/page
+- list files involved
+- identify whether DB changes are needed
+- propose minimal implementation
+- wait for approval before coding

@@ -16,4 +16,5 @@ export const NotificationType = {
   status_changed: "status_changed",
   timer_alert: "timer_alert",
   followed: "followed",
+  general: "general",
 } as const;

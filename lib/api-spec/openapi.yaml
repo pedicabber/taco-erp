@@ -933,6 +933,38 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Notification"
+    post:
+      operationId: createGeneralNotification
+      tags: [notifications]
+      summary: Send a general notification to one or more users (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGeneralNotificationBody"
+      responses:
+        "201":
+          description: Created broadcast
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SentBroadcast"
+
+  /notifications/sent:
+    get:
+      operationId: listSentNotifications
+      tags: [notifications]
+      summary: List general notifications I have sent (admin only)
+      responses:
+        "200":
+          description: Sent broadcasts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SentBroadcast"
 
   /notifications/{notificationId}/read:
     patch:
@@ -1750,13 +1782,21 @@ components:
           type: ["integer", "null"]
         type:
           type: string
-          enum: [overdue, assigned, mentioned, status_changed, timer_alert, followed]
+          enum: [overdue, assigned, mentioned, status_changed, timer_alert, followed, general]
         message:
           type: string
         isRead:
           type: boolean
         createdAt:
           type: string
+        senderId:
+          type: ["integer", "null"]
+        senderName:
+          type: ["string", "null"]
+        title:
+          type: ["string", "null"]
+        broadcastId:
+          type: ["string", "null"]
       required:
         - id
         - userId
@@ -1765,6 +1805,54 @@ components:
         - message
         - isRead
         - createdAt
+        - senderId
+        - senderName
+        - title
+        - broadcastId
+
+    CreateGeneralNotificationBody:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        message:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        recipientUserIds:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+      required:
+        - message
+        - recipientUserIds
+
+    SentBroadcast:
+      type: object
+      properties:
+        broadcastId:
+          type: string
+        title:
+          type: ["string", "null"]
+        message:
+          type: string
+        createdAt:
+          type: string
+        recipientCount:
+          type: integer
+        recipients:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserProfileMini"
+      required:
+        - broadcastId
+        - title
+        - message
+        - createdAt
+        - recipientCount
+        - recipients
 
     RequestUploadUrlBody:
       type: object

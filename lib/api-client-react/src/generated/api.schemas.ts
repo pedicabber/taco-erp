@@ -468,6 +468,7 @@ export const NotificationType = {
   status_changed: "status_changed",
   timer_alert: "timer_alert",
   followed: "followed",
+  general: "general",
 } as const;
 
 export interface Notification {
@@ -479,6 +480,36 @@ export interface Notification {
   message: string;
   isRead: boolean;
   createdAt: string;
+  /** @nullable */
+  senderId: number | null;
+  /** @nullable */
+  senderName: string | null;
+  /** @nullable */
+  title: string | null;
+  /** @nullable */
+  broadcastId: string | null;
+}
+
+export interface CreateGeneralNotificationBody {
+  /** @maxLength 200 */
+  title?: string;
+  /**
+   * @minLength 1
+   * @maxLength 5000
+   */
+  message: string;
+  /** @minItems 1 */
+  recipientUserIds: number[];
+}
+
+export interface SentBroadcast {
+  broadcastId: string;
+  /** @nullable */
+  title: string | null;
+  message: string;
+  createdAt: string;
+  recipientCount: number;
+  recipients: UserProfileMini[];
 }
 
 export interface RequestUploadUrlBody {

@@ -1297,13 +1297,53 @@ export const ListNotificationsResponseItem = zod.object({
     "status_changed",
     "timer_alert",
     "followed",
+    "general",
   ]),
   message: zod.string(),
   isRead: zod.boolean(),
   createdAt: zod.string(),
+  senderId: zod.number().nullable(),
+  senderName: zod.string().nullable(),
+  title: zod.string().nullable(),
+  broadcastId: zod.string().nullable(),
 });
 export const ListNotificationsResponse = zod.array(
   ListNotificationsResponseItem,
+);
+
+/**
+ * @summary Send a general notification to one or more users (admin only)
+ */
+export const createGeneralNotificationBodyTitleMax = 200;
+
+export const createGeneralNotificationBodyMessageMax = 5000;
+
+export const CreateGeneralNotificationBody = zod.object({
+  title: zod.string().max(createGeneralNotificationBodyTitleMax).optional(),
+  message: zod.string().min(1).max(createGeneralNotificationBodyMessageMax),
+  recipientUserIds: zod.array(zod.number()).min(1),
+});
+
+/**
+ * @summary List general notifications I have sent (admin only)
+ */
+export const ListSentNotificationsResponseItem = zod.object({
+  broadcastId: zod.string(),
+  title: zod.string().nullable(),
+  message: zod.string(),
+  createdAt: zod.string(),
+  recipientCount: zod.number(),
+  recipients: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      avatarUrl: zod.string().nullable(),
+      departmentName: zod.string().nullable(),
+    }),
+  ),
+});
+export const ListSentNotificationsResponse = zod.array(
+  ListSentNotificationsResponseItem,
 );
 
 /**
@@ -1324,10 +1364,15 @@ export const MarkNotificationReadResponse = zod.object({
     "status_changed",
     "timer_alert",
     "followed",
+    "general",
   ]),
   message: zod.string(),
   isRead: zod.boolean(),
   createdAt: zod.string(),
+  senderId: zod.number().nullable(),
+  senderName: zod.string().nullable(),
+  title: zod.string().nullable(),
+  broadcastId: zod.string().nullable(),
 });
 
 /**

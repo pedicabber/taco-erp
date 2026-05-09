@@ -16,4 +16,12 @@ export interface Notification {
   message: string;
   isRead: boolean;
   createdAt: string;
+  /** @nullable */
+  senderId: number | null;
+  /** @nullable */
+  senderName: string | null;
+  /** @nullable */
+  title: string | null;
+  /** @nullable */
+  broadcastId: string | null;
 }
