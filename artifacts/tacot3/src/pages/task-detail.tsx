@@ -40,6 +40,7 @@ import {
   StickyNote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -909,27 +910,48 @@ export default function TaskDetailPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {task.status !== "complete" &&
-                    (task.timerRunning ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => timerStopMutation.mutate()}
-                        disabled={timerStopMutation.isPending}
-                        className="border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                      >
-                        <Square className="w-4 h-4 mr-2" />
-                        Stop
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() => timerStartMutation.mutate()}
-                        disabled={timerStartMutation.isPending}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        <Play className="w-4 h-4 mr-2" />
-                        Start
-                      </Button>
-                    ))}
+                  {task.status === "complete" ? (
+                    // Completed tasks can't run the timer (server-side rule),
+                    // but we still render a disabled Start button with a
+                    // tooltip so the control is discoverable rather than
+                    // silently missing.
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button
+                            disabled
+                            aria-disabled="true"
+                            className="bg-green-600 hover:bg-green-700 opacity-50 cursor-not-allowed pointer-events-none"
+                          >
+                            <Play className="w-4 h-4 mr-2" />
+                            Start
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Reopen the task to track time
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : task.timerRunning ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => timerStopMutation.mutate()}
+                      disabled={timerStopMutation.isPending}
+                      className="border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                    >
+                      <Square className="w-4 h-4 mr-2" />
+                      Stop
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => timerStartMutation.mutate()}
+                      disabled={timerStartMutation.isPending}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Start
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
