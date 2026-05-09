@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/apiClient";
+import { GlobalLoadingOverlay } from "@/components/GlobalLoadingOverlay";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
@@ -172,6 +173,7 @@ function ClerkProviderWithRoutes() {
       <QueryClientProvider client={queryClient}>
         <ClerkApiAuthBridge />
         <ClerkQueryClientCacheInvalidator />
+        <GlobalLoadingOverlay />
         <Switch>
           <Route path="/" component={HomeRedirect} />
           <Route path="/sign-in/*?" component={SignInPage} />

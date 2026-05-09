@@ -80,6 +80,7 @@ export default function NotificationsPage() {
     queryKey: ["notifications"],
     queryFn: () => apiClient.get("/notifications").then(r => r.data),
     refetchInterval: 15000,
+    meta: { background: true },
   });
 
   const { data: sent = [], isLoading: sentLoading } = useQuery<SentBroadcast[]>({
