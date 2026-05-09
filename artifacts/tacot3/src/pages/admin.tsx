@@ -8,7 +8,7 @@ import {
   Settings, Users, FolderKanban, Shield, Trash2,
   Loader2, AlertTriangle, ArrowLeft, Search, ChevronUp, ChevronDown,
   Building2, Calendar, FileText, DollarSign, Check, X, Plus, Pencil,
-  ListChecks, ChevronRight,
+  ListChecks, ChevronRight, Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1191,6 +1191,197 @@ function TaskTemplatesTab() {
   );
 }
 
+// ── Loading Screen Tab ───────────────────────────────────────────────────────
+const LOADING_MEDIA_ACCEPT = "video/webm,image/gif,image/png,image/apng";
+const LOADING_MEDIA_MAX_MB = 15;
+const LOADING_MEDIA_MAX_BYTES = LOADING_MEDIA_MAX_MB * 1024 * 1024;
+const LOADING_VIDEO_EXT_RE = /\.(webm|mp4|mov)(\?|#|$)/i;
+const LOADING_IMAGE_EXT_RE = /\.(gif|png|apng|webp|jpg|jpeg)(\?|#|$)/i;
+
+function LoadingMediaPreview({ url, contentType }: { url: string; contentType?: string | null }) {
+  const isVideo = contentType
+    ? contentType.startsWith("video/")
+    : LOADING_VIDEO_EXT_RE.test(url) || !LOADING_IMAGE_EXT_RE.test(url);
+  return isVideo ? (
+    <video
+      key={url}
+      src={url}
+      autoPlay
+      muted
+      loop
+      playsInline
+      className="max-h-full max-w-full object-contain bg-transparent"
+    />
+  ) : (
+    <img
+      key={url}
+      src={url}
+      alt="Loading screen preview"
+      className="max-h-full max-w-full object-contain bg-transparent"
+    />
+  );
+}
+
+function LoadingScreenTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  // After upload, hold the just-uploaded URL locally until the admin clicks
+  // Apply. The persisted setting is updated only on Apply.
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  const [pendingType, setPendingType] = useState<string | null>(null);
+
+  const settingsQ = useQuery<Record<string, string>>({
+    queryKey: ["settings"],
+    queryFn: () => apiClient.get("/settings").then(r => r.data),
+  });
+  const savedUrl = settingsQ.data?.loading_media_url ?? null;
+  const previewUrl = pendingUrl ?? savedUrl;
+
+  const saveMutation = useMutation({
+    mutationFn: (value: string) =>
+      apiClient.put("/settings/loading_media_url", { value }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      setPendingUrl(null);
+      setPendingType(null);
+      toast({ title: "Loading screen updated" });
+    },
+    onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+  });
+
+  async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    const allowed = LOADING_MEDIA_ACCEPT.split(",");
+    if (!allowed.includes(file.type)) {
+      toast({
+        title: "Unsupported file type",
+        description: "Please choose a WebM, GIF, APNG, or PNG file.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (file.size > LOADING_MEDIA_MAX_BYTES) {
+      toast({
+        title: "File too large",
+        description: `Maximum size is ${LOADING_MEDIA_MAX_MB} MB.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const { data } = await apiClient.post<{ uploadURL: string; objectPath: string }>(
+        "/storage/uploads/request-url",
+        {
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+          kind: "loading-media",
+        },
+      );
+      const putRes = await fetch(data.uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+      if (!putRes.ok) throw new Error(`Storage upload failed (${putRes.status})`);
+      setPendingUrl(`${getApiUrl("/storage")}${data.objectPath}`);
+      setPendingType(file.type);
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        ?? (err instanceof Error ? err.message : "Upload failed");
+      toast({ title: "Upload failed", description: msg, variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <ImageIcon className="w-4 h-4" />
+          Loading Screen Media
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border bg-background/70 backdrop-blur-sm h-64 flex items-center justify-center overflow-hidden">
+          {previewUrl ? (
+            <LoadingMediaPreview url={previewUrl} contentType={pendingType} />
+          ) : (
+            <div className="text-center text-sm text-muted-foreground">
+              <p>No custom loading media uploaded.</p>
+              <p className="text-xs mt-1">Default taco animation will be used.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center flex-wrap gap-3">
+          <input
+            ref={fileRef}
+            type="file"
+            accept={LOADING_MEDIA_ACCEPT}
+            className="hidden"
+            onChange={handlePick}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isUploading || saveMutation.isPending}
+            onClick={() => fileRef.current?.click()}
+          >
+            {isUploading
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading…</>
+              : <><Upload className="w-4 h-4 mr-2" /> Upload media</>}
+          </Button>
+          {pendingUrl && (
+            <>
+              <Button
+                onClick={() => saveMutation.mutate(pendingUrl)}
+                disabled={saveMutation.isPending}
+              >
+                {saveMutation.isPending
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving…</>
+                  : <><Check className="w-4 h-4 mr-2" /> Apply</>}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => { setPendingUrl(null); setPendingType(null); }}
+                disabled={saveMutation.isPending}
+              >
+                Cancel
+              </Button>
+            </>
+          )}
+          {savedUrl && !pendingUrl && (
+            <Button
+              variant="ghost"
+              className="text-muted-foreground"
+              disabled={saveMutation.isPending}
+              onClick={() => saveMutation.mutate("")}
+            >
+              <X className="w-4 h-4 mr-2" />
+              Reset to default
+            </Button>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Supported: WebM, GIF, APNG, PNG — max {LOADING_MEDIA_MAX_MB} MB. For
+          best results use a file with a transparent background.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Admin Page ───────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const { data: currentUser, isLoading } = useCurrentUser();
@@ -1255,6 +1446,10 @@ export default function AdminPage() {
             <ListChecks className="w-4 h-4" />
             Task Templates
           </TabsTrigger>
+          <TabsTrigger value="loading-screen" className="gap-2">
+            <ImageIcon className="w-4 h-4" />
+            Loading Screen
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="users">
@@ -1271,6 +1466,10 @@ export default function AdminPage() {
 
         <TabsContent value="task-templates">
           <TaskTemplatesTab />
+        </TabsContent>
+
+        <TabsContent value="loading-screen">
+          <LoadingScreenTab />
         </TabsContent>
       </Tabs>
     </div>

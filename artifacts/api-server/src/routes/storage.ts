@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
+import { getAuth } from "@clerk/express";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
@@ -11,6 +12,8 @@ import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+
+const LOADING_MEDIA_PREFIX = "/objects/uploads/loading-media/";
 
 /**
  * POST /storage/uploads/request-url
@@ -29,14 +32,38 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
 
   try {
     const { name, size, contentType, taskId, projectId } = parsed.data;
+    // Optional discriminator carried alongside the standard fields. Zod
+    // strips unknown keys from `parsed.data`, so read it from the raw body.
+    const kind = (req.body as { kind?: string } | undefined)?.kind;
+
+    // Loading-media uploads are admin-only and live in their own namespace
+    // so the serve handler can identify them by path prefix alone.
+    if (kind === "loading-media") {
+      const auth = getAuth(req);
+      const clerkId = auth?.userId;
+      if (!clerkId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const [adminUser] = await db
+        .select({ role: usersTable.role })
+        .from(usersTable)
+        .where(eq(usersTable.clerkId, clerkId));
+      if (!adminUser || adminUser.role !== "admin") {
+        res.status(403).json({ error: "Forbidden: admin role required" });
+        return;
+      }
+    }
 
     // Organise uploads by context so each domain has its own folder.
-    // No task/project context => avatar upload (only other caller of this endpoint).
-    const subDir = taskId
-      ? `uploads/tasks/${taskId}`
-      : projectId
-        ? `uploads/projects/${projectId}`
-        : "uploads/avatars";
+    // No task/project context => avatar upload (legacy default).
+    const subDir = kind === "loading-media"
+      ? "uploads/loading-media"
+      : taskId
+        ? `uploads/tasks/${taskId}`
+        : projectId
+          ? `uploads/projects/${projectId}`
+          : "uploads/avatars";
     const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL(subDir);
 
     req.log.info({ objectPath }, "Generated upload URL");
@@ -100,6 +127,29 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
+
+    // Loading-media is benign intra-app content (the global loading overlay's
+    // graphic). Allow any authenticated user to read anything under the
+    // dedicated namespace; uploads into the namespace are already gated to
+    // admins by the upload endpoint.
+    if (objectPath.startsWith(LOADING_MEDIA_PREFIX)) {
+      const auth = getAuth(req);
+      if (!auth?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      const response = await objectStorageService.downloadObject(objectFile);
+      res.status(response.status);
+      response.headers.forEach((value, key) => res.setHeader(key, value));
+      if (response.body) {
+        const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
+        nodeStream.pipe(res);
+      } else {
+        res.end();
+      }
+      return;
+    }
 
     const [projectAttachment] = await db
       .select({ id: projectAttachmentsTable.id })
