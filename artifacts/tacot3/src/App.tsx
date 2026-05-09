@@ -7,9 +7,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import NotFound from "@/pages/not-found";
-import { Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/apiClient";
-import { GlobalLoadingOverlay } from "@/components/GlobalLoadingOverlay";
+import { GlobalLoadingOverlay, TacoLoadingScreen } from "@/components/GlobalLoadingOverlay";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
@@ -50,11 +49,10 @@ const SalesPipelinePage = lazy(() => import("@/pages/sales"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 
 function PageLoader() {
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-    </div>
-  );
+  // Reuses the same dim + taco-video screen as the global overlay so users
+  // never see the old spinner alongside the loading media during lazy route
+  // chunk loads.
+  return <TacoLoadingScreen />;
 }
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
