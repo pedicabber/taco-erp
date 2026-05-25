@@ -17,6 +17,9 @@ import TaskCard from "@/components/tasks/TaskCard";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import ProjectAttachmentsPanel from "@/components/projects/ProjectAttachmentsPanel";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -92,19 +95,24 @@ export default function ProjectDetailPage() {
 
   const completedTasks = (tasks as Task[]).filter(t => t.status === "complete").length;
 
-  // Derive "Involved Departments" from task.department (resolved: task's own OR assignee's dept)
-  const involvedDeptMap = new Map<number, { id: number; name: string; color: string | null; count: number }>();
+  // Derive "Involved Departments" from task.department (resolved: task's own OR assignee's dept).
+  // Preserve task order as returned by the API; preserve department order by first-appearance.
+  const involvedDeptMap = new Map<number, { id: number; name: string; color: string | null; tasks: Task[] }>();
+  const unassignedTasks: Task[] = [];
   for (const task of tasks as Task[]) {
     const d = task.department;
-    if (!d) continue;
+    if (!d) {
+      unassignedTasks.push(task);
+      continue;
+    }
     const existing = involvedDeptMap.get(d.id);
     if (existing) {
-      existing.count++;
+      existing.tasks.push(task);
     } else {
-      involvedDeptMap.set(d.id, { id: d.id, name: d.name, color: d.color, count: 1 });
+      involvedDeptMap.set(d.id, { id: d.id, name: d.name, color: d.color, tasks: [task] });
     }
   }
-  const involvedDepartments = [...involvedDeptMap.values()].sort((a, b) => b.count - a.count);
+  const involvedDepartments = [...involvedDeptMap.values()];
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto overflow-x-hidden">
@@ -233,69 +241,53 @@ export default function ProjectDetailPage() {
         </Card>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        {/* Involved Departments */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <h2 className="font-semibold">Involved Departments</h2>
-          </div>
-          {involvedDepartments.length === 0 ? (
-            <Card>
-              <CardContent className="p-6 text-center">
-                <p className="text-sm text-muted-foreground">
-                  {tasks.length === 0
-                    ? "No tasks yet — departments appear here once tasks are assigned."
-                    : "No departments assigned to tasks in this project."}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {involvedDepartments.map(dept => (
-                <Card key={dept.id}>
-                  <CardContent className="p-3 flex items-center gap-3">
-                    <div
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: dept.color ?? "#6B7280" }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{dept.name}</div>
-                      <div className="text-xs text-muted-foreground">{dept.count} task{dept.count !== 1 ? "s" : ""}</div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Tasks */}
-        <div className="md:col-span-2">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold">Tasks</h2>
+      {/* Involved Departments (collapsible groups of tasks) */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold">Involved Departments</h2>
+          {tasks.length > 0 && (
             <Link href={`/tasks?projectId=${projectId}`}>
               <Button size="sm" variant="outline">View all tasks</Button>
             </Link>
-          </div>
-          {tasks.length === 0 ? (
-            <Card>
-              <CardContent className="p-6 text-center">
-                <p className="text-sm text-muted-foreground">No tasks yet</p>
-                <Link href={`/tasks?projectId=${projectId}`}>
-                  <Button size="sm" className="mt-3">
-                    Create Task
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {(tasks as Task[]).map(task => (
-                <TaskCard key={task.id} task={task} compact />
-              ))}
-            </div>
           )}
         </div>
+        {tasks.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <p className="text-sm text-muted-foreground">No tasks yet — departments appear here once tasks are assigned.</p>
+              <Link href={`/tasks?projectId=${projectId}`}>
+                <Button size="sm" className="mt-3">
+                  Create Task
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        ) : involvedDepartments.length === 0 && unassignedTasks.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <p className="text-sm text-muted-foreground">No departments assigned to tasks in this project.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {involvedDepartments.map(dept => (
+              <DepartmentTaskGroup
+                key={dept.id}
+                name={dept.name}
+                color={dept.color}
+                tasks={dept.tasks}
+              />
+            ))}
+            {unassignedTasks.length > 0 && (
+              <DepartmentTaskGroup
+                key="unassigned"
+                name="Unassigned"
+                color={null}
+                tasks={unassignedTasks}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {/* Allocated Inventory */}
@@ -373,5 +365,50 @@ export default function ProjectDetailPage() {
         />
       )}
     </div>
+  );
+}
+
+function DepartmentTaskGroup({
+  name,
+  color,
+  tasks,
+}: {
+  name: string;
+  color: string | null;
+  tasks: Task[];
+}) {
+  const [open, setOpen] = useState(false);
+  const count = tasks.length;
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card className="overflow-hidden">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="w-full p-3 flex items-center gap-3 text-left hover:bg-muted/40 transition-colors"
+            data-testid={`department-toggle-${name}`}
+          >
+            {open
+              ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+            <div
+              className="w-3 h-3 rounded-full flex-shrink-0"
+              style={{ backgroundColor: color ?? "#6B7280" }}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium truncate">{name}</div>
+              <div className="text-xs text-muted-foreground">{count} task{count !== 1 ? "s" : ""}</div>
+            </div>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="px-3 pb-3 pt-1 space-y-2 border-t border-border/60">
+            {tasks.map(task => (
+              <TaskCard key={task.id} task={task} compact />
+            ))}
+          </div>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }

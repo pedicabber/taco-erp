@@ -1,0 +1,102 @@
+1. Module/page:
+Projects page → Individual project detail view
+
+2. Current problem:
+The project detail page currently displays all tasks expanded directly under each department. This creates excessive scrolling, especially on mobile devices, and makes the page feel cluttered and difficult to navigate.
+
+Users must scroll through long task lists before reaching other important project sections such as:
+- Inventory
+- Attachments
+- Additional project details
+
+3. Desired behavior:
+Departments within a project should become collapsible dropdown sections.
+
+By default:
+- Departments appear collapsed
+- Only the department summary is visible
+
+When clicked:
+- The department expands
+- The associated task list becomes visible
+- Each task remains clickable and routes into the existing task-detail page
+
+4. UI requirements:
+Preserve existing layout:
+Do NOT redesign:
+- project header
+- project detail cards
+- tallies/statistics
+- inventory section
+- attachments section
+- navigation flow
+
+Department section behavior:
+Each department row should display:
+- Department name
+- Quantity of tasks associated with that department
+
+Collapsed state:
+Only the department summary row is visible.
+
+Expanded state:
+Displays:
+- Existing task list
+- Existing task styling
+- Existing task click behavior
+
+Mobile optimization:
+The collapsed structure should significantly reduce vertical scrolling on mobile devices.
+
+Interaction:
+- Clicking department row toggles expand/collapse
+- Clicking a task opens existing task detail page
+- Multiple departments may remain expanded simultaneously
+
+Reuse:
+Investigate and reuse any existing accordion/collapsible UI components already used within the ERP before creating new ones.
+
+5. Database involved:
+No database changes expected.
+
+Use the existing:
+- project
+- department
+- task relationships already returned to the frontend.
+
+This should be a frontend-only implementation.
+
+6. What must NOT change:
+- Do not change project creation flow
+- Do not change task creation flow
+- Do not change task routing
+- Do not change inventory behavior
+- Do not change attachments behavior
+- Do not redesign the page layout
+- Do not change task filtering logic
+- Do not alter department/task relationships
+- Do not modify APIs unless absolutely required
+
+7. Workflow step-by-step:
+1. User opens ERP
+2. User clicks Projects tab
+3. User selects a project
+4. Project detail page opens
+5. User sees:
+   - existing project header
+   - existing project statistics/tallies
+6. Below that:
+   - involved departments appear as collapsed dropdown sections
+   - each shows department name + task quantity
+7. User clicks a department
+8. Department expands
+9. Associated tasks appear
+10. User clicks a task
+11. Existing task-detail page opens normally
+12. Inventory and attachments remain below departments exactly as they currently exist
+
+Plan first:
+- inspect current project detail task rendering
+- inspect existing accordion/collapsible components already used in the ERP
+- identify minimal frontend-only implementation
+- wait for approval before coding
