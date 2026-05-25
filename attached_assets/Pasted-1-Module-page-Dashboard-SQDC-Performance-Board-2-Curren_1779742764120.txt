@@ -1,0 +1,115 @@
+1. Module/page:
+Dashboard → SQDC Performance Board
+
+2. Current problem:
+The SQDC board is currently using placeholder/demo values and fake metrics instead of live ERP data.
+
+The layout and interaction behavior are good already, but the metrics themselves are not connected to real operational data.
+
+3. Desired behavior:
+Keep the existing SQDC board layout, colors, dropdown behavior, and structure exactly as they currently exist.
+
+Replace the placeholder values with real ERP-driven metrics using actual:
+- projects
+- tasks
+- overdue items
+- timers
+- activity
+- quality/rework indicators
+- safety records (if available)
+
+Each SQDC category should automatically calculate its current status from live ERP data.
+
+4. UI requirements:
+Do NOT redesign the SQDC board.
+
+Preserve:
+- existing colors
+- dropdown behavior
+- card layout
+- graphs/charts
+- status calendar
+- action plan sections
+- animations/interactions
+
+The only goal is replacing fake data with real ERP calculations.
+
+When clicking each SQDC section:
+- it should continue expanding/collapsing
+- but now show the real underlying records causing the score/result
+
+Example:
+Delivery dropdown:
+- overdue tasks
+- late projects
+- tasks due today
+- delayed milestones
+
+Quality dropdown:
+- rework-required tasks
+- failed QC items
+- reopened tasks
+- issue-related notes
+
+Cost dropdown:
+- estimated vs actual labor time
+- timer overruns
+- excessive task durations
+
+Safety dropdown:
+- safety incidents
+- flagged safety notes
+- days without incidents
+- open safety actions
+
+5. Database involved:
+Investigate existing available ERP data first.
+
+Likely sources:
+- tasks
+- projects
+- task_timer_sessions
+- notifications/activity
+- task status history
+- overdue calculations
+- any existing sqdc-related tables or fields
+
+Do NOT invent fake data.
+If a category lacks real data, display:
+"No data available"
+instead of placeholder numbers.
+
+6. What must NOT change:
+- Do not redesign the dashboard
+- Do not remove dropdown interactions
+- Do not alter task/project logic
+- Do not create fake calculations
+- Do not break mobile layout
+- Do not overwrite existing records
+- Do not create unnecessary new tables
+- Do not change the existing top dashboard cards below SQDC
+
+7. Workflow step-by-step:
+1. User opens Dashboard
+2. SQDC board loads real ERP-derived metrics
+3. Each SQDC category automatically calculates current status
+4. User clicks a category
+5. Dropdown expands
+6. User sees the actual ERP records causing the score
+7. User can identify operational problems directly from the board
+8. Board updates dynamically as ERP data changes
+
+IMPORTANT:
+Investigate first before coding.
+
+Report:
+- current placeholder implementation
+- current hardcoded values
+- available real data sources
+- recommended metric calculations
+- what data does NOT yet exist
+- whether MVP can be completed without schema changes
+- files involved
+- API/DB impact
+
+Wait for approval before implementation.

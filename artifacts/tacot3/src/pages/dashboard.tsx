@@ -44,84 +44,44 @@ function StatCard({
   );
 }
 
-// ── SQDC Types & Data ─────────────────────────────────────────────────────────
+// ── SQDC Types ────────────────────────────────────────────────────────────────
+type SqdcStatus = "green" | "yellow" | "red" | "neutral";
+type SqdcBadgeTone = "ok" | "warn" | "bad" | "neutral";
+
+interface SqdcRecord {
+  id: string;
+  kind: "task" | "project";
+  title: string;
+  subtitle: string;
+  href: string;
+  badge: string;
+  badgeTone: SqdcBadgeTone;
+  occurredAt: string | null;
+}
 interface SqdcMetric {
   key: "S" | "Q" | "D" | "C";
   fullName: string;
   icon: React.ElementType;
-  score: number;
+  score: number | null;
   scoreLabel: string;
-  status: "green" | "yellow" | "red";
+  status: SqdcStatus;
   statusLabel: string;
   calendarData: number[];
   keyMetrics: { label: string; value: string }[];
   trendData: { month: string; value: number }[];
-  actionPlan: { action: string; due: string; status: "closed" | "in-progress" | "open" }[];
+  records: SqdcRecord[];
   trendType: "bar" | "line";
   trendUnit?: string;
 }
 
-const MONTHS_TREND = ["Nov", "Dec", "Jan", "Feb", "Mar", "Apr"];
+interface SqdcApiCategory extends Omit<SqdcMetric, "fullName" | "icon"> {}
 
-const SQDC_DATA: SqdcMetric[] = [
-  {
-    key: "S", fullName: "Safety", icon: ShieldCheck,
-    score: 100, scoreLabel: "100%", status: "green", statusLabel: "GREEN",
-    calendarData: Array(35).fill(0).map((_, i) => (i === 12 ? 1 : 0)),
-    keyMetrics: [
-      { label: "Days W/O Incident", value: "90" },
-      { label: "Incidents / Mo", value: "0" },
-    ],
-    trendData: MONTHS_TREND.map((month, i) => ({ month, value: [0, 0, 1, 0, 2, 0][i] })),
-    actionPlan: [
-      { action: "Design PLC lockout procedure", due: "Feb 9", status: "closed" },
-      { action: "HMI screen safety review", due: "Mar 31", status: "open" },
-    ],
-    trendType: "bar",
-  },
-  {
-    key: "Q", fullName: "Quality", icon: Star,
-    score: 80, scoreLabel: "80%", status: "yellow", statusLabel: "YELLOW",
-    calendarData: Array(35).fill(0).map((_, i) => ([5, 11, 14, 22, 27].includes(i) ? 1 : [8, 19].includes(i) ? 2 : 0)),
-    keyMetrics: [
-      { label: "OFT Rate", value: "80%" },
-      { label: "In Review", value: "1" },
-    ],
-    trendData: MONTHS_TREND.map((month, i) => ({ month, value: [75, 82, 78, 85, 80, 80][i] })),
-    actionPlan: [
-      { action: "Order calibration parts", due: "Feb 28", status: "in-progress" },
-    ],
-    trendType: "line", trendUnit: "%",
-  },
-  {
-    key: "D", fullName: "Delivery", icon: Truck,
-    score: 100, scoreLabel: "100%", status: "green", statusLabel: "GREEN",
-    calendarData: Array(35).fill(0).map((_, i) => ([15, 16, 17].includes(i) ? 1 : 0)),
-    keyMetrics: [
-      { label: "On-Time", value: "100%" },
-      { label: "At Risk", value: "0" },
-    ],
-    trendData: MONTHS_TREND.map((month, i) => ({ month, value: [88, 92, 100, 95, 100, 100][i] })),
-    actionPlan: [
-      { action: "Electrical panel audit", due: "Apr 14", status: "open" },
-    ],
-    trendType: "line", trendUnit: "%",
-  },
-  {
-    key: "C", fullName: "Cost", icon: DollarSign,
-    score: 6, scoreLabel: "6%", status: "red", statusLabel: "RED",
-    calendarData: Array(35).fill(0).map((_, i) => ([3, 9, 14, 20, 26, 30].includes(i) ? 2 : [6, 17].includes(i) ? 1 : 0)),
-    keyMetrics: [
-      { label: "Variance", value: "-79%" },
-      { label: "Pending", value: "$387k" },
-    ],
-    trendData: MONTHS_TREND.map((month, i) => ({ month, value: [180000, 220000, 310000, 260000, 350000, 387000][i] })),
-    actionPlan: [
-      { action: "Site survey quote review", due: "Mar 19", status: "in-progress" },
-    ],
-    trendType: "bar",
-  },
-];
+const SQDC_META: Record<"S" | "Q" | "D" | "C", { fullName: string; icon: React.ElementType }> = {
+  S: { fullName: "Safety", icon: ShieldCheck },
+  Q: { fullName: "Quality", icon: Star },
+  D: { fullName: "Delivery", icon: Truck },
+  C: { fullName: "Cost", icon: DollarSign },
+};
 
 const COL = {
   S: {
@@ -166,10 +126,27 @@ const COL = {
   },
 } as const;
 
-const ACTION_STATUS_STYLE = {
-  closed: "bg-green-900/70 text-green-300",
-  "in-progress": "bg-blue-900/70 text-blue-300",
-  open: "bg-orange-900/70 text-orange-300",
+// Neutral palette used when a category has no underlying data.
+const COL_NEUTRAL = {
+  accent: "#6b7280",
+  headerBg: "bg-zinc-900/80 border-zinc-700/60",
+  letterBg: "bg-zinc-700",
+  metricBg: "bg-zinc-800/50 border-zinc-700/40 text-zinc-300",
+  chartColor: "#71717a",
+  dotColor: "bg-zinc-400",
+  statusText: "text-zinc-400",
+  snippetBg: "bg-zinc-900/90 border-zinc-700/50",
+} as const;
+
+function colorsFor(m: SqdcMetric): typeof COL[keyof typeof COL] {
+  return m.status === "neutral" ? COL_NEUTRAL : COL[m.key];
+}
+
+const BADGE_TONE_STYLE: Record<SqdcBadgeTone, string> = {
+  ok: "bg-green-900/70 text-green-300",
+  warn: "bg-yellow-900/70 text-yellow-300",
+  bad: "bg-red-900/70 text-red-300",
+  neutral: "bg-zinc-800/70 text-zinc-300",
 };
 
 const CAL_CELL_BG = ["bg-green-700/60", "bg-yellow-600/70", "bg-red-700/70"] as const;
@@ -212,6 +189,7 @@ function SqdcHeaderTile({
   onClick: () => void;
   isExpanded: boolean;
 }) {
+  const noData = m.status === "neutral";
   return (
     <button
       onClick={onClick}
@@ -228,7 +206,9 @@ function SqdcHeaderTile({
         <div className="flex-1 min-w-0 overflow-hidden">
           <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold truncate">{m.fullName}</p>
           <p className="text-2xl sm:text-3xl lg:text-4xl font-black leading-none mt-0.5 text-white truncate">{m.scoreLabel}</p>
-          <p className="text-[10px] uppercase text-white/40 mt-0.5 tracking-wider">SCORE</p>
+          <p className="text-[10px] uppercase text-white/40 mt-0.5 tracking-wider">
+            {noData ? "No data available" : "SCORE"}
+          </p>
         </div>
       </div>
       <p className="text-[9px] text-white/30 mt-3 uppercase tracking-widest flex items-center gap-0.5">
@@ -239,6 +219,14 @@ function SqdcHeaderTile({
   );
 }
 
+function EmptyPanelMessage() {
+  return (
+    <div className="h-full min-h-[64px] flex items-center justify-center text-[11px] text-white/40">
+      No data available
+    </div>
+  );
+}
+
 // ── Snippet panel (drops below tiles on click) ─────────────────────────────────
 function SqdcSnippetPanel({
   m, colors,
@@ -246,8 +234,11 @@ function SqdcSnippetPanel({
   m: SqdcMetric;
   colors: typeof COL[keyof typeof COL];
 }) {
-  const fmt = (v: number) =>
-    m.trendUnit === "%" ? `${v}%` : v >= 1000 ? `$${Math.round(v / 1000)}k` : v.toString();
+  const fmt = (v: number) => {
+    if (m.trendUnit) return `${v}${m.trendUnit}`;
+    // Cost trend ships hours; every other unit-less category ships counts.
+    return m.key === "C" ? `${v}h` : v.toString();
+  };
 
   return (
     <motion.div
@@ -262,7 +253,11 @@ function SqdcSnippetPanel({
           {/* Calendar */}
           <div className="bg-black/25 rounded-lg p-3">
             <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold mb-2">Status Calendar</p>
-            <SqdcCalendar data={m.calendarData} />
+            {m.calendarData.some(v => v > 0) ? (
+              <SqdcCalendar data={m.calendarData} />
+            ) : (
+              <EmptyPanelMessage />
+            )}
           </div>
           {/* Key Metrics */}
           <div className="bg-black/25 rounded-lg p-3">
@@ -280,48 +275,63 @@ function SqdcSnippetPanel({
           <div className="bg-black/25 rounded-lg p-3">
             <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold mb-2">6-Month Trend</p>
             <div className="h-24">
-              <ResponsiveContainer width="100%" height="100%">
-                {m.trendType === "bar" ? (
-                  <BarChart data={m.trendData} barSize={8}>
-                    <XAxis dataKey="month" tick={{ fontSize: 8, fill: "#888" }} axisLine={false} tickLine={false} />
-                    <YAxis hide />
-                    <Tooltip
-                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 10 }}
-                      formatter={(v: number) => [fmt(v), m.fullName]}
-                    />
-                    <Bar dataKey="value" fill={colors.chartColor} radius={[2, 2, 0, 0]} />
-                  </BarChart>
-                ) : (
-                  <LineChart data={m.trendData}>
-                    <XAxis dataKey="month" tick={{ fontSize: 8, fill: "#888" }} axisLine={false} tickLine={false} />
-                    <YAxis hide domain={["auto", "auto"]} />
-                    <Tooltip
-                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 10 }}
-                      formatter={(v: number) => [fmt(v), m.fullName]}
-                    />
-                    <Line type="monotone" dataKey="value" stroke={colors.chartColor} strokeWidth={2} dot={{ r: 3, fill: colors.chartColor }} />
-                  </LineChart>
-                )}
-              </ResponsiveContainer>
+              {m.trendData.length === 0 ? (
+                <EmptyPanelMessage />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  {m.trendType === "bar" ? (
+                    <BarChart data={m.trendData} barSize={8}>
+                      <XAxis dataKey="month" tick={{ fontSize: 8, fill: "#888" }} axisLine={false} tickLine={false} />
+                      <YAxis hide />
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 10 }}
+                        formatter={(v: number) => [fmt(v), m.fullName]}
+                      />
+                      <Bar dataKey="value" fill={colors.chartColor} radius={[2, 2, 0, 0]} />
+                    </BarChart>
+                  ) : (
+                    <LineChart data={m.trendData}>
+                      <XAxis dataKey="month" tick={{ fontSize: 8, fill: "#888" }} axisLine={false} tickLine={false} />
+                      <YAxis hide domain={["auto", "auto"]} />
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 10 }}
+                        formatter={(v: number) => [fmt(v), m.fullName]}
+                      />
+                      <Line type="monotone" dataKey="value" stroke={colors.chartColor} strokeWidth={2} dot={{ r: 3, fill: colors.chartColor }} />
+                    </LineChart>
+                  )}
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
-          {/* Action Plan */}
+          {/* Records */}
           <div className="bg-black/25 rounded-lg p-3">
-            <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold mb-2">Action Plan</p>
-            <div className="space-y-1">
-              <div className="grid grid-cols-3 gap-1 text-[9px] uppercase tracking-widest text-white/40 font-bold pb-1.5 border-b border-white/10">
-                <span>Action</span><span>Due</span><span>Status</span>
-              </div>
-              {m.actionPlan.map((ap, i) => (
-                <div key={i} className="grid grid-cols-3 gap-1 items-center py-0.5">
-                  <span className="text-[10px] truncate text-white/80">{ap.action}</span>
-                  <span className="text-[10px] text-white/50">{ap.due}</span>
-                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-medium capitalize", ACTION_STATUS_STYLE[ap.status])}>
-                    {ap.status === "in-progress" ? "In Progress" : ap.status.charAt(0).toUpperCase() + ap.status.slice(1)}
-                  </span>
+            <p className="text-[10px] uppercase tracking-widest text-white/50 font-bold mb-2">Records</p>
+            {m.records.length === 0 ? (
+              <EmptyPanelMessage />
+            ) : (
+              <div className="space-y-1">
+                <div className="grid grid-cols-[1fr_auto] gap-2 text-[9px] uppercase tracking-widest text-white/40 font-bold pb-1.5 border-b border-white/10">
+                  <span>Item</span><span>Status</span>
                 </div>
-              ))}
-            </div>
+                {m.records.slice(0, 6).map((r) => (
+                  <Link key={r.id} href={r.href}>
+                    <div className="grid grid-cols-[1fr_auto] gap-2 items-center py-0.5 hover:bg-white/5 rounded px-1 -mx-1 cursor-pointer">
+                      <div className="min-w-0">
+                        <p className="text-[10px] truncate text-white/80">{r.title}</p>
+                        <p className="text-[9px] truncate text-white/40">
+                          {r.subtitle}
+                          {r.occurredAt && ` · ${formatDistanceToNow(new Date(r.occurredAt), { addSuffix: true })}`}
+                        </p>
+                      </div>
+                      <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap", BADGE_TONE_STYLE[r.badgeTone])}>
+                        {r.badge}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -346,15 +356,48 @@ function SqdcDashboard() {
     queryKey: ["projects"],
     queryFn: () => apiClient.get("/projects").then(r => r.data),
   });
+  const { data: sqdcData } = useQuery<{ categories: SqdcApiCategory[] }>({
+    queryKey: ["dashboard-sqdc"],
+    queryFn: () => apiClient.get("/dashboard/sqdc").then(r => r.data),
+    refetchInterval: 60000,
+  });
   const recentProjects = (projects as Project[] | undefined)?.slice(0, 5) ?? [];
 
-  const overallStatus = SQDC_DATA.some(m => m.status === "red") ? "red"
-    : SQDC_DATA.some(m => m.status === "yellow") ? "yellow" : "green";
-  const overallLabel = { green: "ON TARGET", yellow: "AT RISK", red: "OFF TARGET" }[overallStatus];
+  // Build the SQDC display array by merging API data with the static
+  // per-key metadata (fullName, icon). Falls back to neutral placeholders
+  // while the query is in flight so the layout never shifts.
+  const sqdcMetrics: SqdcMetric[] = (["S", "Q", "D", "C"] as const).map(key => {
+    const api = sqdcData?.categories.find(c => c.key === key);
+    const meta = SQDC_META[key];
+    if (api) return { ...api, fullName: meta.fullName, icon: meta.icon };
+    return {
+      key,
+      fullName: meta.fullName,
+      icon: meta.icon,
+      score: null,
+      scoreLabel: "—",
+      status: "neutral" as SqdcStatus,
+      statusLabel: "NO DATA",
+      keyMetrics: [],
+      calendarData: new Array(35).fill(0),
+      trendData: [],
+      records: [],
+      trendType: "bar" as const,
+    };
+  });
+  const allNeutral = sqdcMetrics.every(m => m.status === "neutral");
+
+  const overallStatus: SqdcStatus = sqdcMetrics.some(m => m.status === "red") ? "red"
+    : sqdcMetrics.some(m => m.status === "yellow") ? "yellow"
+    : sqdcMetrics.some(m => m.status === "green") ? "green" : "neutral";
+  const overallLabel = {
+    green: "ON TARGET", yellow: "AT RISK", red: "OFF TARGET", neutral: "NO DATA",
+  }[overallStatus];
   const overallBadge = {
     green: "bg-green-900/50 text-green-300 border-green-700",
     yellow: "bg-yellow-900/40 text-yellow-300 border-yellow-700",
     red: "bg-red-900/40 text-red-300 border-red-700",
+    neutral: "bg-zinc-800/60 text-zinc-300 border-zinc-700",
   }[overallStatus];
 
   function toggle(key: "S" | "Q" | "D" | "C") {
@@ -380,8 +423,13 @@ function SqdcDashboard() {
         transition={{ duration: 0.18 }}
       >
         {/* ── SQDC Tiles ───────────────────────────────────────────────── */}
+        {allNeutral && (
+          <p className="text-xs text-muted-foreground mb-3">
+            Tag tasks with Safety / Quality / Delivery results to start populating this board.
+          </p>
+        )}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          {SQDC_DATA.map((m, i) => (
+          {sqdcMetrics.map((m, i) => (
             <motion.div
               key={m.key}
               initial={{ opacity: 0, y: 20 }}
@@ -396,7 +444,7 @@ function SqdcDashboard() {
             >
               <SqdcHeaderTile
                 m={m}
-                colors={COL[m.key]}
+                colors={colorsFor(m)}
                 onClick={() => toggle(m.key)}
                 isExpanded={expanded === m.key}
               />
@@ -405,13 +453,10 @@ function SqdcDashboard() {
 
           {/* Snippet panel — col-span-full so it appears below all tiles */}
           <AnimatePresence>
-            {expanded && (
-              <SqdcSnippetPanel
-                key={expanded}
-                m={SQDC_DATA.find(m => m.key === expanded)!}
-                colors={COL[expanded]}
-              />
-            )}
+            {expanded && (() => {
+              const m = sqdcMetrics.find(x => x.key === expanded)!;
+              return <SqdcSnippetPanel key={expanded} m={m} colors={colorsFor(m)} />;
+            })()}
           </AnimatePresence>
         </div>
 

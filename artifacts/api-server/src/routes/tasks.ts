@@ -1326,4 +1326,386 @@ router.get("/tasks/:taskId/subtask-attachments", requireAuth, async (req: Authen
   res.json(result);
 });
 
+// ── SQDC Performance Board ───────────────────────────────────────────────────
+type SqdcStatus = "green" | "yellow" | "red" | "neutral";
+type SqdcRecord = {
+  id: string;
+  kind: "task" | "project";
+  title: string;
+  subtitle: string;
+  href: string;
+  badge: string;
+  badgeTone: "ok" | "warn" | "bad" | "neutral";
+  occurredAt: string | null;
+};
+
+function sqdcStartOfDay(d: Date): Date {
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
+}
+function sqdcDaysAgo(n: number): Date {
+  const d = sqdcStartOfDay(new Date());
+  d.setDate(d.getDate() - n);
+  return d;
+}
+function sqdcDayIndex(date: Date, today: Date): number {
+  // idx 34 = today, idx 0 = 34 days ago
+  const ms = sqdcStartOfDay(date).getTime() - today.getTime();
+  return 34 + Math.round(ms / 86400000);
+}
+function sqdcMonthBuckets(now: Date) {
+  const out: { label: string; start: Date; end: Date }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    out.push({
+      label: start.toLocaleString("en-US", { month: "short" }),
+      start,
+      end,
+    });
+  }
+  return out;
+}
+function sqdcLabelStatus(s: SqdcStatus): string {
+  return s === "green" ? "GREEN" : s === "yellow" ? "YELLOW" : s === "red" ? "RED" : "NO DATA";
+}
+function sqdcParseDueDate(s: string | null): Date | null {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+router.get("/dashboard/sqdc", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const user = await syncUserFromClerk(req);
+
+  // Same OA visibility filtering as /dashboard/summary so non-OA users never
+  // see hidden Office/Admin container tasks or projects in this board.
+  const oaTaskGuard = await excludeForeignOAContainerTasks(user?.id ?? null);
+  const tasks = oaTaskGuard
+    ? await db.select().from(tasksTable).where(oaTaskGuard)
+    : await db.select().from(tasksTable);
+  const projects = await db.select().from(projectsTable).where(excludeOAContainerProject);
+
+  const now = new Date();
+  const today = sqdcStartOfDay(now);
+  const cutoff30 = sqdcDaysAgo(30);
+  const cutoff34 = sqdcDaysAgo(34);
+  const months = sqdcMonthBuckets(now);
+  const monthsStart = months[0].start;
+
+  const projectName = new Map(projects.map(p => [p.id, p.name]));
+
+  // ── Safety (S) ───────────────────────────────────────────────────────
+  const safetyTagged = tasks.filter(t => t.safetyFlag === "incident" || t.safetyFlag === "near_miss");
+  const safetyIn30 = safetyTagged.filter(t => t.updatedAt >= cutoff30);
+  const incidents30 = safetyIn30.filter(t => t.safetyFlag === "incident").length;
+  const nearMiss30 = safetyIn30.filter(t => t.safetyFlag === "near_miss").length;
+  const lastIncident = safetyTagged
+    .filter(t => t.safetyFlag === "incident")
+    .reduce<Date | null>((acc, t) => (!acc || t.updatedAt > acc ? t.updatedAt : acc), null);
+  const daysSinceIncident = lastIncident
+    ? Math.max(0, Math.floor((today.getTime() - sqdcStartOfDay(lastIncident).getTime()) / 86400000))
+    : null;
+
+  const sCal = new Array<number>(35).fill(0);
+  for (const t of safetyTagged) {
+    if (t.updatedAt < cutoff34) continue;
+    const i = sqdcDayIndex(t.updatedAt, today);
+    if (i < 0 || i > 34) continue;
+    const sev = t.safetyFlag === "incident" ? 2 : 1;
+    if (sev > sCal[i]) sCal[i] = sev;
+  }
+  const sTrend = months.map(b => ({
+    month: b.label,
+    value: safetyTagged.filter(t =>
+      t.safetyFlag === "incident" && t.updatedAt >= b.start && t.updatedAt < b.end
+    ).length,
+  }));
+
+  let sScore: number | null = null;
+  let sStatus: SqdcStatus = "neutral";
+  if (safetyTagged.length > 0) {
+    const raw = 100 - (incidents30 * 25 + nearMiss30 * 5);
+    sScore = Math.max(0, Math.min(100, raw));
+    sStatus = sScore === 100 ? "green" : sScore >= 70 ? "yellow" : "red";
+  }
+
+  const sRecords: SqdcRecord[] = safetyTagged
+    .slice()
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, 10)
+    .map(t => ({
+      id: `task:${t.id}`,
+      kind: "task",
+      title: t.title,
+      subtitle: projectName.get(t.projectId) ?? "—",
+      href: `/tasks/${t.id}`,
+      badge: t.safetyFlag === "incident" ? "Incident" : "Near Miss",
+      badgeTone: t.safetyFlag === "incident" ? "bad" : "warn",
+      occurredAt: t.updatedAt.toISOString(),
+    }));
+
+  // ── Quality (Q) ──────────────────────────────────────────────────────
+  const qTagged = tasks.filter(t => t.qualityResult && t.qualityResult !== "pending");
+  const qIn30 = qTagged.filter(t => t.updatedAt >= cutoff30);
+  const qPass30 = qIn30.filter(t => t.qualityResult === "pass").length;
+  const qRework30 = qIn30.filter(t => t.qualityResult === "rework").length;
+  const qFail30 = qIn30.filter(t => t.qualityResult === "fail").length;
+  const qDenom = qPass30 + qRework30 + qFail30;
+  let qScore: number | null = null;
+  let qStatus: SqdcStatus = "neutral";
+  if (qDenom > 0) {
+    qScore = Math.round((qPass30 / qDenom) * 100);
+    qStatus = qScore >= 95 ? "green" : qScore >= 80 ? "yellow" : "red";
+  }
+  const qCal = new Array<number>(35).fill(0);
+  for (const t of qTagged) {
+    if (t.updatedAt < cutoff34) continue;
+    const i = sqdcDayIndex(t.updatedAt, today);
+    if (i < 0 || i > 34) continue;
+    const sev = t.qualityResult === "fail" ? 2 : t.qualityResult === "rework" ? 1 : 0;
+    if (sev > qCal[i]) qCal[i] = sev;
+  }
+  const qTrend = months.map(b => {
+    const inBucket = qTagged.filter(t => t.updatedAt >= b.start && t.updatedAt < b.end);
+    const p = inBucket.filter(t => t.qualityResult === "pass").length;
+    return { month: b.label, value: inBucket.length > 0 ? Math.round((p / inBucket.length) * 100) : 0 };
+  });
+  const qRecords: SqdcRecord[] = qTagged
+    .filter(t => t.qualityResult === "rework" || t.qualityResult === "fail")
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, 10)
+    .map(t => ({
+      id: `task:${t.id}`,
+      kind: "task",
+      title: t.title,
+      subtitle: projectName.get(t.projectId) ?? "—",
+      href: `/tasks/${t.id}`,
+      badge: t.qualityResult === "fail" ? "Fail" : "Rework",
+      badgeTone: t.qualityResult === "fail" ? "bad" : "warn",
+      occurredAt: t.updatedAt.toISOString(),
+    }));
+
+  // ── Delivery (D) ─────────────────────────────────────────────────────
+  const overdueNow = tasks.filter(t => {
+    if (t.status === "complete" || !t.dueDate) return false;
+    const d = sqdcParseDueDate(t.dueDate);
+    return !!d && d < today;
+  });
+  const dTagged = tasks.filter(t => t.deliveryStatus === "on_time" || t.deliveryStatus === "late");
+  const dIn30 = dTagged.filter(t => t.updatedAt >= cutoff30);
+  const onTime30 = dIn30.filter(t => t.deliveryStatus === "on_time").length;
+  const late30 = dIn30.filter(t => t.deliveryStatus === "late").length;
+  const dDenom = onTime30 + late30 + overdueNow.length;
+  let dScore: number | null = null;
+  let dStatus: SqdcStatus = "neutral";
+  if (dDenom > 0) {
+    dScore = Math.round((onTime30 / dDenom) * 100);
+    dStatus = dScore >= 95 ? "green" : dScore >= 80 ? "yellow" : "red";
+  }
+  const dCal = new Array<number>(35).fill(0);
+  for (const t of dTagged) {
+    if (t.updatedAt < cutoff34) continue;
+    const i = sqdcDayIndex(t.updatedAt, today);
+    if (i < 0 || i > 34) continue;
+    if (t.deliveryStatus === "late" && dCal[i] < 2) dCal[i] = 2;
+  }
+  for (const t of overdueNow) {
+    const due = sqdcParseDueDate(t.dueDate);
+    if (!due || due < cutoff34) continue;
+    const i = sqdcDayIndex(due, today);
+    if (i < 0 || i > 34) continue;
+    if (dCal[i] < 1) dCal[i] = 1;
+  }
+  const dTrend = months.map(b => {
+    const inBucket = dTagged.filter(t => t.updatedAt >= b.start && t.updatedAt < b.end);
+    const ot = inBucket.filter(t => t.deliveryStatus === "on_time").length;
+    return { month: b.label, value: inBucket.length > 0 ? Math.round((ot / inBucket.length) * 100) : 0 };
+  });
+
+  const dRecords: SqdcRecord[] = [];
+  for (const t of overdueNow
+    .slice()
+    .sort((a, b) => sqdcParseDueDate(a.dueDate)!.getTime() - sqdcParseDueDate(b.dueDate)!.getTime())
+    .slice(0, 5)) {
+    const due = sqdcParseDueDate(t.dueDate)!;
+    const daysLate = Math.floor((today.getTime() - due.getTime()) / 86400000);
+    dRecords.push({
+      id: `overdue:${t.id}`,
+      kind: "task",
+      title: t.title,
+      subtitle: projectName.get(t.projectId) ?? "—",
+      href: `/tasks/${t.id}`,
+      badge: `Overdue ${daysLate}d`,
+      badgeTone: "bad",
+      occurredAt: due.toISOString(),
+    });
+  }
+  const todayStr = today.toISOString().slice(0, 10);
+  for (const t of tasks
+    .filter(t => t.dueDate?.slice(0, 10) === todayStr && t.status !== "complete")
+    .slice(0, 5)) {
+    dRecords.push({
+      id: `today:${t.id}`,
+      kind: "task",
+      title: t.title,
+      subtitle: projectName.get(t.projectId) ?? "—",
+      href: `/tasks/${t.id}`,
+      badge: "Due today",
+      badgeTone: "warn",
+      occurredAt: new Date(t.dueDate!).toISOString(),
+    });
+  }
+  for (const p of projects
+    .filter(p => {
+      if (p.status !== "active" || !p.deliveryDate) return false;
+      const dd = sqdcParseDueDate(p.deliveryDate);
+      return !!dd && dd < today;
+    })
+    .slice(0, 5)) {
+    const dd = sqdcParseDueDate(p.deliveryDate)!;
+    dRecords.push({
+      id: `project:${p.id}`,
+      kind: "project",
+      title: p.name,
+      subtitle: p.company,
+      href: `/projects/${p.id}`,
+      badge: "Late project",
+      badgeTone: "bad",
+      occurredAt: dd.toISOString(),
+    });
+  }
+
+  // ── Cost (C) — hours-based, never dollars ────────────────────────────
+  const completedWithEstimate30 = tasks.filter(t =>
+    t.status === "complete"
+    && t.expectedHours != null && t.expectedHours > 0
+    && t.completedAt && t.completedAt >= cutoff30
+  );
+  const sumExpected = completedWithEstimate30.reduce((a, t) => a + (t.expectedHours ?? 0), 0);
+  const sumActual = completedWithEstimate30.reduce((a, t) => a + (t.elapsedSeconds / 3600), 0);
+  let cScore: number | null = null;
+  let cStatus: SqdcStatus = "neutral";
+  let variancePct: number | null = null;
+  if (completedWithEstimate30.length > 0 && sumActual > 0 && sumExpected > 0) {
+    cScore = Math.max(0, Math.min(100, Math.round((sumExpected / sumActual) * 100)));
+    cStatus = cScore >= 95 ? "green" : cScore >= 80 ? "yellow" : "red";
+    variancePct = Math.round(((sumActual - sumExpected) / sumExpected) * 100);
+  }
+  const tasksWithEstimate = tasks.filter(t => t.expectedHours != null && t.expectedHours > 0);
+  const overBudget = tasksWithEstimate.filter(t => t.elapsedSeconds > t.expectedHours! * 3600);
+
+  const cCal = new Array<number>(35).fill(0);
+  for (const t of overBudget) {
+    if (t.updatedAt < cutoff34) continue;
+    const i = sqdcDayIndex(t.updatedAt, today);
+    if (i < 0 || i > 34) continue;
+    const ratio = t.elapsedSeconds / (t.expectedHours! * 3600);
+    const sev = ratio >= 1.5 ? 2 : 1;
+    if (sev > cCal[i]) cCal[i] = sev;
+  }
+  const sessions = await db
+    .select()
+    .from(taskTimerSessionsTable)
+    .where(gte(taskTimerSessionsTable.startedAt, monthsStart));
+  const visibleTaskIds = new Set(tasks.map(t => t.id));
+  const cTrend = months.map(b => {
+    const seconds = sessions
+      .filter(s =>
+        visibleTaskIds.has(s.taskId)
+        && s.startedAt >= b.start && s.startedAt < b.end
+        && s.durationSeconds != null
+      )
+      .reduce((a, s) => a + (s.durationSeconds ?? 0), 0);
+    return { month: b.label, value: Math.round(seconds / 3600) };
+  });
+
+  const cRecords: SqdcRecord[] = overBudget
+    .map(t => ({
+      t,
+      overrunH: (t.elapsedSeconds - t.expectedHours! * 3600) / 3600,
+    }))
+    .sort((a, b) => b.overrunH - a.overrunH)
+    .slice(0, 10)
+    .map(({ t, overrunH }) => ({
+      id: `task:${t.id}`,
+      kind: "task",
+      title: t.title,
+      subtitle: projectName.get(t.projectId) ?? "—",
+      href: `/tasks/${t.id}`,
+      badge: `+${overrunH.toFixed(1)}h over`,
+      badgeTone: overrunH > t.expectedHours! * 0.5 ? "bad" : "warn",
+      occurredAt: t.updatedAt.toISOString(),
+    }));
+
+  res.json({
+    categories: [
+      {
+        key: "S",
+        score: sScore,
+        scoreLabel: sScore === null ? "—" : `${sScore}%`,
+        status: sStatus,
+        statusLabel: sqdcLabelStatus(sStatus),
+        keyMetrics: [
+          { label: "Days W/O Incident", value: daysSinceIncident === null ? "—" : String(daysSinceIncident) },
+          { label: "Incidents (30d)", value: String(incidents30) },
+        ],
+        calendarData: sCal,
+        trendData: safetyTagged.length > 0 ? sTrend : [],
+        trendType: "bar",
+        records: sRecords,
+      },
+      {
+        key: "Q",
+        score: qScore,
+        scoreLabel: qScore === null ? "—" : `${qScore}%`,
+        status: qStatus,
+        statusLabel: sqdcLabelStatus(qStatus),
+        keyMetrics: [
+          { label: "OFT %", value: qScore === null ? "—" : `${qScore}%` },
+          { label: "Rework / Fail (30d)", value: String(qRework30 + qFail30) },
+        ],
+        calendarData: qCal,
+        trendData: qTagged.length > 0 ? qTrend : [],
+        trendType: "line",
+        trendUnit: "%",
+        records: qRecords,
+      },
+      {
+        key: "D",
+        score: dScore,
+        scoreLabel: dScore === null ? "—" : `${dScore}%`,
+        status: dStatus,
+        statusLabel: sqdcLabelStatus(dStatus),
+        keyMetrics: [
+          { label: "On-Time %", value: dScore === null ? "—" : `${dScore}%` },
+          { label: "Overdue Now", value: String(overdueNow.length) },
+        ],
+        calendarData: dCal,
+        trendData: (dTagged.length > 0 || overdueNow.length > 0) ? dTrend : [],
+        trendType: "line",
+        trendUnit: "%",
+        records: dRecords,
+      },
+      {
+        key: "C",
+        score: cScore,
+        scoreLabel: cScore === null ? "—" : `${cScore}%`,
+        status: cStatus,
+        statusLabel: sqdcLabelStatus(cStatus),
+        keyMetrics: [
+          { label: "Time Variance", value: variancePct === null ? "—" : `${variancePct > 0 ? "+" : ""}${variancePct}%` },
+          { label: "Over-Budget Tasks", value: String(overBudget.length) },
+        ],
+        calendarData: cCal,
+        trendData: tasksWithEstimate.length > 0 ? cTrend : [],
+        trendType: "bar",
+        trendUnit: "h",
+        records: cRecords,
+      },
+    ],
+  });
+});
+
 export default router;
