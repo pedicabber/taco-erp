@@ -10,7 +10,7 @@ const SHOW_DELAY_MS = 300;
 const VIDEO_EXT_RE = /\.(webm|mp4|mov)(\?|#|$)/i;
 const IMAGE_EXT_RE = /\.(gif|png|apng|webp|jpg|jpeg)(\?|#|$)/i;
 
-function useLoadingMediaUrl(): string | null {
+function useLoadingScreenSettings(): { mediaUrl: string | null; enabled: boolean } {
   const { isSignedIn } = useAuth();
   const { data } = useQuery<Record<string, string>>({
     queryKey: ["settings"],
@@ -20,11 +20,19 @@ function useLoadingMediaUrl(): string | null {
     // Mark as background so it does NOT itself trigger the loading overlay.
     meta: { background: true },
   });
-  return data?.loading_media_url ?? null;
+  // For signed-in users, suppress the overlay until /settings resolves so a
+  // persisted `loading_screen_enabled=false` is never briefly violated on
+  // cold load. Once resolved, default ON: only explicit "false" disables.
+  // For signed-out users the settings query is disabled and never resolves;
+  // fall back to ON so the overlay still works on the sign-in flow.
+  const enabled = isSignedIn
+    ? data !== undefined && data.loading_screen_enabled !== "false"
+    : true;
+  return { mediaUrl: data?.loading_media_url ?? null, enabled };
 }
 
 export function TacoLoadingScreen() {
-  const customUrl = useLoadingMediaUrl();
+  const { mediaUrl: customUrl } = useLoadingScreenSettings();
   const [errored, setErrored] = useState(false);
 
   // Reset the error flag whenever the source URL changes so a new upload
@@ -76,6 +84,7 @@ export function TacoLoadingScreen() {
 }
 
 export function GlobalLoadingOverlay() {
+  const { enabled } = useLoadingScreenSettings();
   const fetchingCount = useIsFetching({
     predicate: (q) => !(q.meta as { background?: boolean } | undefined)?.background,
   });
@@ -85,16 +94,20 @@ export function GlobalLoadingOverlay() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!isLoading) {
+    // When the feature is disabled by an admin, never schedule the overlay
+    // and immediately hide it if it was already visible.
+    if (!enabled || !isLoading) {
       setVisible(false);
       return;
     }
     const t = window.setTimeout(() => setVisible(true), SHOW_DELAY_MS);
     return () => window.clearTimeout(t);
-  }, [isLoading]);
+  }, [isLoading, enabled]);
 
   return (
-    <AnimatePresence>{visible && <TacoLoadingScreen key="global-loading-overlay" />}</AnimatePresence>
+    <AnimatePresence>
+      {enabled && visible && <TacoLoadingScreen key="global-loading-overlay" />}
+    </AnimatePresence>
   );
 }
 

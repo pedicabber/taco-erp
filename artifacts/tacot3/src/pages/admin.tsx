@@ -1238,6 +1238,8 @@ function LoadingScreenTab() {
   });
   const savedUrl = settingsQ.data?.loading_media_url ?? null;
   const previewUrl = pendingUrl ?? savedUrl;
+  // Default ON: only an explicit "false" disables the feature.
+  const featureEnabled = settingsQ.data?.loading_screen_enabled !== "false";
 
   const saveMutation = useMutation({
     mutationFn: (value: string) =>
@@ -1249,6 +1251,18 @@ function LoadingScreenTab() {
       toast({ title: "Loading screen updated" });
     },
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+  });
+
+  const enabledMutation = useMutation({
+    mutationFn: (next: boolean) =>
+      apiClient
+        .put("/settings/loading_screen_enabled", { value: next ? "true" : "false" })
+        .then(r => r.data),
+    onSuccess: (_data, next) => {
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      toast({ title: next ? "Loading screen enabled" : "Loading screen disabled" });
+    },
+    onError: () => toast({ title: "Failed to update toggle", variant: "destructive" }),
   });
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1303,80 +1317,113 @@ function LoadingScreenTab() {
     }
   }
 
+  const controlsDisabled = !featureEnabled;
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <ImageIcon className="w-4 h-4" />
-          Loading Screen Media
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-lg border bg-background/70 backdrop-blur-sm h-64 flex items-center justify-center overflow-hidden">
-          {previewUrl ? (
-            <LoadingMediaPreview url={previewUrl} contentType={pendingType} />
-          ) : (
-            <div className="text-center text-sm text-muted-foreground">
-              <p>No custom loading media uploaded.</p>
-              <p className="text-xs mt-1">Default taco animation will be used.</p>
-            </div>
-          )}
+        <div className="flex items-center justify-between gap-4">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ImageIcon className="w-4 h-4" />
+            Loading Screen Media
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Label
+              htmlFor="loading-screen-enabled"
+              className="text-xs text-muted-foreground"
+            >
+              {featureEnabled ? "On" : "Off"}
+            </Label>
+            <Switch
+              id="loading-screen-enabled"
+              checked={featureEnabled}
+              disabled={settingsQ.isLoading || enabledMutation.isPending}
+              onCheckedChange={(next) => enabledMutation.mutate(next)}
+              data-testid="loading-screen-enabled-toggle"
+            />
+          </div>
         </div>
+      </CardHeader>
+      <CardContent>
+        <div
+          aria-disabled={controlsDisabled}
+          className={cn(
+            "space-y-4 transition-opacity",
+            controlsDisabled && "opacity-50 pointer-events-none select-none",
+          )}
+        >
+          <div className="rounded-lg border bg-background/70 backdrop-blur-sm h-64 flex items-center justify-center overflow-hidden">
+            {controlsDisabled ? (
+              <div className="text-center text-sm text-muted-foreground">
+                <p>Loading screen is disabled.</p>
+                <p className="text-xs mt-1">Turn it on to preview and manage media. Uploaded media is kept while disabled.</p>
+              </div>
+            ) : previewUrl ? (
+              <LoadingMediaPreview url={previewUrl} contentType={pendingType} />
+            ) : (
+              <div className="text-center text-sm text-muted-foreground">
+                <p>No custom loading media uploaded.</p>
+                <p className="text-xs mt-1">Default taco animation will be used.</p>
+              </div>
+            )}
+          </div>
 
-        <div className="flex items-center flex-wrap gap-3">
-          <input
-            ref={fileRef}
-            type="file"
-            accept={LOADING_MEDIA_ACCEPT}
-            className="hidden"
-            onChange={handlePick}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isUploading || saveMutation.isPending}
-            onClick={() => fileRef.current?.click()}
-          >
-            {isUploading
-              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading…</>
-              : <><Upload className="w-4 h-4 mr-2" /> Upload media</>}
-          </Button>
-          {pendingUrl && (
-            <>
-              <Button
-                onClick={() => saveMutation.mutate(pendingUrl)}
-                disabled={saveMutation.isPending}
-              >
-                {saveMutation.isPending
-                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving…</>
-                  : <><Check className="w-4 h-4 mr-2" /> Apply</>}
-              </Button>
+          <div className="flex items-center flex-wrap gap-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept={LOADING_MEDIA_ACCEPT}
+              className="hidden"
+              onChange={handlePick}
+              disabled={controlsDisabled}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={controlsDisabled || isUploading || saveMutation.isPending}
+              onClick={() => fileRef.current?.click()}
+            >
+              {isUploading
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading…</>
+                : <><Upload className="w-4 h-4 mr-2" /> Upload media</>}
+            </Button>
+            {pendingUrl && (
+              <>
+                <Button
+                  onClick={() => saveMutation.mutate(pendingUrl)}
+                  disabled={controlsDisabled || saveMutation.isPending}
+                >
+                  {saveMutation.isPending
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving…</>
+                    : <><Check className="w-4 h-4 mr-2" /> Apply</>}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => { setPendingUrl(null); setPendingType(null); }}
+                  disabled={controlsDisabled || saveMutation.isPending}
+                >
+                  Cancel
+                </Button>
+              </>
+            )}
+            {savedUrl && !pendingUrl && (
               <Button
                 variant="ghost"
-                onClick={() => { setPendingUrl(null); setPendingType(null); }}
-                disabled={saveMutation.isPending}
+                className="text-muted-foreground"
+                disabled={controlsDisabled || saveMutation.isPending}
+                onClick={() => saveMutation.mutate("")}
               >
-                Cancel
+                <X className="w-4 h-4 mr-2" />
+                Reset to default
               </Button>
-            </>
-          )}
-          {savedUrl && !pendingUrl && (
-            <Button
-              variant="ghost"
-              className="text-muted-foreground"
-              disabled={saveMutation.isPending}
-              onClick={() => saveMutation.mutate("")}
-            >
-              <X className="w-4 h-4 mr-2" />
-              Reset to default
-            </Button>
-          )}
-        </div>
+            )}
+          </div>
 
-        <p className="text-xs text-muted-foreground">
-          Supported: WebM, GIF, APNG, PNG — max {LOADING_MEDIA_MAX_MB} MB. For
-          best results use a file with a transparent background.
-        </p>
+          <p className="text-xs text-muted-foreground">
+            Supported: WebM, GIF, APNG, PNG — max {LOADING_MEDIA_MAX_MB} MB. For
+            best results use a file with a transparent background.
+          </p>
+        </div>
       </CardContent>
     </Card>
   );
