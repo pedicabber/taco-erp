@@ -1396,6 +1396,11 @@ router.get("/dashboard/sqdc", requireAuth, async (req: AuthenticatedRequest, res
 
   const projectName = new Map(projects.map(p => [p.id, p.name]));
 
+  // Minimum sample size before a percentage is considered meaningful.
+  // Below this, the category renders "No data available" rather than a
+  // misleading 0%/100% off one or two tagged rows.
+  const MIN_SAMPLES = 5;
+
   // ── Safety (S) ───────────────────────────────────────────────────────
   const safetyTagged = tasks.filter(t => t.safetyFlag === "incident" || t.safetyFlag === "near_miss");
   const safetyIn30 = safetyTagged.filter(t => t.updatedAt >= cutoff30);
@@ -1455,7 +1460,7 @@ router.get("/dashboard/sqdc", requireAuth, async (req: AuthenticatedRequest, res
   const qDenom = qPass30 + qRework30 + qFail30;
   let qScore: number | null = null;
   let qStatus: SqdcStatus = "neutral";
-  if (qDenom > 0) {
+  if (qDenom >= MIN_SAMPLES) {
     qScore = Math.round((qPass30 / qDenom) * 100);
     qStatus = qScore >= 95 ? "green" : qScore >= 80 ? "yellow" : "red";
   }
@@ -1500,7 +1505,7 @@ router.get("/dashboard/sqdc", requireAuth, async (req: AuthenticatedRequest, res
   const dDenom = onTime30 + late30 + overdueNow.length;
   let dScore: number | null = null;
   let dStatus: SqdcStatus = "neutral";
-  if (dDenom > 0) {
+  if (dDenom >= MIN_SAMPLES) {
     dScore = Math.round((onTime30 / dDenom) * 100);
     dStatus = dScore >= 95 ? "green" : dScore >= 80 ? "yellow" : "red";
   }
@@ -1588,7 +1593,7 @@ router.get("/dashboard/sqdc", requireAuth, async (req: AuthenticatedRequest, res
   let cScore: number | null = null;
   let cStatus: SqdcStatus = "neutral";
   let variancePct: number | null = null;
-  if (completedWithEstimate30.length > 0 && sumActual > 0 && sumExpected > 0) {
+  if (completedWithEstimate30.length >= MIN_SAMPLES && sumActual > 0 && sumExpected > 0) {
     cScore = Math.max(0, Math.min(100, Math.round((sumExpected / sumActual) * 100)));
     cStatus = cScore >= 95 ? "green" : cScore >= 80 ? "yellow" : "red";
     variancePct = Math.round(((sumActual - sumExpected) / sumExpected) * 100);
