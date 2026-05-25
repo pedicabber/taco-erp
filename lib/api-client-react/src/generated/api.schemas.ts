@@ -176,6 +176,43 @@ export const TaskPriority = {
   urgent: "urgent",
 } as const;
 
+/**
+ * @nullable
+ */
+export type TaskSafetyFlag =
+  | (typeof TaskSafetyFlag)[keyof typeof TaskSafetyFlag]
+  | null;
+
+export const TaskSafetyFlag = {
+  near_miss: "near_miss",
+  incident: "incident",
+} as const;
+
+/**
+ * @nullable
+ */
+export type TaskQualityResult =
+  | (typeof TaskQualityResult)[keyof typeof TaskQualityResult]
+  | null;
+
+export const TaskQualityResult = {
+  pass: "pass",
+  rework: "rework",
+  fail: "fail",
+} as const;
+
+/**
+ * @nullable
+ */
+export type TaskDeliveryStatus =
+  | (typeof TaskDeliveryStatus)[keyof typeof TaskDeliveryStatus]
+  | null;
+
+export const TaskDeliveryStatus = {
+  on_time: "on_time",
+  late: "late",
+} as const;
+
 export interface UserProfileMini {
   id: number;
   name: string;
@@ -223,6 +260,14 @@ export interface Task {
   completedAt: string | null;
   /** @nullable */
   notes: string | null;
+  /** @nullable */
+  safetyFlag?: TaskSafetyFlag;
+  /** @nullable */
+  qualityResult?: TaskQualityResult;
+  /** @nullable */
+  deliveryStatus?: TaskDeliveryStatus;
+  /** @nullable */
+  costMaterialNotes?: string | null;
   createdAt: string;
   updatedAt: string;
   assignee: UserProfileMini | null;

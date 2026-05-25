@@ -407,6 +407,25 @@ export const ListTasksResponseItem = zod.object({
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
   notes: zod.string().nullable(),
+  safetyFlag: zod
+    .union([
+      zod.literal("near_miss"),
+      zod.literal("incident"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  qualityResult: zod
+    .union([
+      zod.literal("pass"),
+      zod.literal("rework"),
+      zod.literal("fail"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  deliveryStatus: zod
+    .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+    .nullish(),
+  costMaterialNotes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -496,6 +515,25 @@ export const GetTaskResponse = zod.object({
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
   notes: zod.string().nullable(),
+  safetyFlag: zod
+    .union([
+      zod.literal("near_miss"),
+      zod.literal("incident"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  qualityResult: zod
+    .union([
+      zod.literal("pass"),
+      zod.literal("rework"),
+      zod.literal("fail"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  deliveryStatus: zod
+    .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+    .nullish(),
+  costMaterialNotes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -599,6 +637,25 @@ export const UpdateTaskResponse = zod.object({
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
   notes: zod.string().nullable(),
+  safetyFlag: zod
+    .union([
+      zod.literal("near_miss"),
+      zod.literal("incident"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  qualityResult: zod
+    .union([
+      zod.literal("pass"),
+      zod.literal("rework"),
+      zod.literal("fail"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  deliveryStatus: zod
+    .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+    .nullish(),
+  costMaterialNotes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -674,6 +731,25 @@ export const StartTaskTimerResponse = zod.object({
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
   notes: zod.string().nullable(),
+  safetyFlag: zod
+    .union([
+      zod.literal("near_miss"),
+      zod.literal("incident"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  qualityResult: zod
+    .union([
+      zod.literal("pass"),
+      zod.literal("rework"),
+      zod.literal("fail"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  deliveryStatus: zod
+    .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+    .nullish(),
+  costMaterialNotes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -742,6 +818,25 @@ export const StopTaskTimerResponse = zod.object({
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
   notes: zod.string().nullable(),
+  safetyFlag: zod
+    .union([
+      zod.literal("near_miss"),
+      zod.literal("incident"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  qualityResult: zod
+    .union([
+      zod.literal("pass"),
+      zod.literal("rework"),
+      zod.literal("fail"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  deliveryStatus: zod
+    .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+    .nullish(),
+  costMaterialNotes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -814,6 +909,25 @@ export const EditTaskTimerResponse = zod.object({
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
   notes: zod.string().nullable(),
+  safetyFlag: zod
+    .union([
+      zod.literal("near_miss"),
+      zod.literal("incident"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  qualityResult: zod
+    .union([
+      zod.literal("pass"),
+      zod.literal("rework"),
+      zod.literal("fail"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  deliveryStatus: zod
+    .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+    .nullish(),
+  costMaterialNotes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -882,6 +996,25 @@ export const FollowTaskResponse = zod.object({
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
   notes: zod.string().nullable(),
+  safetyFlag: zod
+    .union([
+      zod.literal("near_miss"),
+      zod.literal("incident"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  qualityResult: zod
+    .union([
+      zod.literal("pass"),
+      zod.literal("rework"),
+      zod.literal("fail"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  deliveryStatus: zod
+    .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+    .nullish(),
+  costMaterialNotes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -950,6 +1083,25 @@ export const UnfollowTaskResponse = zod.object({
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
   notes: zod.string().nullable(),
+  safetyFlag: zod
+    .union([
+      zod.literal("near_miss"),
+      zod.literal("incident"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  qualityResult: zod
+    .union([
+      zod.literal("pass"),
+      zod.literal("rework"),
+      zod.literal("fail"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  deliveryStatus: zod
+    .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+    .nullish(),
+  costMaterialNotes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -1018,6 +1170,25 @@ export const GetTaskRelationsResponseItem = zod.object({
   timerStartedAt: zod.string().nullable(),
   completedAt: zod.string().nullable(),
   notes: zod.string().nullable(),
+  safetyFlag: zod
+    .union([
+      zod.literal("near_miss"),
+      zod.literal("incident"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  qualityResult: zod
+    .union([
+      zod.literal("pass"),
+      zod.literal("rework"),
+      zod.literal("fail"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  deliveryStatus: zod
+    .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+    .nullish(),
+  costMaterialNotes: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   assignee: zod
@@ -1157,6 +1328,25 @@ export const GetKanbanColumnsResponseItem = zod.object({
       timerStartedAt: zod.string().nullable(),
       completedAt: zod.string().nullable(),
       notes: zod.string().nullable(),
+      safetyFlag: zod
+        .union([
+          zod.literal("near_miss"),
+          zod.literal("incident"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      qualityResult: zod
+        .union([
+          zod.literal("pass"),
+          zod.literal("rework"),
+          zod.literal("fail"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      deliveryStatus: zod
+        .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+        .nullish(),
+      costMaterialNotes: zod.string().nullish(),
       createdAt: zod.string(),
       updatedAt: zod.string(),
       assignee: zod

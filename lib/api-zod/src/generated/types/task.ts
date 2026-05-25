@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DepartmentMini } from "./departmentMini";
+import type { TaskDeliveryStatus } from "./taskDeliveryStatus";
 import type { TaskPriority } from "./taskPriority";
+import type { TaskQualityResult } from "./taskQualityResult";
+import type { TaskSafetyFlag } from "./taskSafetyFlag";
 import type { TaskStatus } from "./taskStatus";
 import type { UserProfileMini } from "./userProfileMini";
 
@@ -41,6 +44,14 @@ export interface Task {
   completedAt: string | null;
   /** @nullable */
   notes: string | null;
+  /** @nullable */
+  safetyFlag?: TaskSafetyFlag;
+  /** @nullable */
+  qualityResult?: TaskQualityResult;
+  /** @nullable */
+  deliveryStatus?: TaskDeliveryStatus;
+  /** @nullable */
+  costMaterialNotes?: string | null;
   createdAt: string;
   updatedAt: string;
   assignee: UserProfileMini | null;
