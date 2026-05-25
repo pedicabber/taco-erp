@@ -544,6 +544,25 @@ export const UpdateTaskBody = zod.object({
   dueDate: zod.string().nullish(),
   startDate: zod.string().nullish(),
   notes: zod.string().nullish(),
+  safetyFlag: zod
+    .union([
+      zod.literal("near_miss"),
+      zod.literal("incident"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  qualityResult: zod
+    .union([
+      zod.literal("pass"),
+      zod.literal("rework"),
+      zod.literal("fail"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  deliveryStatus: zod
+    .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+    .nullish(),
+  costMaterialNotes: zod.string().nullish(),
 });
 
 export const UpdateTaskResponse = zod.object({

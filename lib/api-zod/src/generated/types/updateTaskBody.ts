@@ -5,7 +5,10 @@
  * TacoTracker3 (TacoT3) API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateTaskBodyDeliveryStatus } from "./updateTaskBodyDeliveryStatus";
 import type { UpdateTaskBodyPriority } from "./updateTaskBodyPriority";
+import type { UpdateTaskBodyQualityResult } from "./updateTaskBodyQualityResult";
+import type { UpdateTaskBodySafetyFlag } from "./updateTaskBodySafetyFlag";
 import type { UpdateTaskBodyStatus } from "./updateTaskBodyStatus";
 
 export interface UpdateTaskBody {
@@ -27,4 +30,12 @@ export interface UpdateTaskBody {
   startDate?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  safetyFlag?: UpdateTaskBodySafetyFlag;
+  /** @nullable */
+  qualityResult?: UpdateTaskBodyQualityResult;
+  /** @nullable */
+  deliveryStatus?: UpdateTaskBodyDeliveryStatus;
+  /** @nullable */
+  costMaterialNotes?: string | null;
 }

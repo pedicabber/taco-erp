@@ -1456,6 +1456,17 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        safetyFlag:
+          type: ["string", "null"]
+          enum: [near_miss, incident, null]
+        qualityResult:
+          type: ["string", "null"]
+          enum: [pass, rework, fail, null]
+        deliveryStatus:
+          type: ["string", "null"]
+          enum: [on_time, late, null]
+        costMaterialNotes:
+          type: ["string", "null"]
 
     EditTimerBody:
       type: object

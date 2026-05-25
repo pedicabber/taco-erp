@@ -294,6 +294,43 @@ export const UpdateTaskBodyPriority = {
   urgent: "urgent",
 } as const;
 
+/**
+ * @nullable
+ */
+export type UpdateTaskBodySafetyFlag =
+  | (typeof UpdateTaskBodySafetyFlag)[keyof typeof UpdateTaskBodySafetyFlag]
+  | null;
+
+export const UpdateTaskBodySafetyFlag = {
+  near_miss: "near_miss",
+  incident: "incident",
+} as const;
+
+/**
+ * @nullable
+ */
+export type UpdateTaskBodyQualityResult =
+  | (typeof UpdateTaskBodyQualityResult)[keyof typeof UpdateTaskBodyQualityResult]
+  | null;
+
+export const UpdateTaskBodyQualityResult = {
+  pass: "pass",
+  rework: "rework",
+  fail: "fail",
+} as const;
+
+/**
+ * @nullable
+ */
+export type UpdateTaskBodyDeliveryStatus =
+  | (typeof UpdateTaskBodyDeliveryStatus)[keyof typeof UpdateTaskBodyDeliveryStatus]
+  | null;
+
+export const UpdateTaskBodyDeliveryStatus = {
+  on_time: "on_time",
+  late: "late",
+} as const;
+
 export interface UpdateTaskBody {
   title?: string;
   /** @nullable */
@@ -313,6 +350,14 @@ export interface UpdateTaskBody {
   startDate?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  safetyFlag?: UpdateTaskBodySafetyFlag;
+  /** @nullable */
+  qualityResult?: UpdateTaskBodyQualityResult;
+  /** @nullable */
+  deliveryStatus?: UpdateTaskBodyDeliveryStatus;
+  /** @nullable */
+  costMaterialNotes?: string | null;
 }
 
 export interface EditTimerBody {
