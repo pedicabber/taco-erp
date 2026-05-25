@@ -8,7 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import NotFound from "@/pages/not-found";
 import { apiClient } from "@/lib/apiClient";
-import { GlobalLoadingOverlay, TacoLoadingScreen } from "@/components/GlobalLoadingOverlay";
+import { GlobalLoadingOverlay, TacoLoadingScreen, useLoadingScreenSettings } from "@/components/GlobalLoadingOverlay";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
@@ -51,7 +51,10 @@ const SettingsPage = lazy(() => import("@/pages/settings"));
 function PageLoader() {
   // Reuses the same dim + taco-video screen as the global overlay so users
   // never see the old spinner alongside the loading media during lazy route
-  // chunk loads.
+  // chunk loads. Respects the admin `loading_screen_enabled` setting — when
+  // disabled, render nothing (no dim, no media, no spinner).
+  const { enabled } = useLoadingScreenSettings();
+  if (!enabled) return null;
   return <TacoLoadingScreen />;
 }
 

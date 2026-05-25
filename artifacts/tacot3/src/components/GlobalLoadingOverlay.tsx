@@ -10,9 +10,9 @@ const SHOW_DELAY_MS = 300;
 const VIDEO_EXT_RE = /\.(webm|mp4|mov)(\?|#|$)/i;
 const IMAGE_EXT_RE = /\.(gif|png|apng|webp|jpg|jpeg)(\?|#|$)/i;
 
-function useLoadingScreenSettings(): { mediaUrl: string | null; enabled: boolean } {
+export function useLoadingScreenSettings(): { mediaUrl: string | null; enabled: boolean } {
   const { isSignedIn } = useAuth();
-  const { data } = useQuery<Record<string, string>>({
+  const { data: settings } = useQuery<Record<string, string>>({
     queryKey: ["settings"],
     queryFn: () => apiClient.get("/settings").then(r => r.data),
     enabled: !!isSignedIn,
@@ -20,15 +20,9 @@ function useLoadingScreenSettings(): { mediaUrl: string | null; enabled: boolean
     // Mark as background so it does NOT itself trigger the loading overlay.
     meta: { background: true },
   });
-  // For signed-in users, suppress the overlay until /settings resolves so a
-  // persisted `loading_screen_enabled=false` is never briefly violated on
-  // cold load. Once resolved, default ON: only explicit "false" disables.
-  // For signed-out users the settings query is disabled and never resolves;
-  // fall back to ON so the overlay still works on the sign-in flow.
-  const enabled = isSignedIn
-    ? data !== undefined && data.loading_screen_enabled !== "false"
-    : true;
-  return { mediaUrl: data?.loading_media_url ?? null, enabled };
+  // Default ON when the setting is missing; only an explicit "false" disables.
+  const loadingScreenEnabled = settings?.loading_screen_enabled !== "false";
+  return { mediaUrl: settings?.loading_media_url ?? null, enabled: loadingScreenEnabled };
 }
 
 export function TacoLoadingScreen() {
@@ -89,24 +83,28 @@ export function GlobalLoadingOverlay() {
     predicate: (q) => !(q.meta as { background?: boolean } | undefined)?.background,
   });
   const mutatingCount = useIsMutating();
-  const isLoading = fetchingCount + mutatingCount > 0;
+  // Only consider loading when the feature is enabled, so the anti-flicker
+  // timer below is never even scheduled while disabled.
+  const isLoading = enabled && fetchingCount + mutatingCount > 0;
 
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // When the feature is disabled by an admin, never schedule the overlay
-    // and immediately hide it if it was already visible.
-    if (!enabled || !isLoading) {
+    if (!isLoading) {
       setVisible(false);
       return;
     }
     const t = window.setTimeout(() => setVisible(true), SHOW_DELAY_MS);
     return () => window.clearTimeout(t);
-  }, [isLoading, enabled]);
+  }, [isLoading]);
+
+  // Hard short-circuit when the admin has turned the feature off: no dim
+  // background, no media, no spinner, no AnimatePresence subtree.
+  if (!enabled) return null;
 
   return (
     <AnimatePresence>
-      {enabled && visible && <TacoLoadingScreen key="global-loading-overlay" />}
+      {visible && <TacoLoadingScreen key="global-loading-overlay" />}
     </AnimatePresence>
   );
 }
