@@ -119,10 +119,42 @@ export const ListProjectsResponseItem = zod.object({
   projectId: zod.string(),
   description: zod.string().nullable(),
   startDate: zod.string().nullable(),
+  deliveryDate: zod.string().nullish(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]),
   createdById: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  schedule: zod.object({
+    baselineStartDate: zod.string().nullable(),
+    baselineDeliveryDate: zod.string().nullable(),
+    activeStartDate: zod.string().nullable(),
+    activeDeliveryDate: zod.string().nullable(),
+    scheduleDriftDays: zod.number(),
+    driftSeverity: zod.enum(["green", "yellow", "red"]),
+    delayReason: zod.union([
+      zod.enum([
+        "customer_delay",
+        "engineering_revision",
+        "vendor_delay",
+        "internal_capacity",
+        "quality_issue",
+        "scope_change",
+        "other",
+      ]),
+      zod.null(),
+    ]),
+    delayNotes: zod.string().nullable(),
+    engineeringPhase: zod.object({
+      startDate: zod.string().nullable(),
+      endDate: zod.string().nullable(),
+      weeks: zod.number().nullable(),
+    }),
+    manufacturingPhase: zod.object({
+      startDate: zod.string().nullable(),
+      endDate: zod.string().nullable(),
+      weeks: zod.number().nullable(),
+    }),
+  }),
 });
 export const ListProjectsResponse = zod.array(ListProjectsResponseItem);
 
@@ -135,6 +167,7 @@ export const CreateProjectBody = zod.object({
   projectId: zod.string(),
   description: zod.string().nullish(),
   startDate: zod.string().nullish(),
+  deliveryDate: zod.string().nullish(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]).optional(),
 });
 
@@ -152,10 +185,42 @@ export const GetProjectResponse = zod.object({
   projectId: zod.string(),
   description: zod.string().nullable(),
   startDate: zod.string().nullable(),
+  deliveryDate: zod.string().nullish(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]),
   createdById: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  schedule: zod.object({
+    baselineStartDate: zod.string().nullable(),
+    baselineDeliveryDate: zod.string().nullable(),
+    activeStartDate: zod.string().nullable(),
+    activeDeliveryDate: zod.string().nullable(),
+    scheduleDriftDays: zod.number(),
+    driftSeverity: zod.enum(["green", "yellow", "red"]),
+    delayReason: zod.union([
+      zod.enum([
+        "customer_delay",
+        "engineering_revision",
+        "vendor_delay",
+        "internal_capacity",
+        "quality_issue",
+        "scope_change",
+        "other",
+      ]),
+      zod.null(),
+    ]),
+    delayNotes: zod.string().nullable(),
+    engineeringPhase: zod.object({
+      startDate: zod.string().nullable(),
+      endDate: zod.string().nullable(),
+      weeks: zod.number().nullable(),
+    }),
+    manufacturingPhase: zod.object({
+      startDate: zod.string().nullable(),
+      endDate: zod.string().nullable(),
+      weeks: zod.number().nullable(),
+    }),
+  }),
 });
 
 /**
@@ -171,6 +236,7 @@ export const UpdateProjectBody = zod.object({
   projectId: zod.string().optional(),
   description: zod.string().nullish(),
   startDate: zod.string().nullish(),
+  deliveryDate: zod.string().nullish(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]).optional(),
 });
 
@@ -181,10 +247,42 @@ export const UpdateProjectResponse = zod.object({
   projectId: zod.string(),
   description: zod.string().nullable(),
   startDate: zod.string().nullable(),
+  deliveryDate: zod.string().nullish(),
   status: zod.enum(["active", "completed", "on_hold", "cancelled"]),
   createdById: zod.number(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  schedule: zod.object({
+    baselineStartDate: zod.string().nullable(),
+    baselineDeliveryDate: zod.string().nullable(),
+    activeStartDate: zod.string().nullable(),
+    activeDeliveryDate: zod.string().nullable(),
+    scheduleDriftDays: zod.number(),
+    driftSeverity: zod.enum(["green", "yellow", "red"]),
+    delayReason: zod.union([
+      zod.enum([
+        "customer_delay",
+        "engineering_revision",
+        "vendor_delay",
+        "internal_capacity",
+        "quality_issue",
+        "scope_change",
+        "other",
+      ]),
+      zod.null(),
+    ]),
+    delayNotes: zod.string().nullable(),
+    engineeringPhase: zod.object({
+      startDate: zod.string().nullable(),
+      endDate: zod.string().nullable(),
+      weeks: zod.number().nullable(),
+    }),
+    manufacturingPhase: zod.object({
+      startDate: zod.string().nullable(),
+      endDate: zod.string().nullable(),
+      weeks: zod.number().nullable(),
+    }),
+  }),
 });
 
 /**
@@ -218,6 +316,73 @@ export const GetProjectSummaryResponse = zod.object({
     }),
   ),
   overdueTasks: zod.number(),
+});
+
+/**
+ * @summary Reschedule a project's ACTIVE dates without touching the baseline. Restricted to admins or the project creator.
+ */
+export const RescheduleProjectParams = zod.object({
+  projectId: zod.coerce.number(),
+});
+
+export const RescheduleProjectBody = zod.object({
+  activeStartDate: zod.string().nullish(),
+  activeDeliveryDate: zod.string().nullish(),
+  delayReason: zod.enum([
+    "customer_delay",
+    "engineering_revision",
+    "vendor_delay",
+    "internal_capacity",
+    "quality_issue",
+    "scope_change",
+    "other",
+  ]),
+  delayNotes: zod.string().nullish(),
+});
+
+export const RescheduleProjectResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  company: zod.string(),
+  projectId: zod.string(),
+  description: zod.string().nullable(),
+  startDate: zod.string().nullable(),
+  deliveryDate: zod.string().nullish(),
+  status: zod.enum(["active", "completed", "on_hold", "cancelled"]),
+  createdById: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  schedule: zod.object({
+    baselineStartDate: zod.string().nullable(),
+    baselineDeliveryDate: zod.string().nullable(),
+    activeStartDate: zod.string().nullable(),
+    activeDeliveryDate: zod.string().nullable(),
+    scheduleDriftDays: zod.number(),
+    driftSeverity: zod.enum(["green", "yellow", "red"]),
+    delayReason: zod.union([
+      zod.enum([
+        "customer_delay",
+        "engineering_revision",
+        "vendor_delay",
+        "internal_capacity",
+        "quality_issue",
+        "scope_change",
+        "other",
+      ]),
+      zod.null(),
+    ]),
+    delayNotes: zod.string().nullable(),
+    engineeringPhase: zod.object({
+      startDate: zod.string().nullable(),
+      endDate: zod.string().nullable(),
+      weeks: zod.number().nullable(),
+    }),
+    manufacturingPhase: zod.object({
+      startDate: zod.string().nullable(),
+      endDate: zod.string().nullable(),
+      weeks: zod.number().nullable(),
+    }),
+  }),
 });
 
 /**

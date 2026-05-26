@@ -1564,12 +1564,17 @@ router.get("/dashboard/sqdc", requireAuth, async (req: AuthenticatedRequest, res
   }
   for (const p of projects
     .filter(p => {
-      if (p.status !== "active" || !p.deliveryDate) return false;
-      const dd = sqdcParseDueDate(p.deliveryDate);
+      // SQDC "D" tracks projects against their ORIGINAL commitment (baseline
+      // delivery), so a reschedule cannot retroactively erase a missed deadline.
+      // Fall back to deliveryDate for any legacy row missing baseline.
+      const deliveryRef = p.baselineDeliveryDate ?? p.deliveryDate;
+      if (p.status !== "active" || !deliveryRef) return false;
+      const dd = sqdcParseDueDate(deliveryRef);
       return !!dd && dd < today;
     })
     .slice(0, 5)) {
-    const dd = sqdcParseDueDate(p.deliveryDate)!;
+    const deliveryRef = p.baselineDeliveryDate ?? p.deliveryDate;
+    const dd = sqdcParseDueDate(deliveryRef!)!;
     dRecords.push({
       id: `project:${p.id}`,
       kind: "project",

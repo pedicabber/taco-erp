@@ -1,0 +1,169 @@
+#12 - Adaptive Project Phase Scheduling + Baseline Drift Tracking
+
+1. Module/page:
+Projects / Project Scheduling / Calendar / Board / Dashboard / SQDC
+
+2. Current problem:
+Project schedules currently use mostly arbitrary task dates and do not reflect realistic department lead-time phases.
+
+Engineering and Manufacturing do not automatically occupy proportional portions of the project timeline.
+
+Additionally, when schedules change due to customer delays or operational issues, there is currently no distinction between:
+- original committed schedule
+- current operational schedule
+
+This causes:
+- inaccurate calendar visualization
+- poor manufacturing load visibility
+- weak SQDC delivery tracking
+- inability to measure project drift
+- inability to distinguish customer-caused delays from internal delays
+
+3. Desired behavior:
+Implement adaptive department phase scheduling with baseline tracking.
+
+Every project should contain:
+- baseline schedule (original committed schedule)
+- active schedule (current operational reality)
+
+Department phase scheduling:
+- Engineering = 25% of total project lead time
+- Manufacturing = 30% of total project lead time
+
+Example:
+16-week project:
+- Engineering phase = 4 weeks
+- Manufacturing phase = 4.8 weeks
+- Remaining time = final project delivery/install window
+
+The ERP should:
+- automatically calculate department phase windows
+- automatically schedule department tasks into those windows
+- visually stretch department workload across the project timeline
+- allow active schedules to shift without erasing original commitments
+
+4. UI requirements:
+Do not redesign the overall ERP layout.
+
+Project creation:
+- user enters start date + delivery date
+- ERP displays calculated Engineering + Manufacturing phase windows
+
+Project detail page:
+Add a lightweight "Schedule" section showing:
+- Baseline Start
+- Baseline Delivery
+- Active Start
+- Active Delivery
+- Engineering Phase Window
+- Manufacturing Phase Window
+- Schedule Drift
+- Delay Reason
+
+Add:
+"Reschedule Project" button
+
+Reschedule flow:
+Popup/modal:
+- new start or delivery date
+- delay reason dropdown
+- optional notes
+
+Delay reasons MVP:
+- customer_delay
+- engineering_revision
+- vendor_delay
+- internal_capacity
+- quality_issue
+- scope_change
+- other
+
+5. Database involved:
+Projects table likely gains:
+- baselineStartDate
+- baselineDeliveryDate
+- activeStartDate
+- activeDeliveryDate
+- scheduleDriftDays
+- delayReason
+- delayNotes
+
+Potentially:
+- engineeringPhaseStart
+- engineeringPhaseEnd
+- manufacturingPhaseStart
+- manufacturingPhaseEnd
+
+Investigate whether phase dates should:
+- live on project
+OR
+- be dynamically calculated
+
+Tasks:
+- existing task startDate/dueDate should be updated from department phase scheduling
+
+6. What must NOT change:
+- Do not change Office Ops behavior
+- Do not change SQDC logic unrelated to scheduling
+- Do not redesign dashboard
+- Do not change existing task architecture beyond scheduling fields
+- Do not remove manual task editing ability
+- Do not affect auth/permissions
+- Do not break existing calendar or board functionality
+- Do not erase historical baseline schedule when projects are rescheduled
+
+7. Workflow step-by-step:
+1. User creates project
+2. User enters start date + delivery date
+3. ERP calculates total lead time
+4. ERP calculates baseline department phase windows:
+   - Engineering = first 25%
+   - Manufacturing = next 30%
+5. ERP assigns/schedules tasks into those phase windows
+6. Calendar/Board visualize department occupancy across those ranges
+7. Dashboard/SQDC track progress against baseline schedule
+
+If delays occur:
+8. PM/admin clicks "Reschedule Project"
+9. User enters:
+   - new dates
+   - delay reason
+   - notes
+10. ERP recalculates ACTIVE schedule only
+11. Baseline schedule remains preserved
+12. Dashboard/SQDC now show:
+   - drift days
+   - project health
+   - delay attribution
+   - schedule variance
+
+Important:
+This system should support BOTH:
+- operational adaptability
+- historical accountability
+
+The active schedule drives:
+- boards
+- calendars
+- workload visualization
+
+The baseline schedule drives:
+- SQDC
+- KPI tracking
+- drift reporting
+- project health scoring
+
+Apply to:
+- all NEW projects
+- all EXISTING projects during migration/backfill
+
+Investigate first and report:
+- current project/task scheduling architecture
+- how tasks are generated from templates today
+- how Calendar/Board currently consume task dates
+- whether phase windows should be stored or calculated
+- safest migration strategy for existing projects
+- recommended visual implementation for schedule drift
+- estimated impact on SQDC calculations
+
+Wait for approval before implementation.

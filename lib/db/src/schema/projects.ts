@@ -18,6 +18,18 @@ export const projectsTable = pgTable("projects", {
   totalPrice: text("total_price"),
   deliveryDate: text("delivery_date"),
   scopeOfWork: text("scope_of_work"),
+  // Baseline (original commitment, set once at create, never moved by edits)
+  baselineStartDate: text("baseline_start_date"),
+  baselineDeliveryDate: text("baseline_delivery_date"),
+  // Active (operational reality, what calendars/boards consume)
+  activeStartDate: text("active_start_date"),
+  activeDeliveryDate: text("active_delivery_date"),
+  // Drift = activeDeliveryDate - baselineDeliveryDate in days (denormalized for cheap sort/filter)
+  scheduleDriftDays: integer("schedule_drift_days").notNull().default(0),
+  // One of: customer_delay | engineering_revision | vendor_delay | internal_capacity
+  //        | quality_issue | scope_change | other  (or null if never rescheduled)
+  delayReason: text("delay_reason"),
+  delayNotes: text("delay_notes"),
   createdById: integer("created_by_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

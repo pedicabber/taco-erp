@@ -51,6 +51,7 @@ import type {
   ProjectSummary,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
+  RescheduleProjectBody,
   SentBroadcast,
   Task,
   TaskAttachment,
@@ -947,6 +948,93 @@ export function useGetProjectSummary<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Reschedule a project's ACTIVE dates without touching the baseline. Restricted to admins or the project creator.
+ */
+export const getRescheduleProjectUrl = (projectId: number) => {
+  return `/api/projects/${projectId}/reschedule`;
+};
+
+export const rescheduleProject = async (
+  projectId: number,
+  rescheduleProjectBody: RescheduleProjectBody,
+  options?: RequestInit,
+): Promise<Project> => {
+  return customFetch<Project>(getRescheduleProjectUrl(projectId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(rescheduleProjectBody),
+  });
+};
+
+export const getRescheduleProjectMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rescheduleProject>>,
+    TError,
+    { projectId: number; data: BodyType<RescheduleProjectBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rescheduleProject>>,
+  TError,
+  { projectId: number; data: BodyType<RescheduleProjectBody> },
+  TContext
+> => {
+  const mutationKey = ["rescheduleProject"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rescheduleProject>>,
+    { projectId: number; data: BodyType<RescheduleProjectBody> }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return rescheduleProject(projectId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RescheduleProjectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rescheduleProject>>
+>;
+export type RescheduleProjectMutationBody = BodyType<RescheduleProjectBody>;
+export type RescheduleProjectMutationError = ErrorType<void>;
+
+/**
+ * @summary Reschedule a project's ACTIVE dates without touching the baseline. Restricted to admins or the project creator.
+ */
+export const useRescheduleProject = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rescheduleProject>>,
+    TError,
+    { projectId: number; data: BodyType<RescheduleProjectBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rescheduleProject>>,
+  TError,
+  { projectId: number; data: BodyType<RescheduleProjectBody> },
+  TContext
+> => {
+  return useMutation(getRescheduleProjectMutationOptions(options));
+};
 
 /**
  * @summary List project attachments

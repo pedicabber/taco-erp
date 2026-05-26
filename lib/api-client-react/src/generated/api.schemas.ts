@@ -43,6 +43,53 @@ export interface UpdateMeBody {
   avatarUrl?: string | null;
 }
 
+export type DelayReason = (typeof DelayReason)[keyof typeof DelayReason];
+
+export const DelayReason = {
+  customer_delay: "customer_delay",
+  engineering_revision: "engineering_revision",
+  vendor_delay: "vendor_delay",
+  internal_capacity: "internal_capacity",
+  quality_issue: "quality_issue",
+  scope_change: "scope_change",
+  other: "other",
+} as const;
+
+export type DriftSeverity = (typeof DriftSeverity)[keyof typeof DriftSeverity];
+
+export const DriftSeverity = {
+  green: "green",
+  yellow: "yellow",
+  red: "red",
+} as const;
+
+export interface PhaseWindow {
+  /** @nullable */
+  startDate: string | null;
+  /** @nullable */
+  endDate: string | null;
+  /** @nullable */
+  weeks: number | null;
+}
+
+export interface ProjectSchedule {
+  /** @nullable */
+  baselineStartDate: string | null;
+  /** @nullable */
+  baselineDeliveryDate: string | null;
+  /** @nullable */
+  activeStartDate: string | null;
+  /** @nullable */
+  activeDeliveryDate: string | null;
+  scheduleDriftDays: number;
+  driftSeverity: DriftSeverity;
+  delayReason: DelayReason | null;
+  /** @nullable */
+  delayNotes: string | null;
+  engineeringPhase: PhaseWindow;
+  manufacturingPhase: PhaseWindow;
+}
+
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
 
 export const ProjectStatus = {
@@ -61,10 +108,13 @@ export interface Project {
   description: string | null;
   /** @nullable */
   startDate: string | null;
+  /** @nullable */
+  deliveryDate?: string | null;
   status: ProjectStatus;
   createdById: number;
   createdAt: string;
   updatedAt: string;
+  schedule: ProjectSchedule;
 }
 
 export type CreateProjectBodyStatus =
@@ -85,6 +135,8 @@ export interface CreateProjectBody {
   description?: string | null;
   /** @nullable */
   startDate?: string | null;
+  /** @nullable */
+  deliveryDate?: string | null;
   status?: CreateProjectBodyStatus;
 }
 
@@ -106,7 +158,19 @@ export interface UpdateProjectBody {
   description?: string | null;
   /** @nullable */
   startDate?: string | null;
+  /** @nullable */
+  deliveryDate?: string | null;
   status?: UpdateProjectBodyStatus;
+}
+
+export interface RescheduleProjectBody {
+  /** @nullable */
+  activeStartDate?: string | null;
+  /** @nullable */
+  activeDeliveryDate?: string | null;
+  delayReason: DelayReason;
+  /** @nullable */
+  delayNotes?: string | null;
 }
 
 export interface ParsedPdfData {

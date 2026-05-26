@@ -221,6 +221,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProjectSummary"
 
+  /projects/{projectId}/reschedule:
+    post:
+      operationId: rescheduleProject
+      tags: [projects]
+      summary: >-
+        Reschedule a project's ACTIVE dates without touching the baseline.
+        Restricted to admins or the project creator.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RescheduleProjectBody"
+      responses:
+        "200":
+          description: Rescheduled project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "403":
+          description: Not allowed
+        "404":
+          description: Not found
+
   /projects/{projectId}/attachments:
     get:
       operationId: listProjectAttachments
@@ -1216,6 +1247,69 @@ components:
         avatarUrl:
           type: ["string", "null"]
 
+    DelayReason:
+      type: string
+      enum:
+        - customer_delay
+        - engineering_revision
+        - vendor_delay
+        - internal_capacity
+        - quality_issue
+        - scope_change
+        - other
+
+    DriftSeverity:
+      type: string
+      enum: [green, yellow, red]
+
+    PhaseWindow:
+      type: object
+      properties:
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        weeks:
+          type: ["number", "null"]
+      required: [startDate, endDate, weeks]
+
+    ProjectSchedule:
+      type: object
+      properties:
+        baselineStartDate:
+          type: ["string", "null"]
+        baselineDeliveryDate:
+          type: ["string", "null"]
+        activeStartDate:
+          type: ["string", "null"]
+        activeDeliveryDate:
+          type: ["string", "null"]
+        scheduleDriftDays:
+          type: integer
+        driftSeverity:
+          $ref: "#/components/schemas/DriftSeverity"
+        delayReason:
+          oneOf:
+            - $ref: "#/components/schemas/DelayReason"
+            - type: "null"
+        delayNotes:
+          type: ["string", "null"]
+        engineeringPhase:
+          $ref: "#/components/schemas/PhaseWindow"
+        manufacturingPhase:
+          $ref: "#/components/schemas/PhaseWindow"
+      required:
+        - baselineStartDate
+        - baselineDeliveryDate
+        - activeStartDate
+        - activeDeliveryDate
+        - scheduleDriftDays
+        - driftSeverity
+        - delayReason
+        - delayNotes
+        - engineeringPhase
+        - manufacturingPhase
+
     Project:
       type: object
       properties:
@@ -1231,6 +1325,8 @@ components:
           type: ["string", "null"]
         startDate:
           type: ["string", "null"]
+        deliveryDate:
+          type: ["string", "null"]
         status:
           type: string
           enum: [active, completed, on_hold, cancelled]
@@ -1240,6 +1336,8 @@ components:
           type: string
         updatedAt:
           type: string
+        schedule:
+          $ref: "#/components/schemas/ProjectSchedule"
       required:
         - id
         - name
@@ -1251,6 +1349,7 @@ components:
         - createdById
         - createdAt
         - updatedAt
+        - schedule
 
     CreateProjectBody:
       type: object
@@ -1264,6 +1363,8 @@ components:
         description:
           type: ["string", "null"]
         startDate:
+          type: ["string", "null"]
+        deliveryDate:
           type: ["string", "null"]
         status:
           type: string
@@ -1286,9 +1387,25 @@ components:
           type: ["string", "null"]
         startDate:
           type: ["string", "null"]
+        deliveryDate:
+          type: ["string", "null"]
         status:
           type: string
           enum: [active, completed, on_hold, cancelled]
+
+    RescheduleProjectBody:
+      type: object
+      properties:
+        activeStartDate:
+          type: ["string", "null"]
+        activeDeliveryDate:
+          type: ["string", "null"]
+        delayReason:
+          $ref: "#/components/schemas/DelayReason"
+        delayNotes:
+          type: ["string", "null"]
+      required:
+        - delayReason
 
     ParsedPdfData:
       type: object

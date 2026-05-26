@@ -14,6 +14,7 @@ import {
   UpdateProjectResponse,
   GetProjectSummaryResponse,
   ParsePdfResponse,
+  RescheduleProjectBody,
 } from "@workspace/api-zod";
 import {
   excludeOAContainerProject,
@@ -37,6 +38,93 @@ function parseProjectAttachmentBody(body: unknown) {
   };
 }
 
+// ─── Phase scheduling constants (single source of truth) ──────────────────────
+// Engineering occupies the first 25% of the active lead time; Manufacturing
+// the next 30% (i.e. ends at 55%). Manual edits to individual tasks are
+// always preserved.
+export const ENGINEERING_PHASE_PCT = 0.25;
+export const MANUFACTURING_PHASE_PCT = 0.30;
+const ENG_END = ENGINEERING_PHASE_PCT;                          // 0.25
+const MFG_START = ENGINEERING_PHASE_PCT;                        // 0.25
+const MFG_END = ENGINEERING_PHASE_PCT + MANUFACTURING_PHASE_PCT; // 0.55
+
+function parseDateOnly(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function formatDateOnly(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function addLeadTimePercent(start: Date, leadMs: number, percent: number): Date {
+  return new Date(start.getTime() + Math.round(leadMs * percent));
+}
+
+function diffDays(a: Date, b: Date): number {
+  return Math.round((a.getTime() - b.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+type PhaseWindow = { startDate: string | null; endDate: string | null; weeks: number | null };
+
+// Compute Engineering + Manufacturing phase windows from active dates.
+// Returns nulls when dates are missing or invalid — never throws.
+export function computePhaseWindows(
+  activeStartDate: string | null | undefined,
+  activeDeliveryDate: string | null | undefined,
+): { engineering: PhaseWindow; manufacturing: PhaseWindow } {
+  const start = parseDateOnly(activeStartDate);
+  const delivery = parseDateOnly(activeDeliveryDate);
+  const empty: PhaseWindow = { startDate: null, endDate: null, weeks: null };
+  if (!start || !delivery || delivery.getTime() <= start.getTime()) {
+    return { engineering: empty, manufacturing: empty };
+  }
+  const leadMs = delivery.getTime() - start.getTime();
+  const engEnd = addLeadTimePercent(start, leadMs, ENG_END);
+  const mfgStart = addLeadTimePercent(start, leadMs, MFG_START);
+  const mfgEnd = addLeadTimePercent(start, leadMs, MFG_END);
+  const week = 7 * 24 * 60 * 60 * 1000;
+  return {
+    engineering: {
+      startDate: formatDateOnly(start),
+      endDate: formatDateOnly(engEnd),
+      weeks: Math.round(((engEnd.getTime() - start.getTime()) / week) * 10) / 10,
+    },
+    manufacturing: {
+      startDate: formatDateOnly(mfgStart),
+      endDate: formatDateOnly(mfgEnd),
+      weeks: Math.round(((mfgEnd.getTime() - mfgStart.getTime()) / week) * 10) / 10,
+    },
+  };
+}
+
+// Severity buckets per product decision: 0-3 green, 4-10 yellow, 11+ red.
+// Negative drift (ahead of baseline) is always green.
+export function computeDriftSeverity(driftDays: number): "green" | "yellow" | "red" {
+  const d = Math.max(0, driftDays);
+  if (d <= 3) return "green";
+  if (d <= 10) return "yellow";
+  return "red";
+}
+
+function buildSchedule(p: typeof projectsTable.$inferSelect) {
+  const windows = computePhaseWindows(p.activeStartDate, p.activeDeliveryDate);
+  return {
+    baselineStartDate: p.baselineStartDate,
+    baselineDeliveryDate: p.baselineDeliveryDate,
+    activeStartDate: p.activeStartDate,
+    activeDeliveryDate: p.activeDeliveryDate,
+    scheduleDriftDays: p.scheduleDriftDays ?? 0,
+    driftSeverity: computeDriftSeverity(p.scheduleDriftDays ?? 0),
+    delayReason: p.delayReason,
+    delayNotes: p.delayNotes,
+    engineeringPhase: windows.engineering,
+    manufacturingPhase: windows.manufacturing,
+  };
+}
+
 function buildProject(p: typeof projectsTable.$inferSelect) {
   return {
     id: p.id,
@@ -57,27 +145,15 @@ function buildProject(p: typeof projectsTable.$inferSelect) {
     createdById: p.createdById,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
+    schedule: buildSchedule(p),
   };
 }
 
-function parseDateOnly(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return null;
-  return new Date(Date.UTC(year, month - 1, day));
-}
-
-function formatDateOnly(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addLeadTimePercent(start: Date, leadMs: number, percent: number): Date {
-  return new Date(start.getTime() + Math.round(leadMs * percent));
-}
-
 function getDepartmentTaskTiming(project: typeof projectsTable.$inferSelect, departmentName: string) {
-  const start = parseDateOnly(project.startDate);
-  const delivery = parseDateOnly(project.deliveryDate);
+  // Task generation always uses ACTIVE dates so calendars/boards reflect the
+  // current operational schedule.
+  const start = parseDateOnly(project.activeStartDate ?? project.startDate);
+  const delivery = parseDateOnly(project.activeDeliveryDate ?? project.deliveryDate);
   if (!start || !delivery || delivery.getTime() <= start.getTime()) return {};
 
   const leadMs = delivery.getTime() - start.getTime();
@@ -86,16 +162,16 @@ function getDepartmentTaskTiming(project: typeof projectsTable.$inferSelect, dep
   if (departmentName === "ENGINEERING") {
     return {
       startDate: formatDateOnly(start),
-      dueDate: formatDateOnly(addLeadTimePercent(start, leadMs, 0.25)),
-      expectedHours: Math.max(1, Math.round(leadDays * 0.25 * 8)),
+      dueDate: formatDateOnly(addLeadTimePercent(start, leadMs, ENG_END)),
+      expectedHours: Math.max(1, Math.round(leadDays * ENGINEERING_PHASE_PCT * 8)),
     };
   }
 
   if (departmentName === "MANUFACTURING") {
     return {
-      startDate: formatDateOnly(addLeadTimePercent(start, leadMs, 0.25)),
-      dueDate: formatDateOnly(addLeadTimePercent(start, leadMs, 0.6)),
-      expectedHours: Math.max(1, Math.round(leadDays * 0.35 * 8)),
+      startDate: formatDateOnly(addLeadTimePercent(start, leadMs, MFG_START)),
+      dueDate: formatDateOnly(addLeadTimePercent(start, leadMs, MFG_END)),
+      expectedHours: Math.max(1, Math.round(leadDays * MANUFACTURING_PHASE_PCT * 8)),
     };
   }
 
@@ -126,10 +202,20 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
 
   const { parsedTasks: _ignore, ...projectData } = parsed.data;
 
+  // On first create, baseline = active = the user-entered dates. Baseline
+  // is then frozen — only the dedicated /reschedule endpoint may move
+  // active dates without touching it.
+  const initialStart = projectData.startDate ?? null;
+  const initialDelivery = projectData.deliveryDate ?? null;
   const [project] = await db.insert(projectsTable).values({
     ...projectData,
     status: "active",
     createdById: user.id,
+    baselineStartDate: initialStart,
+    baselineDeliveryDate: initialDelivery,
+    activeStartDate: initialStart,
+    activeDeliveryDate: initialDelivery,
+    scheduleDriftDays: 0,
   }).returning();
 
   // Read auto_populate_tasks setting
@@ -775,13 +861,161 @@ router.patch("/projects/:projectId", requireAuth, async (req, res): Promise<void
     return;
   }
 
-  const [updated] = await db.update(projectsTable).set(parsed.data).where(eq(projectsTable.id, id)).returning();
+  // Keep the legacy startDate/deliveryDate columns in sync with the active
+  // columns so existing consumers don't have to change. Baseline columns are
+  // NEVER touched by a normal PATCH — that's the /reschedule endpoint's job.
+  // For first-set (baseline still null after backfill should never happen, but
+  // defensively allow it), populate baseline too.
+  const [existing] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  const patch: Partial<typeof projectsTable.$inferInsert> = { ...parsed.data };
+  if (parsed.data.startDate !== undefined) {
+    patch.activeStartDate = parsed.data.startDate;
+    if (!existing.baselineStartDate) patch.baselineStartDate = parsed.data.startDate;
+  }
+  if (parsed.data.deliveryDate !== undefined) {
+    patch.activeDeliveryDate = parsed.data.deliveryDate;
+    if (!existing.baselineDeliveryDate) patch.baselineDeliveryDate = parsed.data.deliveryDate;
+    // Recompute drift whenever the active delivery moves.
+    const baselineDel = parseDateOnly(existing.baselineDeliveryDate ?? parsed.data.deliveryDate);
+    const activeDel = parseDateOnly(parsed.data.deliveryDate);
+    if (baselineDel && activeDel) {
+      patch.scheduleDriftDays = diffDays(activeDel, baselineDel);
+    }
+  }
+
+  const [updated] = await db.update(projectsTable).set(patch).where(eq(projectsTable.id, id)).returning();
   if (!updated) {
     res.status(404).json({ error: "Project not found" });
     return;
   }
 
   res.json(UpdateProjectResponse.parse(buildProject(updated)));
+});
+
+router.post("/projects/:projectId/reschedule", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.projectId) ? req.params.projectId[0] : req.params.projectId, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid project ID" });
+    return;
+  }
+  if (await rejectIfHiddenProject(res, id)) return;
+
+  const user = await syncUserFromClerk(req);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const [existing] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  // Permission: admins or the project creator only.
+  if (user.role !== "admin" && existing.createdById !== user.id) {
+    res.status(403).json({ error: "Only admins or the project creator may reschedule." });
+    return;
+  }
+
+  const parsed = RescheduleProjectBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { activeStartDate, activeDeliveryDate, delayReason, delayNotes } = parsed.data;
+  if (activeStartDate === undefined && activeDeliveryDate === undefined) {
+    res.status(400).json({ error: "Must change at least one of activeStartDate / activeDeliveryDate." });
+    return;
+  }
+
+  // Capture old active window before mutation so we can shift matching tasks.
+  const oldActiveStart = existing.activeStartDate;
+  const oldActiveDelivery = existing.activeDeliveryDate;
+
+  const newActiveStart = activeStartDate !== undefined ? activeStartDate : oldActiveStart;
+  const newActiveDelivery = activeDeliveryDate !== undefined ? activeDeliveryDate : oldActiveDelivery;
+
+  // Drift is driven exclusively by delivery delta. Per product decision: if
+  // only the start date changes, drift stays 0.
+  let scheduleDriftDays = existing.scheduleDriftDays ?? 0;
+  const baselineDelivery = parseDateOnly(existing.baselineDeliveryDate);
+  const newActiveDeliveryDate = parseDateOnly(newActiveDelivery);
+  if (baselineDelivery && newActiveDeliveryDate) {
+    scheduleDriftDays = diffDays(newActiveDeliveryDate, baselineDelivery);
+  } else if (!newActiveDeliveryDate || !baselineDelivery) {
+    scheduleDriftDays = 0;
+  }
+
+  const [updated] = await db
+    .update(projectsTable)
+    .set({
+      activeStartDate: newActiveStart,
+      activeDeliveryDate: newActiveDelivery,
+      // Keep legacy columns in sync so calendar/board/etc don't break.
+      startDate: newActiveStart,
+      deliveryDate: newActiveDelivery,
+      scheduleDriftDays,
+      delayReason,
+      delayNotes: delayNotes ?? null,
+    })
+    .where(eq(projectsTable.id, id))
+    .returning();
+
+  // ── Best-effort task shifting ──────────────────────────────────────────
+  // Recompute Engineering + Manufacturing windows for both the OLD and NEW
+  // active schedules. Any generated task whose current (startDate, dueDate)
+  // exactly matches the old window for its department gets shifted to the
+  // new window. Manually-edited tasks (whose dates don't match) are left
+  // alone — they keep whatever the user set.
+  try {
+    const oldEng = computePhaseWindows(oldActiveStart, oldActiveDelivery).engineering;
+    const oldMfg = computePhaseWindows(oldActiveStart, oldActiveDelivery).manufacturing;
+    const newWindows = computePhaseWindows(newActiveStart, newActiveDelivery);
+
+    const projectTasks = await db
+      .select()
+      .from(tasksTable)
+      .where(eq(tasksTable.projectId, id));
+    const globalDepts = await db
+      .select()
+      .from(departmentsTable)
+      .where(isNull(departmentsTable.projectId));
+    const deptById = new Map(globalDepts.map(d => [d.id, d]));
+
+    let shifted = 0;
+    let skipped = 0;
+    for (const t of projectTasks) {
+      if (!t.departmentId) continue;
+      const dept = deptById.get(t.departmentId);
+      if (!dept) continue;
+      let oldWin: PhaseWindow | null = null;
+      let newWin: PhaseWindow | null = null;
+      if (dept.name === "ENGINEERING") { oldWin = oldEng; newWin = newWindows.engineering; }
+      else if (dept.name === "MANUFACTURING") { oldWin = oldMfg; newWin = newWindows.manufacturing; }
+      if (!oldWin || !newWin || !newWin.startDate || !newWin.endDate) continue;
+
+      if (t.startDate === oldWin.startDate && t.dueDate === oldWin.endDate) {
+        await db
+          .update(tasksTable)
+          .set({ startDate: newWin.startDate, dueDate: newWin.endDate })
+          .where(eq(tasksTable.id, t.id));
+        shifted++;
+      } else if (t.startDate || t.dueDate) {
+        skipped++;
+      }
+    }
+    req.log.info({ projectId: id, shifted, skipped }, "reschedule: task shift summary");
+  } catch (err) {
+    req.log.error({ err, projectId: id }, "reschedule: best-effort task shift failed");
+  }
+
+  res.json(GetProjectResponse.parse(buildProject(updated)));
 });
 
 router.delete("/projects/:projectId", requireAdmin, async (req, res): Promise<void> => {
