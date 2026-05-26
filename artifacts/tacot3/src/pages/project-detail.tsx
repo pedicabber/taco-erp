@@ -6,11 +6,23 @@ import type { Task, Project } from "@/lib/types";
 import {
   ArrowLeft, Loader2, Building2, FileText,
   Calendar, CheckSquare, FolderKanban, Info, Users, ChevronDown, ChevronRight, Package,
+  CalendarClock, AlertTriangle,
 } from "lucide-react";
 import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useState } from "react";
 import { format } from "date-fns";
 import TaskCard from "@/components/tasks/TaskCard";
@@ -21,6 +33,15 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import ProjectAttachmentsPanel from "@/components/projects/ProjectAttachmentsPanel";
+import {
+  computePhaseWindows,
+  computeDriftSeverity,
+  delayReasonLabel,
+  DELAY_REASONS,
+  DRIFT_SEVERITY_CLASS,
+  DRIFT_SEVERITY_BG,
+  type DelayReasonValue,
+} from "@/lib/schedule";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   active: "default",
@@ -34,7 +55,9 @@ export default function ProjectDetailPage() {
   const projectId = parseInt(params.projectId, 10);
   const [infoOpen, setInfoOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(true);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const qc = useQueryClient();
+  const { data: currentUser } = useCurrentUser();
 
   const statusMutation = useMutation({
     mutationFn: (status: string) =>
@@ -241,6 +264,25 @@ export default function ProjectDetailPage() {
         </Card>
       </div>
 
+      {/* Schedule (baseline vs active + phase windows + drift) */}
+      <ScheduleSection
+        project={project}
+        canReschedule={!!currentUser && (currentUser.role === "admin" || currentUser.id === project.createdById)}
+        onOpenReschedule={() => setRescheduleOpen(true)}
+      />
+
+      <RescheduleDialog
+        open={rescheduleOpen}
+        onOpenChange={setRescheduleOpen}
+        project={project}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ["project", projectId] });
+          qc.invalidateQueries({ queryKey: ["projects"] });
+          qc.invalidateQueries({ queryKey: ["tasks", { projectId }] });
+          qc.invalidateQueries({ queryKey: ["project-summary", projectId] });
+        }}
+      />
+
       {/* Involved Departments (collapsible groups of tasks) */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -410,5 +452,284 @@ function DepartmentTaskGroup({
         </CollapsibleContent>
       </Card>
     </Collapsible>
+  );
+}
+
+// ─── Schedule section ────────────────────────────────────────────────────────
+function ScheduleSection({
+  project,
+  canReschedule,
+  onOpenReschedule,
+}: {
+  project: Project & {
+    baselineStartDate?: string | null;
+    baselineDeliveryDate?: string | null;
+    activeStartDate?: string | null;
+    activeDeliveryDate?: string | null;
+    scheduleDriftDays?: number | null;
+    delayReason?: string | null;
+    delayNotes?: string | null;
+    schedule?: {
+      baselineStartDate: string | null;
+      baselineDeliveryDate: string | null;
+      activeStartDate: string | null;
+      activeDeliveryDate: string | null;
+      scheduleDriftDays: number;
+      driftSeverity: "green" | "yellow" | "red";
+      delayReason: string | null;
+      delayNotes: string | null;
+      engineeringPhase: { startDate: string | null; endDate: string | null; weeks: number | null };
+      manufacturingPhase: { startDate: string | null; endDate: string | null; weeks: number | null };
+    };
+  };
+  canReschedule: boolean;
+  onOpenReschedule: () => void;
+}) {
+  // Prefer the server-rendered schedule object; fall back to recomputing
+  // locally from the flat project fields so the section still works against
+  // any legacy /projects/:id response that hasn't been refetched yet.
+  const s = project.schedule;
+  const baselineStart = s?.baselineStartDate ?? project.baselineStartDate ?? null;
+  const baselineDelivery = s?.baselineDeliveryDate ?? project.baselineDeliveryDate ?? null;
+  const activeStart = s?.activeStartDate ?? project.activeStartDate ?? project.startDate ?? null;
+  const activeDelivery = s?.activeDeliveryDate ?? project.activeDeliveryDate ?? project.deliveryDate ?? null;
+  const drift = s?.scheduleDriftDays ?? project.scheduleDriftDays ?? 0;
+  const severity = s?.driftSeverity ?? computeDriftSeverity(drift);
+  const delayReason = s?.delayReason ?? project.delayReason ?? null;
+  const delayNotes = s?.delayNotes ?? project.delayNotes ?? null;
+  const windows = s
+    ? { engineering: s.engineeringPhase, manufacturing: s.manufacturingPhase }
+    : computePhaseWindows(activeStart, activeDelivery);
+
+  const fmt = (d: string | null) => (d ? format(new Date(d + "T00:00:00"), "MMM d, yyyy") : "—");
+  const fmtRange = (a: string | null, b: string | null, weeks: number | null) =>
+    a && b ? `${format(new Date(a + "T00:00:00"), "MMM d")} → ${format(new Date(b + "T00:00:00"), "MMM d, yyyy")}${weeks ? `  ·  ${weeks} wk` : ""}` : "—";
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold flex items-center gap-2">
+          <CalendarClock className="w-4 h-4 text-primary" />
+          Schedule
+        </h2>
+        {canReschedule && (
+          <Button size="sm" variant="outline" onClick={onOpenReschedule}>
+            Reschedule
+          </Button>
+        )}
+      </div>
+      <Card className={DRIFT_SEVERITY_BG[severity] + " border"}>
+        <CardContent className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div>
+            <div className="text-xs text-muted-foreground">Baseline Start</div>
+            <div className="font-medium">{fmt(baselineStart)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Baseline Delivery</div>
+            <div className="font-medium">{fmt(baselineDelivery)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Active Start</div>
+            <div className="font-medium">{fmt(activeStart)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Active Delivery</div>
+            <div className="font-medium">{fmt(activeDelivery)}</div>
+          </div>
+          <div className="col-span-2">
+            <div className="text-xs text-muted-foreground">Engineering Window (25%)</div>
+            <div className="font-medium">{fmtRange(windows.engineering.startDate, windows.engineering.endDate, windows.engineering.weeks)}</div>
+          </div>
+          <div className="col-span-2">
+            <div className="text-xs text-muted-foreground">Manufacturing Window (30%)</div>
+            <div className="font-medium">{fmtRange(windows.manufacturing.startDate, windows.manufacturing.endDate, windows.manufacturing.weeks)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Drift Days</div>
+            <div className={"font-bold text-base " + DRIFT_SEVERITY_CLASS[severity]}>
+              {drift > 0 ? `+${drift}` : drift}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Drift Severity</div>
+            <div className={"font-medium capitalize " + DRIFT_SEVERITY_CLASS[severity]}>{severity}</div>
+          </div>
+          <div className="col-span-2">
+            <div className="text-xs text-muted-foreground">Delay Reason</div>
+            <div className="font-medium">{delayReasonLabel(delayReason)}</div>
+            {delayNotes && (
+              <div className="text-xs text-muted-foreground mt-0.5 italic">{delayNotes}</div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Reschedule dialog ───────────────────────────────────────────────────────
+function RescheduleDialog({
+  open,
+  onOpenChange,
+  project,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  project: Project & {
+    activeStartDate?: string | null;
+    activeDeliveryDate?: string | null;
+    schedule?: {
+      activeStartDate: string | null;
+      activeDeliveryDate: string | null;
+    };
+  };
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const initialStart = project.schedule?.activeStartDate ?? project.activeStartDate ?? project.startDate ?? "";
+  const initialDelivery = project.schedule?.activeDeliveryDate ?? project.activeDeliveryDate ?? project.deliveryDate ?? "";
+
+  const [activeStartDate, setActiveStartDate] = useState(initialStart ?? "");
+  const [activeDeliveryDate, setActiveDeliveryDate] = useState(initialDelivery ?? "");
+  const [delayReason, setDelayReason] = useState<DelayReasonValue | "">("");
+  const [delayNotes, setDelayNotes] = useState("");
+
+  // Reset form whenever the dialog opens against a (possibly new) project.
+  const resetForm = () => {
+    setActiveStartDate(initialStart ?? "");
+    setActiveDeliveryDate(initialDelivery ?? "");
+    setDelayReason("");
+    setDelayNotes("");
+  };
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const body: Record<string, unknown> = { delayReason };
+      if (activeStartDate !== (initialStart ?? "")) body.activeStartDate = activeStartDate || null;
+      if (activeDeliveryDate !== (initialDelivery ?? "")) body.activeDeliveryDate = activeDeliveryDate || null;
+      if (delayNotes.trim()) body.delayNotes = delayNotes.trim();
+      return apiClient.post(`/projects/${project.id}/reschedule`, body).then(r => r.data);
+    },
+    onSuccess: () => {
+      toast({ title: "Project rescheduled" });
+      onSuccess();
+      onOpenChange(false);
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Reschedule failed";
+      toast({ title: msg, variant: "destructive" });
+    },
+  });
+
+  // Live preview of new ENG/MFG windows for the active dates entered.
+  const preview = computePhaseWindows(activeStartDate || null, activeDeliveryDate || null);
+
+  const noDateChange =
+    activeStartDate === (initialStart ?? "") &&
+    activeDeliveryDate === (initialDelivery ?? "");
+  const disabled = mutation.isPending || !delayReason || noDateChange;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (o) resetForm();
+        onOpenChange(o);
+      }}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarClock className="w-4 h-4 text-primary" />
+            Reschedule Project
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="text-xs text-muted-foreground">
+            Updates the ACTIVE schedule only. The baseline (original commitment)
+            is preserved so drift remains visible.
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Active Start</Label>
+              <Input
+                type="date"
+                value={activeStartDate}
+                onChange={(e) => setActiveStartDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Active Delivery</Label>
+              <Input
+                type="date"
+                value={activeDeliveryDate}
+                onChange={(e) => setActiveDeliveryDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {(preview.engineering.startDate || preview.manufacturing.startDate) && (
+            <div className="rounded-md border bg-muted/40 p-2 text-xs space-y-1">
+              <div>
+                <span className="text-muted-foreground">Engineering:</span>{" "}
+                {preview.engineering.startDate && preview.engineering.endDate
+                  ? `${preview.engineering.startDate} → ${preview.engineering.endDate} (${preview.engineering.weeks} wk)`
+                  : "—"}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Manufacturing:</span>{" "}
+                {preview.manufacturing.startDate && preview.manufacturing.endDate
+                  ? `${preview.manufacturing.startDate} → ${preview.manufacturing.endDate} (${preview.manufacturing.weeks} wk)`
+                  : "—"}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <Label>Delay Reason *</Label>
+            <Select value={delayReason} onValueChange={(v) => setDelayReason(v as DelayReasonValue)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a reason..." />
+              </SelectTrigger>
+              <SelectContent>
+                {DELAY_REASONS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label>Notes (optional)</Label>
+            <Textarea
+              rows={3}
+              value={delayNotes}
+              onChange={(e) => setDelayNotes(e.target.value)}
+              placeholder="What happened? Anything the team should know."
+            />
+          </div>
+
+          {noDateChange && (
+            <div className="flex items-start gap-2 text-xs text-muted-foreground">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              Change at least one active date to record a reschedule.
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={() => mutation.mutate()} disabled={disabled}>
+            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Save Reschedule
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

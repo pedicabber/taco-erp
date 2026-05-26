@@ -24,6 +24,7 @@ import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { cn, formatQuoteNum } from "@/lib/utils";
 import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
+import { computePhaseWindows } from "@/lib/schedule";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   active: "default",
@@ -299,6 +300,32 @@ function NewProjectDialog({
                     <Label>Delivery Date</Label>
                     <Input type="date" value={form.deliveryDate} onChange={e => setForm(p => ({ ...p, deliveryDate: e.target.value }))} />
                   </div>
+                  {form.startDate && form.deliveryDate && (() => {
+                    // Read-only phase preview. Uses the same 25%/30% lead-time
+                    // split the server applies on create, so what the user
+                    // sees here is exactly what gets persisted.
+                    const w = computePhaseWindows(form.startDate, form.deliveryDate);
+                    if (!w.engineering.startDate) {
+                      return (
+                        <div className="col-span-full rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+                          Delivery date must be after start date to compute phase windows.
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="col-span-full rounded-md border bg-muted/40 p-2 text-xs space-y-1">
+                        <div className="font-medium text-foreground">Phase preview</div>
+                        <div>
+                          <span className="text-muted-foreground">Engineering (25%):</span>{" "}
+                          {w.engineering.startDate} → {w.engineering.endDate} ({w.engineering.weeks} wk)
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Manufacturing (30%):</span>{" "}
+                          {w.manufacturing.startDate} → {w.manufacturing.endDate} ({w.manufacturing.weeks} wk)
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="col-span-full">
                     <Label>Brief Description</Label>
                     <Textarea
