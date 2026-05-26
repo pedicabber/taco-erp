@@ -1,0 +1,83 @@
+1. Module/page:
+Infrastructure / Database Environment Management
+
+2. Current problem:
+Development and production databases are fully separate.
+
+Production is live and contains real ERP data:
+- users
+- tasks
+- timer sessions
+- SQDC data
+- notifications
+- projects
+- inventory/activity
+
+Development is stale and does not reflect current production data.
+
+The publish checkbox "Copy development database to production database" is dangerous because it would overwrite production with stale dev data.
+
+3. Desired behavior:
+Create an intuitive, safe development database strategy:
+
+Production remains protected as the source of truth.
+
+Development should use a refreshed copy/branch/snapshot of production data so testing happens against realistic ERP data without risking live production writes.
+
+Preferred approach:
+- Use Neon branching or scheduled production-to-development snapshot
+- Development points to a dev/preview database branch copied from production
+- Production remains separate and protected
+- No destructive copy from dev to production
+
+4. UI requirements:
+No ERP UI changes required.
+
+Optional:
+Add documentation/warning in project notes or replit.md:
+- Never use "Copy development database to production database"
+- Production DB is source of truth
+- Dev DB should be refreshed from prod snapshot/branch only
+
+5. Database involved:
+Production Neon database = source of truth.
+Development database should become a Neon dev branch/snapshot based on production.
+
+Investigate:
+- current production Neon database
+- whether Neon branching is available
+- how to create/use dev branch safely
+- how to point workspace DATABASE_URL to dev branch
+- how to refresh dev from prod safely
+- rollback plan
+
+6. What must NOT change:
+Do not overwrite production.
+Do not copy dev database into production.
+Do not enable destructive publish DB copy.
+Do not share one live DB between dev and prod.
+Do not delete production data.
+Do not change production DATABASE_URL without explicit approval.
+Do not break current production app.
+Do not expose production secrets in frontend code.
+
+7. Workflow step-by-step:
+1. Investigate current dev/prod DB setup
+2. Recommend safest Neon branch/snapshot approach
+3. Identify required secrets/env changes
+4. Create a clear step-by-step implementation plan
+5. Include rollback plan
+6. Wait for approval before changing secrets or database URLs
+7. After approval:
+   - create/use dev branch from production
+   - point workspace dev DATABASE_URL to dev branch
+   - leave production DATABASE_URL untouched
+   - document the workflow
+
+Goal:
+Dev should have realistic production-like data.
+Production stays isolated and safe.
+Publishing code should never overwrite production data.
+
+Plan first.
+Do not make changes yet.

@@ -76,6 +76,15 @@ REST API server.
 - **Followers**: Follow tasks to receive notifications
 - **Activity Feed**: Recent actions dashboard
 
+## Database environments
+
+- **Production (`neondb` on Neon)** is the source of truth. It holds all real foreman/PM data: users, tasks, timer sessions, SQDC tags, notifications, projects, inventory, activity.
+- **Development (`heliumdb` on Replit-managed Postgres)** is a separate, throwaway database. It is NEVER the source of truth.
+- Data direction is **prod → dev only**. There is no supported workflow that copies dev → prod, and none should ever be added.
+- At publish time, **never check the "Copy development database to production database" box.** Doing so will overwrite live production with stale dev data. There is no built-in undo.
+- Schema changes flow automatically: `pnpm --filter @workspace/db run push` updates dev; Replit's Publish diff applies the same schema to prod. Do not write custom migration scripts or startup-time DDL.
+- If dev needs realistic data, refresh it from prod using the documented procedure (Task #7, pending). Until that procedure ships, dev stays stale on purpose — that is safer than improvising.
+
 ## Important Design Decisions
 
 - NO emojis anywhere; icons only (lucide-react)
