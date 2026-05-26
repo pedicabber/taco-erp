@@ -75,8 +75,20 @@ In order:
    `--clean --if-exists`. Do not try to use dev between a failed run
    and a successful re-run.
 6. Applies the data-handling policy:
-   - **`notifications`** — `TRUNCATE ... RESTART IDENTITY CASCADE`. Dev
-     starts with an empty notification queue every refresh.
+   - **`notifications`** — copies the table verbatim from prod, then
+     deletes anything older than **7 days**. The script computes a
+     single cutoff timestamp in JS (`Date.now() - 7d`, ISO string) and
+     reuses it for both the `DELETE FROM notifications WHERE created_at
+     < TIMESTAMPTZ '<cutoff>'` and the verification query, so rows at
+     the boundary cannot slip between two `NOW()` calls. The cutoff is
+     logged at the start of the policy pass. Both Inbox-style
+     rows (`sender_id IS NULL`) and Sent / general rows (`sender_id IS
+     NOT NULL`, `broadcast_id` set) within the window are preserved —
+     the cut-off is purely time-based, not type-based. The 7-day window
+     is a constant in `scripts/src/refresh-dev-db.ts`
+     (`POLICY.notificationRetentionDays`); change it there if you ever
+     need a different window. After the prune the script verifies that
+     zero rows older than the window remain and aborts otherwise.
    - **`task_attachments` / `project_attachments`** — installs a
      `BEFORE DELETE` trigger that raises an exception. Dev cannot delete
      attachment rows because those rows point at real production files in
@@ -96,8 +108,13 @@ The temp dump file lives under the system tmpdir and is removed on exit.
 
 ## What the refresh does **not** do
 
-- It does not touch production. The only prod operation is `pg_dump`.
+- It does not touch production. Prod operations are read-only: an
+  identity probe (`SELECT current_database()`), task/user row counts
+  (`SELECT count(*)`), and `pg_dump`.
 - It does not modify `DATABASE_URL` or any other secret.
+- It does not wipe dev notifications. Recent notifications (last 7
+  days) are copied from prod so the Inbox and Sent tabs look realistic;
+  only older rows are pruned.
 - It does not change schema. It assumes dev and prod schemas already
   match (which they do via the publish-time diff). If you have unpushed
   schema changes in dev, **they will be lost** — push them to prod first

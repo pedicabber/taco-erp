@@ -100,15 +100,24 @@ console.log(`refresh-dev-db: dev  host = ${devHost}`);
 console.log(`refresh-dev-db: mode     = ${APPLY ? "APPLY (--yes)" : "DRY RUN (no --yes)"}`);
 
 const POLICY = {
-  truncateTables: ["notifications"],
+  // Notifications are copied from prod, then pruned to a recent window so
+  // dev has realistic Inbox / Sent data without hauling along years of
+  // history. The window is intentionally a single constant — there is one
+  // definition of "recent" across the team. Do not add a CLI flag.
+  notificationRetentionDays: 7,
   readOnlyAttachmentTables: ["task_attachments", "project_attachments"],
 } as const;
 
-const POST_RESTORE_SQL = `
+function buildPostRestoreSql(cutoffIso: string): string {
+  return `
 -- Refresh-dev-db policy pass. Idempotent; safe to re-run.
 
--- (1) Truncate tables the dev environment should not inherit.
-TRUNCATE TABLE ${POLICY.truncateTables.join(", ")} RESTART IDENTITY CASCADE;
+-- (1) Prune notifications older than the retention window. Cutoff is a
+--     single fixed timestamp computed by the script and reused by the
+--     verification query below, so there is no boundary race against a
+--     second NOW() call.
+DELETE FROM notifications
+WHERE created_at < TIMESTAMPTZ '${cutoffIso}';
 
 -- (2) Install BEFORE DELETE triggers on attachment tables so dev cannot
 --     delete rows that point at real production object-storage files.
@@ -127,12 +136,15 @@ CREATE TRIGGER dev_block_delete BEFORE DELETE ON ${t}
   )
   .join("\n")}
 `;
+}
 
 if (!APPLY) {
   console.log("\nrefresh-dev-db: DRY RUN. Would execute the following steps:");
   console.log("  1. pg_dump (custom format) from prod -> temp file");
   console.log(`  2. pg_restore --clean --if-exists into dev (${devHost})`);
-  console.log(`  3. Truncate dev tables: ${POLICY.truncateTables.join(", ")}`);
+  console.log(
+    `  3. Prune notifications older than ${POLICY.notificationRetentionDays} days (keep both Inbox and Sent rows within the window)`,
+  );
   console.log(
     `  4. Install BEFORE DELETE triggers on: ${POLICY.readOnlyAttachmentTables.join(", ")}`,
   );
@@ -238,18 +250,35 @@ try {
   );
 
   // ---------- Step 4: data-handling policy pass ----------
-  const r = spawnSync("psql", ["-v", "ON_ERROR_STOP=1", "-c", POST_RESTORE_SQL], {
-    stdio: "inherit",
-    env: { ...process.env, ...connEnv(DEV_URL, "DATABASE_URL") },
-  });
+  // Compute the prune cutoff once and reuse it for both the DELETE and the
+  // post-pass verification. Using NOW() in each statement would let rows
+  // near exactly 7d old slip between the two calls and false-trip the
+  // "stale rows remain" abort.
+  const cutoffIso = new Date(
+    Date.now() - POLICY.notificationRetentionDays * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  console.log(`refresh-dev-db: notification prune cutoff = ${cutoffIso}`);
+  const r = spawnSync(
+    "psql",
+    ["-v", "ON_ERROR_STOP=1", "-c", buildPostRestoreSql(cutoffIso)],
+    {
+      stdio: "inherit",
+      env: { ...process.env, ...connEnv(DEV_URL, "DATABASE_URL") },
+    },
+  );
   if (r.status !== 0) die(`policy SQL pass failed (${r.status})`);
 
   // ---------- Step 5: dev row counts ----------
   const devTaskCount = psqlScalar(DEV_URL, "DATABASE_URL", "SELECT count(*) FROM tasks");
   const devUserCount = psqlScalar(DEV_URL, "DATABASE_URL", "SELECT count(*) FROM users");
-  const devNotifCount = psqlScalar(DEV_URL, "DATABASE_URL", "SELECT count(*) FROM notifications");
+  const devNotifKept = psqlScalar(DEV_URL, "DATABASE_URL", "SELECT count(*) FROM notifications");
+  const devNotifStale = psqlScalar(
+    DEV_URL,
+    "DATABASE_URL",
+    `SELECT count(*) FROM notifications WHERE created_at < TIMESTAMPTZ '${cutoffIso}'`,
+  );
   console.log(
-    `\nrefresh-dev-db: dev  task count = ${devTaskCount}, user count = ${devUserCount}, notifications = ${devNotifCount}`,
+    `\nrefresh-dev-db: dev  task count = ${devTaskCount}, user count = ${devUserCount}, notifications kept (last ${POLICY.notificationRetentionDays}d) = ${devNotifKept}`,
   );
 
   if (devTaskCount !== prodTaskCount || devUserCount !== prodUserCount) {
@@ -258,8 +287,10 @@ try {
         `Likely causes: (a) pg_restore partially failed mid-way — re-run, it is idempotent; (b) prod was written during the dump window (real users were active); (c) dev was written after restore by a running workflow. Investigate before trusting this dev DB.`,
     );
   }
-  if (devNotifCount !== "0") {
-    die(`notifications were not truncated (count=${devNotifCount}). Aborting as policy violation.`);
+  if (devNotifStale !== "0") {
+    die(
+      `notification prune failed: ${devNotifStale} row(s) older than ${POLICY.notificationRetentionDays} days remain. Aborting as policy violation.`,
+    );
   }
 
   console.log("\nrefresh-dev-db: SUCCESS");
