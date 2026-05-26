@@ -23,8 +23,15 @@ import type { Response } from "express";
 export const OA_DEPT_NAME = "OFFICE/ADMIN";
 export const OA_CONTAINER_PROJECT_NAME = "__OFFICE_ADMIN__";
 
-let cachedContainerId: number | null = null;
-let cachedOADeptId: number | null = null;
+/**
+ * Intentionally NOT cached at module scope. A previous version cached
+ * `cachedContainerId` and `cachedOADeptId` for the lifetime of the process;
+ * after a prod → dev DB refresh (`pg_restore --clean`), the cached IDs
+ * referred to rows that no longer existed, causing `rejectIfHiddenProject`
+ * to false-positive against unrelated real projects whose IDs collided with
+ * the old container ID. Both lookups are single-row equality queries against
+ * tiny tables, so we resolve them live on every call.
+ */
 
 /** Drizzle WHERE fragment that excludes the hidden Office/Admin container. */
 export const excludeOAContainerProject = ne(
@@ -40,23 +47,19 @@ export function isOAContainerProjectName(name: string | null | undefined): boole
 export const OA_DISPLAY_LABEL = "Office / Admin";
 
 export async function getOADepartmentId(): Promise<number | null> {
-  if (cachedOADeptId !== null) return cachedOADeptId;
   const [d] = await db
     .select()
     .from(departmentsTable)
     .where(and(eq(departmentsTable.name, OA_DEPT_NAME), isNull(departmentsTable.projectId)));
-  cachedOADeptId = d?.id ?? null;
-  return cachedOADeptId;
+  return d?.id ?? null;
 }
 
 export async function getOAContainerProjectId(): Promise<number | null> {
-  if (cachedContainerId !== null) return cachedContainerId;
   const [p] = await db
     .select()
     .from(projectsTable)
     .where(eq(projectsTable.name, OA_CONTAINER_PROJECT_NAME));
-  cachedContainerId = p?.id ?? null;
-  return cachedContainerId;
+  return p?.id ?? null;
 }
 
 export async function isHiddenProjectId(id: number): Promise<boolean> {
@@ -151,7 +154,6 @@ export async function bootstrapOAContainerProject(): Promise<void> {
       .from(projectsTable)
       .where(eq(projectsTable.name, OA_CONTAINER_PROJECT_NAME));
     if (existing) {
-      cachedContainerId = existing.id;
       return;
     }
 
@@ -160,7 +162,7 @@ export async function bootstrapOAContainerProject(): Promise<void> {
       .from(usersTable)
       .where(eq(usersTable.role, "admin"));
 
-    const [created] = await db
+    await db
       .insert(projectsTable)
       .values({
         name: OA_CONTAINER_PROJECT_NAME,
@@ -168,9 +170,7 @@ export async function bootstrapOAContainerProject(): Promise<void> {
         projectId: "OA-INTERNAL",
         status: "active",
         createdById: admin?.id ?? 0,
-      })
-      .returning();
-    cachedContainerId = created.id;
+      });
   } catch {
     // Database may not be ready yet; will lazy-init on first request.
   }

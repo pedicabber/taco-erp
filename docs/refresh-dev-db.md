@@ -101,6 +101,16 @@ In order:
    non-zero exit and a detailed message (partial restore vs. live writes
    during the dump window vs. workflow writes after restore).
 
+## After a refresh: restart the api-server workflow
+
+A `pg_restore --clean` rewrites every primary key the API server has ever
+seen. Restart the `artifacts/api-server: API Server` workflow once the
+refresh completes so any in-memory state (open connections, request-scoped
+caches, anything a future helper might memoize) repopulates from the new
+DB. Skipping this step has previously caused 404s on real projects whose
+post-refresh IDs collided with pre-refresh sentinel IDs that a module-scope
+cache was still holding.
+
 All operations against prod are read-only (`SELECT count(*)` and
 `pg_dump`). All destructive operations target dev only.
 
