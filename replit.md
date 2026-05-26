@@ -83,7 +83,7 @@ REST API server.
 - Data direction is **prod → dev only**. There is no supported workflow that copies dev → prod, and none should ever be added.
 - At publish time, **never check the "Copy development database to production database" box.** Doing so will overwrite live production with stale dev data. There is no built-in undo.
 - Schema changes flow automatically: `pnpm --filter @workspace/db run push` updates dev; Replit's Publish diff applies the same schema to prod. Do not write custom migration scripts or startup-time DDL.
-- If dev needs realistic data, refresh it from prod using the documented procedure (Task #7, pending). Until that procedure ships, dev stays stale on purpose — that is safer than improvising.
+- If dev needs realistic data, refresh it from prod using `pnpm --filter @workspace/scripts run db:refresh-dev`. See `docs/refresh-dev-db.md` for the full procedure, including the one-time `DATABASE_URL_PROD_READONLY` secret setup and the policy applied to notifications and attachments after restore.
 
 ## Important Design Decisions
 
