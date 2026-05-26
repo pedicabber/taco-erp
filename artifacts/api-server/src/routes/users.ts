@@ -6,6 +6,7 @@ import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk, getOrCreateUser } from "../lib/userSync";
 import { UpdateMeBody, UpdateMeResponse, ListUsersResponse, GetUserResponse } from "@workspace/api-zod";
 import { getOADepartmentId, seedOATasksForUser } from "../lib/officeAdmin";
+import { userHasOfficeOpsAccess } from "../lib/officeOpsAccess";
 
 const router: IRouter = Router();
 
@@ -27,6 +28,7 @@ function buildUserProfile(
   user: typeof usersTable.$inferSelect,
   departmentName: string | null,
   departmentIds: number[] = [],
+  officeOpsAccess: boolean = false,
 ) {
   return {
     id: user.id,
@@ -37,6 +39,7 @@ function buildUserProfile(
     departmentId: user.departmentId,
     departmentName,
     departmentIds,
+    officeOpsAccess,
     avatarUrl: user.avatarUrl,
     createdAt: user.createdAt.toISOString(),
   };
@@ -64,9 +67,10 @@ router.get("/users/me", requireAuth, async (req: AuthenticatedRequest, res): Pro
   }
 
   const departmentIds = await getDeptIdsForUser(user.id);
+  const officeOpsAccess = await userHasOfficeOpsAccess(user);
 
   res.set("Cache-Control", "no-store");
-  res.json(buildUserProfile(user, departmentName, departmentIds));
+  res.json(buildUserProfile(user, departmentName, departmentIds, officeOpsAccess));
 });
 
 router.patch("/users/me", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
@@ -87,9 +91,17 @@ router.patch("/users/me", requireAuth, async (req: AuthenticatedRequest, res): P
     return;
   }
 
+  // Self-service department changes are not allowed: department membership
+  // grants access to scoped features (e.g. Office Ops via OFFICE/ADMIN), so
+  // only admins may set department via PATCH /users/:id. Reject any attempt
+  // here to prevent privilege escalation through profile editing.
+  if (parsed.data.departmentId !== undefined && parsed.data.departmentId !== user.departmentId) {
+    res.status(403).json({ error: "Department changes are admin-only." });
+    return;
+  }
+
   const updates: Partial<typeof usersTable.$inferInsert> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
-  if (parsed.data.departmentId !== undefined) updates.departmentId = parsed.data.departmentId;
   if (parsed.data.avatarUrl !== undefined) updates.avatarUrl = parsed.data.avatarUrl;
 
   const [updated] = await db.update(usersTable).set(updates).where(eq(usersTable.id, user.id)).returning();
@@ -101,8 +113,9 @@ router.patch("/users/me", requireAuth, async (req: AuthenticatedRequest, res): P
   }
 
   const departmentIds = await getDeptIdsForUser(updated.id);
+  const officeOpsAccess = await userHasOfficeOpsAccess(updated);
 
-  res.json(UpdateMeResponse.parse(buildUserProfile(updated, departmentName, departmentIds)));
+  res.json(UpdateMeResponse.parse(buildUserProfile(updated, departmentName, departmentIds, officeOpsAccess)));
 });
 
 router.get("/users", requireAuth, async (_req, res): Promise<void> => {
@@ -124,12 +137,21 @@ router.get("/users", requireAuth, async (_req, res): Promise<void> => {
     userDeptsMap.get(row.userId)!.push(row.departmentId);
   }
 
+  const oaDeptId = await getOADepartmentId();
+  const isOA = (u: typeof usersTable.$inferSelect): boolean => {
+    if (u.role === "admin") return true;
+    if (oaDeptId === null) return false;
+    if (u.departmentId === oaDeptId) return true;
+    return (userDeptsMap.get(u.id) ?? []).includes(oaDeptId);
+  };
+
   res.json(
     users.map(u =>
       buildUserProfile(
         u,
         u.departmentId ? deptMap.get(u.departmentId) ?? null : null,
         userDeptsMap.get(u.id) ?? [],
+        isOA(u),
       )
     )
   );
@@ -206,8 +228,9 @@ router.patch("/users/:userId", requireAdmin, async (req: AuthenticatedRequest, r
   }
 
   const finalDeptIds = await getDeptIdsForUser(id);
+  const officeOpsAccess = await userHasOfficeOpsAccess(updated);
 
-  res.json(buildUserProfile(updated, departmentName, finalDeptIds));
+  res.json(buildUserProfile(updated, departmentName, finalDeptIds, officeOpsAccess));
 });
 
 router.delete("/users/:userId", requireAdmin, async (req: AuthenticatedRequest, res): Promise<void> => {
@@ -249,8 +272,9 @@ router.get("/users/:userId", requireAuth, async (req, res): Promise<void> => {
   }
 
   const departmentIds = await getDeptIdsForUser(id);
+  const officeOpsAccess = await userHasOfficeOpsAccess(user);
 
-  res.json(GetUserResponse.parse(buildUserProfile(user, departmentName, departmentIds)));
+  res.json(GetUserResponse.parse(buildUserProfile(user, departmentName, departmentIds, officeOpsAccess)));
 });
 
 export default router;

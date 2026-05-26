@@ -16,6 +16,7 @@ import {
   Settings,
   Package,
   TrendingUp,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -31,12 +32,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 
+type NavUser = {
+  role?: string | null;
+  officeOpsAccess?: boolean | null;
+} | null | undefined;
+
 interface NavItem {
   icon: React.ElementType;
   label: string;
   href: string;
-  adminOnly?: boolean;
+  visibleIf?: (user: NavUser) => boolean;
 }
+
+const isAdminUser = (u: NavUser) => u?.role === "admin";
+// Server is the source of truth for OA membership (handles admin + primary
+// dept + secondary dept via user_departments). See `/users/me` payload.
+const isOfficeOpsUser = (u: NavUser) => !!u?.officeOpsAccess;
 
 const NAV_ITEMS: NavItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
@@ -45,7 +56,8 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Trello, label: "Board", href: "/board" },
   { icon: CalendarDays, label: "Calendar", href: "/calendar" },
   { icon: Package, label: "Inventory", href: "/inventory" },
-  { icon: TrendingUp, label: "Sales Pipeline", href: "/sales", adminOnly: true },
+  { icon: ClipboardList, label: "Office Ops", href: "/office-ops", visibleIf: isOfficeOpsUser },
+  { icon: TrendingUp, label: "Sales Pipeline", href: "/sales", visibleIf: isAdminUser },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -133,7 +145,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Nav items */}
         <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.filter(item => !item.adminOnly || isAdmin).map((item) => {
+          {NAV_ITEMS.filter(item => !item.visibleIf || item.visibleIf(currentUser)).map((item) => {
             const Icon = item.icon;
             const active = location.startsWith(item.href);
             return (

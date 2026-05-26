@@ -25,6 +25,12 @@ export const GetMeResponse = zod.object({
   role: zod.enum(["admin", "member"]),
   departmentId: zod.number().nullable(),
   departmentName: zod.string().nullable(),
+  departmentIds: zod.array(zod.number()),
+  officeOpsAccess: zod
+    .boolean()
+    .describe(
+      "True when the caller is an admin or a member of the OFFICE\/ADMIN department (primary or via user_departments).",
+    ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
 });
@@ -46,6 +52,12 @@ export const UpdateMeResponse = zod.object({
   role: zod.enum(["admin", "member"]),
   departmentId: zod.number().nullable(),
   departmentName: zod.string().nullable(),
+  departmentIds: zod.array(zod.number()),
+  officeOpsAccess: zod
+    .boolean()
+    .describe(
+      "True when the caller is an admin or a member of the OFFICE\/ADMIN department (primary or via user_departments).",
+    ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
 });
@@ -61,6 +73,12 @@ export const ListUsersResponseItem = zod.object({
   role: zod.enum(["admin", "member"]),
   departmentId: zod.number().nullable(),
   departmentName: zod.string().nullable(),
+  departmentIds: zod.array(zod.number()),
+  officeOpsAccess: zod
+    .boolean()
+    .describe(
+      "True when the caller is an admin or a member of the OFFICE\/ADMIN department (primary or via user_departments).",
+    ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
 });
@@ -81,6 +99,12 @@ export const GetUserResponse = zod.object({
   role: zod.enum(["admin", "member"]),
   departmentId: zod.number().nullable(),
   departmentName: zod.string().nullable(),
+  departmentIds: zod.array(zod.number()),
+  officeOpsAccess: zod
+    .boolean()
+    .describe(
+      "True when the caller is an admin or a member of the OFFICE\/ADMIN department (primary or via user_departments).",
+    ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
 });
@@ -1612,4 +1636,119 @@ export const RequestUploadUrlResponse = zod.object({
  */
 export const GetObjectParams = zod.object({
   objectPath: zod.coerce.string(),
+});
+
+/**
+ * @summary List Office Ops tasks visible to the caller
+ */
+export const listOfficeOpsTasksQueryFilterDefault = `open`;
+export const listOfficeOpsTasksQueryScopeDefault = `mine`;
+
+export const ListOfficeOpsTasksQueryParams = zod.object({
+  filter: zod
+    .enum(["open", "completed", "overdue"])
+    .default(listOfficeOpsTasksQueryFilterDefault),
+  scope: zod
+    .enum(["mine", "all"])
+    .default(listOfficeOpsTasksQueryScopeDefault)
+    .describe(
+      "`mine` (default) = assigned to me OR unassigned OR created by me. `all` = every task.",
+    ),
+});
+
+export const ListOfficeOpsTasksResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  notes: zod.string().nullable(),
+  status: zod.enum(["open", "completed"]),
+  assigneeId: zod.number().nullable(),
+  createdById: zod.number(),
+  dueDate: zod.string().nullable(),
+  completedAt: zod.string().nullable(),
+  recurrence: zod.enum(["none", "daily", "weekly", "monthly"]),
+  recurrenceAnchorDate: zod.string().nullable(),
+  parentRecurrenceId: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListOfficeOpsTasksResponse = zod.array(
+  ListOfficeOpsTasksResponseItem,
+);
+
+/**
+ * @summary Create an Office Ops task
+ */
+
+export const createOfficeOpsTaskBodyRecurrenceDefault = `none`;
+
+export const CreateOfficeOpsTaskBody = zod.object({
+  title: zod.string().min(1),
+  notes: zod.string().nullish(),
+  assigneeId: zod.number().nullish(),
+  dueDate: zod.string().nullish(),
+  recurrence: zod
+    .enum(["none", "daily", "weekly", "monthly"])
+    .default(createOfficeOpsTaskBodyRecurrenceDefault),
+});
+
+/**
+ * @summary Get a single Office Ops task
+ */
+export const GetOfficeOpsTaskParams = zod.object({
+  taskId: zod.coerce.number(),
+});
+
+export const GetOfficeOpsTaskResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  notes: zod.string().nullable(),
+  status: zod.enum(["open", "completed"]),
+  assigneeId: zod.number().nullable(),
+  createdById: zod.number(),
+  dueDate: zod.string().nullable(),
+  completedAt: zod.string().nullable(),
+  recurrence: zod.enum(["none", "daily", "weekly", "monthly"]),
+  recurrenceAnchorDate: zod.string().nullable(),
+  parentRecurrenceId: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update an Office Ops task. Marking status=completed on a recurring task creates the next instance.
+ */
+export const UpdateOfficeOpsTaskParams = zod.object({
+  taskId: zod.coerce.number(),
+});
+
+export const UpdateOfficeOpsTaskBody = zod.object({
+  title: zod.string().min(1).optional(),
+  notes: zod.string().nullish(),
+  status: zod.enum(["open", "completed"]).optional(),
+  assigneeId: zod.number().nullish(),
+  dueDate: zod.string().nullish(),
+  recurrence: zod.enum(["none", "daily", "weekly", "monthly"]).optional(),
+});
+
+export const UpdateOfficeOpsTaskResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  notes: zod.string().nullable(),
+  status: zod.enum(["open", "completed"]),
+  assigneeId: zod.number().nullable(),
+  createdById: zod.number(),
+  dueDate: zod.string().nullable(),
+  completedAt: zod.string().nullable(),
+  recurrence: zod.enum(["none", "daily", "weekly", "monthly"]),
+  recurrenceAnchorDate: zod.string().nullable(),
+  parentRecurrenceId: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Delete an Office Ops task (admin only)
+ */
+export const DeleteOfficeOpsTaskParams = zod.object({
+  taskId: zod.coerce.number(),
 });

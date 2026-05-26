@@ -27,6 +27,9 @@ export interface UserProfile {
   departmentId: number | null;
   /** @nullable */
   departmentName: string | null;
+  departmentIds: number[];
+  /** True when the caller is an admin or a member of the OFFICE/ADMIN department (primary or via user_departments). */
+  officeOpsAccess: boolean;
   /** @nullable */
   avatarUrl: string | null;
   createdAt: string;
@@ -615,6 +618,101 @@ export interface RequestUploadUrlResponse {
   objectPath: string;
 }
 
+export type OfficeOpsTaskStatus =
+  (typeof OfficeOpsTaskStatus)[keyof typeof OfficeOpsTaskStatus];
+
+export const OfficeOpsTaskStatus = {
+  open: "open",
+  completed: "completed",
+} as const;
+
+export type OfficeOpsTaskRecurrence =
+  (typeof OfficeOpsTaskRecurrence)[keyof typeof OfficeOpsTaskRecurrence];
+
+export const OfficeOpsTaskRecurrence = {
+  none: "none",
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
+
+export interface OfficeOpsTask {
+  id: number;
+  title: string;
+  /** @nullable */
+  notes: string | null;
+  status: OfficeOpsTaskStatus;
+  /** @nullable */
+  assigneeId: number | null;
+  createdById: number;
+  /** @nullable */
+  dueDate: string | null;
+  /** @nullable */
+  completedAt: string | null;
+  recurrence: OfficeOpsTaskRecurrence;
+  /** @nullable */
+  recurrenceAnchorDate: string | null;
+  /** @nullable */
+  parentRecurrenceId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ListOfficeOpsTasksResponse = OfficeOpsTask[];
+
+export type CreateOfficeOpsTaskBodyRecurrence =
+  (typeof CreateOfficeOpsTaskBodyRecurrence)[keyof typeof CreateOfficeOpsTaskBodyRecurrence];
+
+export const CreateOfficeOpsTaskBodyRecurrence = {
+  none: "none",
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
+
+export interface CreateOfficeOpsTaskBody {
+  /** @minLength 1 */
+  title: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  dueDate?: string | null;
+  recurrence?: CreateOfficeOpsTaskBodyRecurrence;
+}
+
+export type UpdateOfficeOpsTaskBodyStatus =
+  (typeof UpdateOfficeOpsTaskBodyStatus)[keyof typeof UpdateOfficeOpsTaskBodyStatus];
+
+export const UpdateOfficeOpsTaskBodyStatus = {
+  open: "open",
+  completed: "completed",
+} as const;
+
+export type UpdateOfficeOpsTaskBodyRecurrence =
+  (typeof UpdateOfficeOpsTaskBodyRecurrence)[keyof typeof UpdateOfficeOpsTaskBodyRecurrence];
+
+export const UpdateOfficeOpsTaskBodyRecurrence = {
+  none: "none",
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
+
+export interface UpdateOfficeOpsTaskBody {
+  /** @minLength 1 */
+  title?: string;
+  /** @nullable */
+  notes?: string | null;
+  status?: UpdateOfficeOpsTaskBodyStatus;
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  dueDate?: string | null;
+  recurrence?: UpdateOfficeOpsTaskBodyRecurrence;
+}
+
 export type ParsePdfBody = {
   file: Blob;
 };
@@ -682,3 +780,28 @@ export type GetActivityFeedParams = {
 export type MarkAllNotificationsRead200 = {
   count: number;
 };
+
+export type ListOfficeOpsTasksParams = {
+  filter?: ListOfficeOpsTasksFilter;
+  /**
+   * `mine` (default) = assigned to me OR unassigned OR created by me. `all` = every task.
+   */
+  scope?: ListOfficeOpsTasksScope;
+};
+
+export type ListOfficeOpsTasksFilter =
+  (typeof ListOfficeOpsTasksFilter)[keyof typeof ListOfficeOpsTasksFilter];
+
+export const ListOfficeOpsTasksFilter = {
+  open: "open",
+  completed: "completed",
+  overdue: "overdue",
+} as const;
+
+export type ListOfficeOpsTasksScope =
+  (typeof ListOfficeOpsTasksScope)[keyof typeof ListOfficeOpsTasksScope];
+
+export const ListOfficeOpsTasksScope = {
+  mine: "mine",
+  all: "all",
+} as const;

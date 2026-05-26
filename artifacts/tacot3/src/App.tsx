@@ -46,6 +46,7 @@ const ActivityFullPage = lazy(() => import("@/pages/activity"));
 const AdminPage = lazy(() => import("@/pages/admin"));
 const InventoryPage = lazy(() => import("@/pages/inventory"));
 const SalesPipelinePage = lazy(() => import("@/pages/sales"));
+const OfficeOpsPage = lazy(() => import("@/pages/office-ops"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 
 function PageLoader() {
@@ -214,6 +215,9 @@ function ClerkProviderWithRoutes() {
           </Route>
           <Route path="/sales">
             <ProtectedLayout><AdminLayout><SalesPipelinePage /></AdminLayout></ProtectedLayout>
+          </Route>
+          <Route path="/office-ops">
+            <ProtectedLayout><OfficeOpsPage /></ProtectedLayout>
           </Route>
           <Route path="/settings">
             <ProtectedLayout><SettingsPage /></ProtectedLayout>

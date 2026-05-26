@@ -25,6 +25,7 @@ import type {
   CreateDepartmentBody,
   CreateGeneralNotificationBody,
   CreateKanbanColumnBody,
+  CreateOfficeOpsTaskBody,
   CreateProjectBody,
   CreateTaskBody,
   DashboardSummary,
@@ -36,9 +37,12 @@ import type {
   HealthStatus,
   KanbanColumn,
   KanbanColumnConfig,
+  ListOfficeOpsTasksParams,
+  ListOfficeOpsTasksResponse,
   ListTasksParams,
   MarkAllNotificationsRead200,
   Notification,
+  OfficeOpsTask,
   ParsePdfBody,
   ParsedPdfData,
   Project,
@@ -53,6 +57,7 @@ import type {
   UpdateDepartmentBody,
   UpdateKanbanColumnBody,
   UpdateMeBody,
+  UpdateOfficeOpsTaskBody,
   UpdateProjectBody,
   UpdateTaskBody,
   UserProfile,
@@ -4468,3 +4473,448 @@ export function useGetObject<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List Office Ops tasks visible to the caller
+ */
+export const getListOfficeOpsTasksUrl = (params?: ListOfficeOpsTasksParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/office-ops/tasks?${stringifiedParams}`
+    : `/api/office-ops/tasks`;
+};
+
+export const listOfficeOpsTasks = async (
+  params?: ListOfficeOpsTasksParams,
+  options?: RequestInit,
+): Promise<ListOfficeOpsTasksResponse> => {
+  return customFetch<ListOfficeOpsTasksResponse>(
+    getListOfficeOpsTasksUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListOfficeOpsTasksQueryKey = (
+  params?: ListOfficeOpsTasksParams,
+) => {
+  return [`/api/office-ops/tasks`, ...(params ? [params] : [])] as const;
+};
+
+export const getListOfficeOpsTasksQueryOptions = <
+  TData = Awaited<ReturnType<typeof listOfficeOpsTasks>>,
+  TError = ErrorType<void>,
+>(
+  params?: ListOfficeOpsTasksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listOfficeOpsTasks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListOfficeOpsTasksQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listOfficeOpsTasks>>
+  > = ({ signal }) => listOfficeOpsTasks(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOfficeOpsTasks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListOfficeOpsTasksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listOfficeOpsTasks>>
+>;
+export type ListOfficeOpsTasksQueryError = ErrorType<void>;
+
+/**
+ * @summary List Office Ops tasks visible to the caller
+ */
+
+export function useListOfficeOpsTasks<
+  TData = Awaited<ReturnType<typeof listOfficeOpsTasks>>,
+  TError = ErrorType<void>,
+>(
+  params?: ListOfficeOpsTasksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listOfficeOpsTasks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListOfficeOpsTasksQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create an Office Ops task
+ */
+export const getCreateOfficeOpsTaskUrl = () => {
+  return `/api/office-ops/tasks`;
+};
+
+export const createOfficeOpsTask = async (
+  createOfficeOpsTaskBody: CreateOfficeOpsTaskBody,
+  options?: RequestInit,
+): Promise<OfficeOpsTask> => {
+  return customFetch<OfficeOpsTask>(getCreateOfficeOpsTaskUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createOfficeOpsTaskBody),
+  });
+};
+
+export const getCreateOfficeOpsTaskMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOfficeOpsTask>>,
+    TError,
+    { data: BodyType<CreateOfficeOpsTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createOfficeOpsTask>>,
+  TError,
+  { data: BodyType<CreateOfficeOpsTaskBody> },
+  TContext
+> => {
+  const mutationKey = ["createOfficeOpsTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createOfficeOpsTask>>,
+    { data: BodyType<CreateOfficeOpsTaskBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createOfficeOpsTask(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateOfficeOpsTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createOfficeOpsTask>>
+>;
+export type CreateOfficeOpsTaskMutationBody = BodyType<CreateOfficeOpsTaskBody>;
+export type CreateOfficeOpsTaskMutationError = ErrorType<void>;
+
+/**
+ * @summary Create an Office Ops task
+ */
+export const useCreateOfficeOpsTask = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOfficeOpsTask>>,
+    TError,
+    { data: BodyType<CreateOfficeOpsTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createOfficeOpsTask>>,
+  TError,
+  { data: BodyType<CreateOfficeOpsTaskBody> },
+  TContext
+> => {
+  return useMutation(getCreateOfficeOpsTaskMutationOptions(options));
+};
+
+/**
+ * @summary Get a single Office Ops task
+ */
+export const getGetOfficeOpsTaskUrl = (taskId: number) => {
+  return `/api/office-ops/tasks/${taskId}`;
+};
+
+export const getOfficeOpsTask = async (
+  taskId: number,
+  options?: RequestInit,
+): Promise<OfficeOpsTask> => {
+  return customFetch<OfficeOpsTask>(getGetOfficeOpsTaskUrl(taskId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetOfficeOpsTaskQueryKey = (taskId: number) => {
+  return [`/api/office-ops/tasks/${taskId}`] as const;
+};
+
+export const getGetOfficeOpsTaskQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOfficeOpsTask>>,
+  TError = ErrorType<void>,
+>(
+  taskId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOfficeOpsTask>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetOfficeOpsTaskQueryKey(taskId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getOfficeOpsTask>>
+  > = ({ signal }) => getOfficeOpsTask(taskId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!taskId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOfficeOpsTask>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOfficeOpsTaskQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOfficeOpsTask>>
+>;
+export type GetOfficeOpsTaskQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a single Office Ops task
+ */
+
+export function useGetOfficeOpsTask<
+  TData = Awaited<ReturnType<typeof getOfficeOpsTask>>,
+  TError = ErrorType<void>,
+>(
+  taskId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOfficeOpsTask>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOfficeOpsTaskQueryOptions(taskId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update an Office Ops task. Marking status=completed on a recurring task creates the next instance.
+ */
+export const getUpdateOfficeOpsTaskUrl = (taskId: number) => {
+  return `/api/office-ops/tasks/${taskId}`;
+};
+
+export const updateOfficeOpsTask = async (
+  taskId: number,
+  updateOfficeOpsTaskBody: UpdateOfficeOpsTaskBody,
+  options?: RequestInit,
+): Promise<OfficeOpsTask> => {
+  return customFetch<OfficeOpsTask>(getUpdateOfficeOpsTaskUrl(taskId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateOfficeOpsTaskBody),
+  });
+};
+
+export const getUpdateOfficeOpsTaskMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOfficeOpsTask>>,
+    TError,
+    { taskId: number; data: BodyType<UpdateOfficeOpsTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateOfficeOpsTask>>,
+  TError,
+  { taskId: number; data: BodyType<UpdateOfficeOpsTaskBody> },
+  TContext
+> => {
+  const mutationKey = ["updateOfficeOpsTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateOfficeOpsTask>>,
+    { taskId: number; data: BodyType<UpdateOfficeOpsTaskBody> }
+  > = (props) => {
+    const { taskId, data } = props ?? {};
+
+    return updateOfficeOpsTask(taskId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateOfficeOpsTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateOfficeOpsTask>>
+>;
+export type UpdateOfficeOpsTaskMutationBody = BodyType<UpdateOfficeOpsTaskBody>;
+export type UpdateOfficeOpsTaskMutationError = ErrorType<void>;
+
+/**
+ * @summary Update an Office Ops task. Marking status=completed on a recurring task creates the next instance.
+ */
+export const useUpdateOfficeOpsTask = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOfficeOpsTask>>,
+    TError,
+    { taskId: number; data: BodyType<UpdateOfficeOpsTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateOfficeOpsTask>>,
+  TError,
+  { taskId: number; data: BodyType<UpdateOfficeOpsTaskBody> },
+  TContext
+> => {
+  return useMutation(getUpdateOfficeOpsTaskMutationOptions(options));
+};
+
+/**
+ * @summary Delete an Office Ops task (admin only)
+ */
+export const getDeleteOfficeOpsTaskUrl = (taskId: number) => {
+  return `/api/office-ops/tasks/${taskId}`;
+};
+
+export const deleteOfficeOpsTask = async (
+  taskId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteOfficeOpsTaskUrl(taskId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteOfficeOpsTaskMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOfficeOpsTask>>,
+    TError,
+    { taskId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteOfficeOpsTask>>,
+  TError,
+  { taskId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteOfficeOpsTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteOfficeOpsTask>>,
+    { taskId: number }
+  > = (props) => {
+    const { taskId } = props ?? {};
+
+    return deleteOfficeOpsTask(taskId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteOfficeOpsTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteOfficeOpsTask>>
+>;
+
+export type DeleteOfficeOpsTaskMutationError = ErrorType<void>;
+
+/**
+ * @summary Delete an Office Ops task (admin only)
+ */
+export const useDeleteOfficeOpsTask = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOfficeOpsTask>>,
+    TError,
+    { taskId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteOfficeOpsTask>>,
+  TError,
+  { taskId: number },
+  TContext
+> => {
+  return useMutation(getDeleteOfficeOpsTaskMutationOptions(options));
+};

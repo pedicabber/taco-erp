@@ -8,6 +8,7 @@ import tasksRouter from "./tasks";
 import notificationsRouter from "./notifications";
 import taskTemplatesRouter from "./taskTemplates";
 import inventoryRouter from "./inventory";
+import officeOpsRouter from "./officeOps";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(tasksRouter);
 router.use(notificationsRouter);
 router.use(taskTemplatesRouter);
 router.use(inventoryRouter);
+router.use(officeOpsRouter);
 
 export default router;

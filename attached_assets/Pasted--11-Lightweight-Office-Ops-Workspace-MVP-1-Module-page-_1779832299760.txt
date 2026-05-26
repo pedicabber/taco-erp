@@ -1,0 +1,139 @@
+#11 - Lightweight Office Ops Workspace (MVP)
+
+1. Module/page:
+New sidebar page → Office Ops
+
+2. Current problem:
+Office Management users currently do not have a clean workflow for handling recurring operational/admin work.
+
+The current project-task system is designed for:
+- customer projects
+- milestone work
+- engineering/manufacturing execution
+
+Office work is different:
+- recurring
+- operational
+- daily/weekly admin work
+- often unrelated to a single project
+
+Trying to force Office/Admin tasks into project workflows creates:
+- cluttered projects
+- duplicated tasks
+- confusing visibility behavior
+- poor usability for office staff
+
+3. Desired behavior:
+Create a lightweight standalone "Office Ops" workspace specifically for Office Management users.
+
+This should be intentionally minimal for MVP:
+- simple task list
+- recurring task support
+- assignment support
+- clean office-focused workflow
+
+The goal is to start lightweight and evolve based on real user feedback after usage.
+
+4. UI requirements:
+Add a new sidebar item:
+- "Office Ops"
+
+Visible only to:
+- admins
+- Office Management department users
+
+Page layout should remain lightweight and simple:
+- Assigned To Me
+- Due Today
+- Overdue
+- Upcoming
+
+Tasks should display:
+- title
+- assigned user
+- due date
+- recurrence type
+- status
+
+Simple filters only:
+- Open
+- Completed
+- Overdue
+
+Task detail layout should be simpler than project tasks:
+- no project engineering complexity
+- no SQDC
+- no project department logic
+- no kanban requirements
+
+Allow:
+- notes/comments
+- completion
+- reassignment
+- recurrence settings
+
+5. Database involved:
+Create separate lightweight tables for Office Ops tasks.
+
+Recommended:
+- office_ops_tasks
+- optional future template/recurrence support
+
+Do NOT reuse the existing project tasks table directly.
+
+Reason:
+- avoid polluting project metrics
+- avoid SQDC contamination
+- avoid Office/Admin visibility conflicts
+- avoid complex conditional logic in existing task flows
+
+6. What must NOT change:
+- Do not change existing project task behavior
+- Do not affect SQDC calculations
+- Do not affect project pages
+- Do not affect manufacturing workflows
+- Do not change current Office/Admin hidden project container logic yet
+- Do not redesign dashboard or tasks page
+- Do not build advanced automation yet
+- Do not build HR/payroll features
+- Do not create overly complex recurrence systems yet
+
+7. Workflow step-by-step:
+1. Office Management user logs in
+2. User sees new "Office Ops" sidebar item
+3. User opens Office Ops page
+4. User sees assigned operational/admin tasks
+5. Lead/admin can create recurring or one-off office tasks
+6. User completes tasks or adds notes
+7. Recurring tasks continue appearing based on recurrence settings
+
+MVP recurring support:
+- none
+- daily
+- weekly
+- monthly
+
+Keep recurrence lightweight/simple for phase 1.
+
+IMPORTANT:
+Start intentionally lightweight.
+
+Prioritize:
+- usability
+- clarity
+- operational simplicity
+
+NOT:
+- enterprise complexity
+- automation overload
+- excessive schema abstraction
+
+Investigate first and report:
+- recommended schema
+- minimal recurring approach
+- routing/sidebar impact
+- permissions model
+- future expansion path
+- files involved
+
+Wait for approval before implementation.

@@ -17,6 +17,9 @@ export interface UserProfile {
   departmentId: number | null;
   /** @nullable */
   departmentName: string | null;
+  departmentIds: number[];
+  /** True when the caller is an admin or a member of the OFFICE/ADMIN department (primary or via user_departments). */
+  officeOpsAccess: boolean;
   /** @nullable */
   avatarUrl: string | null;
   createdAt: string;

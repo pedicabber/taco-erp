@@ -24,6 +24,8 @@ tags:
     description: Calendar/timeline views
   - name: storage
     description: File storage
+  - name: office-ops
+    description: Office Ops lightweight task workspace
 
 paths:
   /healthz:
@@ -1039,6 +1041,119 @@ paths:
         "200":
           description: Object file
 
+  # ─── Office Ops ──────────────────────────────────────────────────────────────
+
+  /office-ops/tasks:
+    get:
+      operationId: listOfficeOpsTasks
+      tags: [office-ops]
+      summary: List Office Ops tasks visible to the caller
+      parameters:
+        - name: filter
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [open, completed, overdue]
+            default: open
+        - name: scope
+          in: query
+          required: false
+          description: "`mine` (default) = assigned to me OR unassigned OR created by me. `all` = every task."
+          schema:
+            type: string
+            enum: [mine, all]
+            default: mine
+      responses:
+        "200":
+          description: List of Office Ops tasks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListOfficeOpsTasksResponse"
+        "403":
+          description: Caller is not an Office Ops member
+    post:
+      operationId: createOfficeOpsTask
+      tags: [office-ops]
+      summary: Create an Office Ops task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOfficeOpsTaskBody"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfficeOpsTask"
+        "403":
+          description: Caller is not an Office Ops member
+
+  /office-ops/tasks/{taskId}:
+    get:
+      operationId: getOfficeOpsTask
+      tags: [office-ops]
+      summary: Get a single Office Ops task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Office Ops task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfficeOpsTask"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateOfficeOpsTask
+      tags: [office-ops]
+      summary: Update an Office Ops task. Marking status=completed on a recurring task creates the next instance.
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOfficeOpsTaskBody"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfficeOpsTask"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteOfficeOpsTask
+      tags: [office-ops]
+      summary: Delete an Office Ops task (admin only)
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Caller is not an admin
+
 components:
   schemas:
     HealthStatus:
@@ -1067,6 +1182,13 @@ components:
           type: ["integer", "null"]
         departmentName:
           type: ["string", "null"]
+        departmentIds:
+          type: array
+          items:
+            type: integer
+        officeOpsAccess:
+          type: boolean
+          description: True when the caller is an admin or a member of the OFFICE/ADMIN department (primary or via user_departments).
         avatarUrl:
           type: ["string", "null"]
         createdAt:
@@ -1079,6 +1201,8 @@ components:
         - role
         - departmentId
         - departmentName
+        - departmentIds
+        - officeOpsAccess
         - avatarUrl
         - createdAt
 
@@ -1904,3 +2028,92 @@ components:
       required:
         - uploadURL
         - objectPath
+
+    OfficeOpsTask:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        notes:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [open, completed]
+        assigneeId:
+          type: ["integer", "null"]
+        createdById:
+          type: integer
+        dueDate:
+          type: ["string", "null"]
+        completedAt:
+          type: ["string", "null"]
+        recurrence:
+          type: string
+          enum: [none, daily, weekly, monthly]
+        recurrenceAnchorDate:
+          type: ["string", "null"]
+        parentRecurrenceId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - title
+        - notes
+        - status
+        - assigneeId
+        - createdById
+        - dueDate
+        - completedAt
+        - recurrence
+        - recurrenceAnchorDate
+        - parentRecurrenceId
+        - createdAt
+        - updatedAt
+
+    ListOfficeOpsTasksResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/OfficeOpsTask"
+
+    CreateOfficeOpsTaskBody:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        notes:
+          type: ["string", "null"]
+        assigneeId:
+          type: ["integer", "null"]
+        dueDate:
+          type: ["string", "null"]
+        recurrence:
+          type: string
+          enum: [none, daily, weekly, monthly]
+          default: none
+      required:
+        - title
+
+    UpdateOfficeOpsTaskBody:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        notes:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [open, completed]
+        assigneeId:
+          type: ["integer", "null"]
+        dueDate:
+          type: ["string", "null"]
+        recurrence:
+          type: string
+          enum: [none, daily, weekly, monthly]
