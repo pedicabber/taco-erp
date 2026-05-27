@@ -2255,6 +2255,8 @@ components:
           type: ["string", "null"]
         parentRecurrenceId:
           type: ["integer", "null"]
+        nextInstanceId:
+          type: ["integer", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -2271,6 +2273,7 @@ components:
         - recurrence
         - recurrenceAnchorDate
         - parentRecurrenceId
+        - nextInstanceId
         - createdAt
         - updatedAt
 

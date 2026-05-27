@@ -1,0 +1,73 @@
+Approved.
+
+Proceed with Office Ops Recurrence Cleanup + Operational Checklist UX.
+
+Build exactly this scope:
+
+1. Add recurrence idempotency
+- Add nullable next_instance_id to office_ops_tasks.
+- Add it to OpenAPI/OfficeOpsTask schema and regenerate client/zod types.
+- Completing a recurring task creates exactly ONE next occurrence.
+- If next_instance_id is already set, do NOT create another.
+- Reopening/uncompleting must NOT clear next_instance_id.
+- Complete → reopen → complete must still result in only one future occurrence.
+
+2. Delete permissions
+- Admins can delete any Office Ops task.
+- Non-admin Office Ops users can delete only tasks they created.
+- Hide trash button when user cannot delete.
+- Preserve existing Office Ops access gate.
+
+3. Daily completed behavior
+- Daily task completed today remains visible in Daily section.
+- Show line-through + muted styling.
+- Daily task completed before today appears only in Completed tab.
+- No cron, no scheduler, no midnight worker.
+- Visibility is calculated dynamically from completedAt vs current day.
+
+4. Weekly/monthly behavior
+- Once completed, weekly/monthly tasks leave active layout immediately.
+- They appear in Completed tab.
+- Next occurrence appears only at next weekly/monthly interval.
+
+5. One-time behavior
+- Completed one-time tasks move to Completed.
+- They never regenerate.
+
+6. Office Ops layout
+Open tab should show four collapsible sections:
+- One-Time Tasks
+- Daily Tasks
+- Weekly Tasks
+- Monthly Tasks
+
+Each section header should show:
+- recurrence type
+- open count
+- completed count where relevant
+
+7. Completed tab
+- Show completed one-time tasks.
+- Show completed weekly/monthly tasks.
+- Show daily tasks completed before today.
+- Do NOT show daily tasks completed today in Completed tab.
+
+8. Do not change:
+- Office Ops access gate
+- global task system
+- Timeclock popup
+- Office Ops sidebar entry
+- notifications
+- dashboard
+- analytics
+- custom recurrence rules
+- cron/background workers
+- drag-and-drop
+- overall page redesign
+
+9. After implementation:
+- report exactly what files changed
+- verify recurrence duplicate bug is fixed
+- verify creator/admin delete permissions
+- verify daily completed-today line-through behavior
+- verify weekly/monthly completed behavior

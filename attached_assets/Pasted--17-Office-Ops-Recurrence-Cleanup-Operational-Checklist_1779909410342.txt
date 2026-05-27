@@ -1,0 +1,230 @@
+#17 - Office Ops Recurrence Cleanup + Operational Checklist UX
+
+1. Module/page:
+Office Ops
+
+2. Current problems:
+There are currently three major workflow issues in Office Ops:
+
+A. Delete permissions are too restrictive
+Currently only admins may delete Office Ops tasks.
+
+B. Recurring tasks duplicate incorrectly
+When a recurring task is:
+- completed
+then
+- reopened/uncompleted
+
+the recurrence engine:
+- creates duplicate future occurrences
+- incorrectly rolls due dates
+- creates confusing duplicate assignments
+
+This breaks recurrence integrity.
+
+C. Recurring tasks are visually confusing
+All recurrence types currently intermingle together.
+
+Users need clear operational separation between:
+- One-time tasks
+- Daily recurring tasks
+- Weekly recurring tasks
+- Monthly recurring tasks
+
+Additionally:
+daily recurring tasks should remain visually visible after completion for the current day only.
+
+3. Desired behavior:
+Office Ops should behave like:
+- a production checklist
+- recurring operations workflow
+- maintenance/task board
+
+The system should feel:
+- intuitive
+- deterministic
+- operationally readable
+- lightweight
+
+4. Delete permission behavior:
+New rules:
+- Office Ops users may delete ONLY tasks they created
+- Admins may delete any Office Ops task
+
+Reason:
+Prevent accidental deletion of another user's recurring workflow while still removing unnecessary admin dependence.
+
+Constraints:
+- preserve Office Ops access gate
+- no broader permission escalation
+- no audit system in this phase
+
+5. Recurrence duplication bug:
+Current bug:
+If a recurring task is:
+- completed
+then
+- reopened/uncompleted
+
+the system creates duplicate recurrence entries and shifts dates incorrectly.
+
+Desired behavior:
+Recurring generation must be fully idempotent.
+
+Rules:
+- completing a recurring task creates ONLY ONE next occurrence
+- reopening/uncompleting must NEVER generate another recurrence
+- reopening restores ONLY the current task state
+- recurrence generation should occur only once per recurrence cycle
+- recurrence logic must remain deterministic even across rapid state changes
+
+Required investigation:
+Audit:
+- recurrence rollover trigger
+- completion-state transitions
+- recurrence parent linkage
+- PATCH/update flow
+- race-condition handling
+
+Determine:
+- safest idempotent recurrence strategy
+
+6. New Office Ops layout:
+Segregate tasks into collapsible operational sections:
+
+A. One-Time Tasks
+B. Daily Tasks
+C. Weekly Tasks
+D. Monthly Tasks
+
+Each section:
+- collapsible
+- independently grouped
+- easy to scan quickly
+
+7. Daily recurring task behavior:
+Daily tasks behave differently from weekly/monthly tasks.
+
+Desired UX:
+When a daily task is completed:
+- it remains visible for the rest of the current day
+- task receives line-through styling
+- muted/completed appearance
+- remains in the Daily section
+
+On the next day:
+- previous completed instance no longer appears in active Daily section
+- appears only in Completed/history
+- next daily occurrence appears with current day's due date
+
+IMPORTANT:
+Do NOT implement:
+- cron jobs
+- midnight schedulers
+- background workers
+
+Instead:
+Daily visibility should be calculated dynamically based on:
+- completion timestamp
+- current date
+
+8. Weekly/monthly recurring behavior:
+Weekly and monthly tasks should behave differently from daily tasks.
+
+Once completed:
+- they leave the active layout immediately
+- move into Completed/history
+- next occurrence appears only at the proper next interval
+
+Purpose:
+Prevent active-layout clutter.
+
+9. One-time task behavior:
+One-time tasks:
+- move normally to Completed
+- never regenerate
+
+10. Completed tab behavior:
+Completed tab should contain:
+- completed one-time tasks
+- completed weekly tasks
+- completed monthly tasks
+- archived daily completions from previous days
+
+Current-day completed daily tasks remain visible in Daily section until the day changes.
+
+11. UI/UX requirements:
+The page should feel:
+- checklist-oriented
+- operational
+- lightweight
+- production-friendly
+
+Visual requirements:
+- line-through styling for completed current-day daily tasks
+- subtle muted appearance
+- preserve readability
+- avoid excessive animations
+
+Section headers should show:
+- recurrence type
+- open count
+- completed count
+
+12. Mobile requirements:
+Sections should:
+- collapse cleanly
+- remain fast to scan
+- avoid giant scroll walls
+
+Completed daily tasks should not dominate mobile layout.
+
+13. Out of scope:
+- advanced recurrence rules
+- cron scheduling
+- custom intervals
+- analytics
+- notifications
+- dashboard integration
+- Office Ops redesign
+- drag-and-drop scheduling
+- manual recurrence editing UI
+
+14. Critical architectural constraints:
+- preserve existing Office Ops access gate
+- preserve recurrence schema/model if possible
+- avoid duplicate recurrence creation
+- avoid polling/background schedulers
+- recurrence logic must remain deterministic
+- preserve existing Office Ops APIs where possible
+
+15. Recommended implementation approach:
+Phase 1:
+- recurrence duplication/idempotency fix
+- creator/admin delete permissions
+- recurrence-type grouping sections
+
+Phase 2:
+- current-day completed-daily visibility
+- completed-history polish
+- visual cleanup
+
+16. Relevant files:
+artifacts/api-server/src/routes/officeOps.ts
+artifacts/tacot3/src/pages/office-ops.tsx
+lib/db/src/schema/office_ops_tasks.ts
+
+17. Required investigation before implementation:
+Audit:
+- recurrence rollover logic
+- completion transition logic
+- recurrence duplication root cause
+- current completed-tab behavior
+
+Report:
+- root cause of duplication
+- safest idempotent recurrence strategy
+- whether current schema already supports dynamic daily visibility
+- recommended frontend grouping architecture
+
+Wait for approval before major schema changes.

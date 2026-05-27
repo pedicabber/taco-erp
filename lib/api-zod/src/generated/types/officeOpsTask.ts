@@ -26,6 +26,8 @@ export interface OfficeOpsTask {
   recurrenceAnchorDate: string | null;
   /** @nullable */
   parentRecurrenceId: number | null;
+  /** @nullable */
+  nextInstanceId: number | null;
   createdAt: string;
   updatedAt: string;
 }

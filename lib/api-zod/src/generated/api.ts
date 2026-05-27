@@ -2217,6 +2217,7 @@ export const ListOfficeOpsTasksResponseItem = zod.object({
   recurrence: zod.enum(["none", "daily", "weekly", "monthly"]),
   recurrenceAnchorDate: zod.string().nullable(),
   parentRecurrenceId: zod.number().nullable(),
+  nextInstanceId: zod.number().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -2259,6 +2260,7 @@ export const GetOfficeOpsTaskResponse = zod.object({
   recurrence: zod.enum(["none", "daily", "weekly", "monthly"]),
   recurrenceAnchorDate: zod.string().nullable(),
   parentRecurrenceId: zod.number().nullable(),
+  nextInstanceId: zod.number().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -2291,6 +2293,7 @@ export const UpdateOfficeOpsTaskResponse = zod.object({
   recurrence: zod.enum(["none", "daily", "weekly", "monthly"]),
   recurrenceAnchorDate: zod.string().nullable(),
   parentRecurrenceId: zod.number().nullable(),
+  nextInstanceId: zod.number().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });

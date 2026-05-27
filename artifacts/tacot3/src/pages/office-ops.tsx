@@ -37,10 +37,12 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, RefreshCw, CheckCircle2, Circle, Pencil } from "lucide-react";
+import { Plus, Trash2, RefreshCw, CheckCircle2, Circle, Pencil, ChevronRight } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 type Filter = "open" | "completed" | "overdue";
 type Scope = "mine" | "all";
+type RecurrenceSectionKey = "none" | "daily" | "weekly" | "monthly";
 
 const RECURRENCE_LABEL: Record<OfficeOpsTaskRecurrence, string> = {
   none: "One-off",
@@ -48,6 +50,15 @@ const RECURRENCE_LABEL: Record<OfficeOpsTaskRecurrence, string> = {
   weekly: "Weekly",
   monthly: "Monthly",
 };
+
+const SECTION_TITLES: Record<RecurrenceSectionKey, string> = {
+  none: "One-Time Tasks",
+  daily: "Daily Tasks",
+  weekly: "Weekly Tasks",
+  monthly: "Monthly Tasks",
+};
+
+const SECTION_ORDER: RecurrenceSectionKey[] = ["none", "daily", "weekly", "monthly"];
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -63,8 +74,14 @@ function isOverdue(t: OfficeOpsTask): boolean {
   return !!t.dueDate && t.status === "open" && t.dueDate < todayIso();
 }
 
-function isDueToday(t: OfficeOpsTask): boolean {
-  return t.dueDate === todayIso() && t.status === "open";
+/**
+ * A daily recurring task that was completed at some point today (local UTC
+ * day) — these stay visible in the Daily section with line-through styling
+ * until the calendar day rolls over.
+ */
+function isDailyCompletedToday(t: OfficeOpsTask): boolean {
+  if (t.recurrence !== "daily" || t.status !== "completed" || !t.completedAt) return false;
+  return t.completedAt.slice(0, 10) === todayIso();
 }
 
 export default function OfficeOpsPage() {
@@ -76,6 +93,12 @@ export default function OfficeOpsPage() {
   const [scope, setScope] = useState<Scope>("mine");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<OfficeOpsTask | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<RecurrenceSectionKey, boolean>>({
+    none: false,
+    daily: false,
+    weekly: false,
+    monthly: false,
+  });
 
   const { data: users } = useQuery<UserProfileMini[]>({
     queryKey: ["users"],
@@ -93,33 +116,47 @@ export default function OfficeOpsPage() {
   const tasks = tasksQuery.data ?? [];
   const myId = currentUser?.id ?? null;
 
-  const sections = useMemo(() => {
-    if (filter !== "open") {
-      return [{ key: "all", title: filter === "completed" ? "Completed" : "Overdue", items: tasks }];
-    }
-    const today = todayIso();
-    const mine: OfficeOpsTask[] = [];
-    const dueToday: OfficeOpsTask[] = [];
-    const overdue: OfficeOpsTask[] = [];
-    const upcoming: OfficeOpsTask[] = [];
-
+  // Open tab: group by recurrence type into four collapsible sections.
+  // Daily section *also* includes today's completed dailies (rendered with
+  // line-through + muted styling) per the operational-checklist UX spec.
+  const recurrenceSections = useMemo(() => {
+    if (filter !== "open") return null;
+    const buckets: Record<RecurrenceSectionKey, OfficeOpsTask[]> = {
+      none: [],
+      daily: [],
+      weekly: [],
+      monthly: [],
+    };
+    const completedTodayCount: Record<RecurrenceSectionKey, number> = {
+      none: 0,
+      daily: 0,
+      weekly: 0,
+      monthly: 0,
+    };
     for (const t of tasks) {
-      if (myId !== null && t.assigneeId === myId) {
-        mine.push(t);
-        continue;
+      const key = (t.recurrence as RecurrenceSectionKey) ?? "none";
+      if (!(key in buckets)) continue;
+      buckets[key].push(t);
+      if (t.status === "completed" && isDailyCompletedToday(t)) {
+        completedTodayCount[key] += 1;
       }
-      if (isOverdue(t)) overdue.push(t);
-      else if (isDueToday(t)) dueToday.push(t);
-      else upcoming.push(t);
     }
+    return SECTION_ORDER.map((key) => ({
+      key,
+      title: SECTION_TITLES[key],
+      items: buckets[key],
+      openCount: buckets[key].filter((t) => t.status === "open").length,
+      doneTodayCount: completedTodayCount[key],
+    }));
+  }, [tasks, filter]);
 
-    return [
-      { key: "mine", title: "Assigned to Me", items: mine },
-      { key: "overdue", title: "Overdue", items: overdue },
-      { key: "today", title: `Due Today (${today})`, items: dueToday },
-      { key: "upcoming", title: "Upcoming / Unscheduled", items: upcoming },
-    ].filter((s) => s.items.length > 0);
-  }, [tasks, filter, myId]);
+  // Overdue/Completed tabs: flat list, server-filtered.
+  const flatSection = useMemo(() => {
+    if (filter === "open") return null;
+    return { title: filter === "completed" ? "Completed" : "Overdue", items: tasks };
+  }, [tasks, filter]);
+
+  void myId;
 
   const createMut = useMutation({
     mutationFn: (body: CreateOfficeOpsTaskBody) =>
@@ -198,40 +235,96 @@ export default function OfficeOpsPage() {
 
       {tasksQuery.isLoading ? (
         <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
-      ) : sections.length === 0 ? (
-        <Card className="p-10 text-center text-muted-foreground">
-          No tasks in this view. {filter === "open" && "Create one to get started."}
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          {sections.map((section) => (
-            <section key={section.key}>
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                {section.title}
-                <span className="ml-2 text-xs font-normal">({section.items.length})</span>
-              </h2>
-              <div className="space-y-2">
-                {section.items.map((t) => (
-                  <TaskRow
-                    key={t.id}
-                    task={t}
-                    users={users ?? []}
-                    currentUserId={myId}
-                    isAdmin={isAdmin}
-                    onToggle={(next) =>
-                      updateMut.mutate({ id: t.id, body: { status: next } })
-                    }
-                    onEdit={() => setEditing(t)}
-                    onDelete={() => {
-                      if (confirm(`Delete "${t.title}"?`)) deleteMut.mutate(t.id);
-                    }}
+      ) : recurrenceSections ? (
+        <div className="space-y-3">
+          {recurrenceSections.map((section) => {
+            const isOpen = !collapsed[section.key];
+            const countLabel =
+              section.key === "daily"
+                ? `${section.openCount} open · ${section.doneTodayCount} done today`
+                : `${section.openCount} open`;
+            return (
+              <Collapsible
+                key={section.key}
+                open={isOpen}
+                onOpenChange={(v) =>
+                  setCollapsed((c) => ({ ...c, [section.key]: !v }))
+                }
+              >
+                <CollapsibleTrigger
+                  className="flex items-center gap-2 w-full text-left py-2 group"
+                  data-testid={`section-toggle-${section.key}`}
+                >
+                  <ChevronRight
+                    className={`w-4 h-4 text-muted-foreground transition-transform ${
+                      isOpen ? "rotate-90" : ""
+                    }`}
                   />
-                ))}
-              </div>
-            </section>
-          ))}
+                  <h2 className="text-sm font-semibold uppercase tracking-wide">
+                    {section.title}
+                  </h2>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    — {countLabel}
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  {section.items.length === 0 ? (
+                    <p className="text-xs text-muted-foreground px-6 pb-3">
+                      Nothing here yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 pl-6">
+                      {section.items.map((t) => (
+                        <TaskRow
+                          key={t.id}
+                          task={t}
+                          users={users ?? []}
+                          canDelete={isAdmin || (myId !== null && t.createdById === myId)}
+                          onToggle={(next) =>
+                            updateMut.mutate({ id: t.id, body: { status: next } })
+                          }
+                          onEdit={() => setEditing(t)}
+                          onDelete={() => {
+                            if (confirm(`Delete "${t.title}"?`)) deleteMut.mutate(t.id);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
         </div>
-      )}
+      ) : flatSection && flatSection.items.length === 0 ? (
+        <Card className="p-10 text-center text-muted-foreground">
+          No tasks in this view.
+        </Card>
+      ) : flatSection ? (
+        <section>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+            {flatSection.title}
+            <span className="ml-2 text-xs font-normal">({flatSection.items.length})</span>
+          </h2>
+          <div className="space-y-2">
+            {flatSection.items.map((t) => (
+              <TaskRow
+                key={t.id}
+                task={t}
+                users={users ?? []}
+                canDelete={isAdmin || (myId !== null && t.createdById === myId)}
+                onToggle={(next) =>
+                  updateMut.mutate({ id: t.id, body: { status: next } })
+                }
+                onEdit={() => setEditing(t)}
+                onDelete={() => {
+                  if (confirm(`Delete "${t.title}"?`)) deleteMut.mutate(t.id);
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         {editing && (
@@ -257,31 +350,30 @@ export default function OfficeOpsPage() {
 function TaskRow({
   task,
   users,
-  currentUserId,
-  isAdmin,
+  canDelete,
   onToggle,
   onEdit,
   onDelete,
 }: {
   task: OfficeOpsTask;
   users: UserProfileMini[];
-  currentUserId: number | null;
-  isAdmin: boolean;
+  canDelete: boolean;
   onToggle: (status: "open" | "completed") => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const assignee = users.find((u) => u.id === task.assigneeId);
-  // Any user who can see this page has Office Ops access and is allowed to
-  // edit/complete (product decision #2). Suppress unused-var noise from the
-  // currentUserId / isAdmin props that are still threaded for delete gating.
-  void currentUserId;
   const canMutate = true;
   const completed = task.status === "completed";
   const overdue = isOverdue(task);
+  // Daily-completed-today rows live in the Open tab's Daily section. Render
+  // them muted so the checklist reads at a glance.
+  const mutedDoneToday = completed && isDailyCompletedToday(task);
   return (
     <Card
-      className="p-3 flex items-start gap-3 hover-elevate"
+      className={`p-3 flex items-start gap-3 hover-elevate ${
+        mutedDoneToday ? "bg-muted/40 opacity-70" : ""
+      }`}
       data-testid={`task-row-${task.id}`}
     >
       <button
@@ -335,7 +427,7 @@ function TaskRow({
             <Pencil className="w-4 h-4" />
           </Button>
         )}
-        {isAdmin && (
+        {canDelete && (
           <Button
             variant="ghost"
             size="icon"
