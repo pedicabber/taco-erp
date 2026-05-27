@@ -269,6 +269,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex-1" />
 
+          {/* Global timeclock popup */}
+          <TimeclockPopover />
+
           {/* Settings / Admin gear — visible to all users */}
           <Link href={settingsHref}>
             <div
@@ -285,9 +288,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Settings className="w-5 h-5" />
             </div>
           </Link>
-
-          {/* Global timeclock popup */}
-          <TimeclockPopover />
 
           {/* Notification bell */}
           <Link href="/notifications">

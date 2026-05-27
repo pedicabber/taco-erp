@@ -44,17 +44,20 @@ function ActiveTimerDisplay({ task }: { task: Task }) {
   return <span className="font-mono tabular-nums">{formatElapsed(live)}</span>;
 }
 
-function StartDifferentSection({ onSwitched }: { onSwitched: () => void }) {
+function StartDifferentSection({
+  visibleProjects,
+  onSwitched,
+}: {
+  visibleProjects: Project[];
+  onSwitched: () => void;
+}) {
   const { toast } = useToast();
   const switchTimer = useSwitchTimer();
   const [projectId, setProjectId] = useState<string>("");
   const [taskId, setTaskId] = useState<string>("");
 
-  const { data: projects = [] } = useQuery<Project[]>({
-    queryKey: ["projects"],
-    queryFn: () => apiClient.get("/projects").then((r) => r.data),
-  });
-
+  // Task list for the selected project. `/tasks` already applies the server-side
+  // OA visibility filter for the current user, so no extra client scoping needed.
   const { data: projectTasks = [], isFetching: tasksFetching } = useQuery<Task[]>({
     queryKey: ["tasks", projectId],
     queryFn: () => apiClient.get(`/tasks?projectId=${projectId}`).then((r) => r.data),
@@ -93,7 +96,7 @@ function StartDifferentSection({ onSwitched }: { onSwitched: () => void }) {
           <SelectValue placeholder="Select project" />
         </SelectTrigger>
         <SelectContent>
-          {projects.map((p) => (
+          {visibleProjects.map((p) => (
             <SelectItem key={p.id} value={String(p.id)}>{p.company} — {p.name}</SelectItem>
           ))}
         </SelectContent>
@@ -131,6 +134,37 @@ export default function TimeclockPopover() {
   const { data: recent = [] } = useRecentTimers();
   const switchTimer = useSwitchTimer();
   const stopActive = useStopActiveTimer();
+
+  // Lifted: used both to label rows with their project's `company` and to
+  // narrow the "Start Different Task" project dropdown to projects the
+  // current user can actually see tasks in.
+  const { data: allProjects = [] } = useQuery<Project[]>({
+    queryKey: ["projects"],
+    queryFn: () => apiClient.get("/projects").then((r) => r.data),
+  });
+
+  // `/tasks` is already filtered server-side by per-user visibility (OA hidden
+  // container is excluded for non-members), so the set of distinct projectIds
+  // it returns is exactly the set of projects the user has visible work in.
+  const { data: visibleTasks = [] } = useQuery<Task[]>({
+    queryKey: ["tasks"],
+    queryFn: () => apiClient.get("/tasks").then((r) => r.data),
+  });
+
+  const projectCompanyById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const p of allProjects) m.set(p.id, p.company);
+    return m;
+  }, [allProjects]);
+
+  const visibleProjects = useMemo(() => {
+    const ids = new Set<number>();
+    for (const t of visibleTasks) if (t.projectId != null) ids.add(t.projectId);
+    return allProjects.filter((p) => ids.has(p.id));
+  }, [allProjects, visibleTasks]);
+
+  const projectLabel = (projectId: number | null | undefined): string =>
+    (projectId != null && projectCompanyById.get(projectId)) || "No project";
 
   const isRunning = !!active;
 
@@ -198,7 +232,9 @@ export default function TimeclockPopover() {
             <div className="space-y-2">
               <div>
                 <div className="font-medium text-sm leading-snug line-clamp-2">{active.title}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">
+                <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {projectLabel(active.projectId)}
+                  {" · "}
                   <ActiveTimerDisplay task={active} />
                 </div>
               </div>
@@ -243,7 +279,7 @@ export default function TimeclockPopover() {
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium truncate">{r.task.title}</div>
                     <div className="text-[11px] text-muted-foreground truncate">
-                      {r.task.projectId != null ? `Project #${r.task.projectId}` : "No project"}
+                      {projectLabel(r.task.projectId)}
                       {" · "}
                       {formatRelative(r.lastStartedAt)}
                     </div>
@@ -276,7 +312,10 @@ export default function TimeclockPopover() {
           </button>
           {showStartDifferent && (
             <div className="mt-2">
-              <StartDifferentSection onSwitched={() => setShowStartDifferent(false)} />
+              <StartDifferentSection
+                visibleProjects={visibleProjects}
+                onSwitched={() => setShowStartDifferent(false)}
+              />
             </div>
           )}
         </div>
