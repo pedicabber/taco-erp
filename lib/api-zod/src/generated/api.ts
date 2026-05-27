@@ -568,6 +568,7 @@ export const ListTasksResponseItem = zod.object({
   description: zod.string().nullable(),
   status: zod.enum([
     "backlog",
+    "new_tasks",
     "in_progress",
     "in_review",
     "blocked",
@@ -650,7 +651,14 @@ export const CreateTaskBody = zod.object({
   title: zod.string(),
   description: zod.string().nullish(),
   status: zod
-    .enum(["backlog", "in_progress", "in_review", "blocked", "complete"])
+    .enum([
+      "backlog",
+      "new_tasks",
+      "in_progress",
+      "in_review",
+      "blocked",
+      "complete",
+    ])
     .optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
   projectId: zod.number(),
@@ -676,6 +684,7 @@ export const GetTaskResponse = zod.object({
   description: zod.string().nullable(),
   status: zod.enum([
     "backlog",
+    "new_tasks",
     "in_progress",
     "in_review",
     "blocked",
@@ -761,7 +770,14 @@ export const UpdateTaskBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().nullish(),
   status: zod
-    .enum(["backlog", "in_progress", "in_review", "blocked", "complete"])
+    .enum([
+      "backlog",
+      "new_tasks",
+      "in_progress",
+      "in_review",
+      "blocked",
+      "complete",
+    ])
     .optional(),
   priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
   departmentId: zod.number().nullish(),
@@ -798,6 +814,7 @@ export const UpdateTaskResponse = zod.object({
   description: zod.string().nullable(),
   status: zod.enum([
     "backlog",
+    "new_tasks",
     "in_progress",
     "in_review",
     "blocked",
@@ -892,6 +909,7 @@ export const StartTaskTimerResponse = zod.object({
   description: zod.string().nullable(),
   status: zod.enum([
     "backlog",
+    "new_tasks",
     "in_progress",
     "in_review",
     "blocked",
@@ -979,6 +997,7 @@ export const StopTaskTimerResponse = zod.object({
   description: zod.string().nullable(),
   status: zod.enum([
     "backlog",
+    "new_tasks",
     "in_progress",
     "in_review",
     "blocked",
@@ -1070,6 +1089,7 @@ export const EditTaskTimerResponse = zod.object({
   description: zod.string().nullable(),
   status: zod.enum([
     "backlog",
+    "new_tasks",
     "in_progress",
     "in_review",
     "blocked",
@@ -1157,6 +1177,7 @@ export const FollowTaskResponse = zod.object({
   description: zod.string().nullable(),
   status: zod.enum([
     "backlog",
+    "new_tasks",
     "in_progress",
     "in_review",
     "blocked",
@@ -1244,6 +1265,7 @@ export const UnfollowTaskResponse = zod.object({
   description: zod.string().nullable(),
   status: zod.enum([
     "backlog",
+    "new_tasks",
     "in_progress",
     "in_review",
     "blocked",
@@ -1331,6 +1353,7 @@ export const GetTaskRelationsResponseItem = zod.object({
   description: zod.string().nullable(),
   status: zod.enum([
     "backlog",
+    "new_tasks",
     "in_progress",
     "in_review",
     "blocked",
@@ -1489,6 +1512,7 @@ export const GetKanbanColumnsResponseItem = zod.object({
       description: zod.string().nullable(),
       status: zod.enum([
         "backlog",
+        "new_tasks",
         "in_progress",
         "in_review",
         "blocked",

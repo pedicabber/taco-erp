@@ -1522,7 +1522,7 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [backlog, in_progress, in_review, blocked, complete]
+          enum: [backlog, new_tasks, in_progress, in_review, blocked, complete]
         priority:
           type: string
           enum: [low, medium, high, urgent]
@@ -1653,7 +1653,7 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [backlog, in_progress, in_review, blocked, complete]
+          enum: [backlog, new_tasks, in_progress, in_review, blocked, complete]
         priority:
           type: string
           enum: [low, medium, high, urgent]
@@ -1688,7 +1688,7 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [backlog, in_progress, in_review, blocked, complete]
+          enum: [backlog, new_tasks, in_progress, in_review, blocked, complete]
         priority:
           type: string
           enum: [low, medium, high, urgent]

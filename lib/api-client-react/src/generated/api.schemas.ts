@@ -228,6 +228,7 @@ export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
 
 export const TaskStatus = {
   backlog: "backlog",
+  new_tasks: "new_tasks",
   in_progress: "in_progress",
   in_review: "in_review",
   blocked: "blocked",
@@ -347,6 +348,7 @@ export type CreateTaskBodyStatus =
 
 export const CreateTaskBodyStatus = {
   backlog: "backlog",
+  new_tasks: "new_tasks",
   in_progress: "in_progress",
   in_review: "in_review",
   blocked: "blocked",
@@ -390,6 +392,7 @@ export type UpdateTaskBodyStatus =
 
 export const UpdateTaskBodyStatus = {
   backlog: "backlog",
+  new_tasks: "new_tasks",
   in_progress: "in_progress",
   in_review: "in_review",
   blocked: "blocked",

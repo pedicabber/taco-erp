@@ -1,7 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/apiClient";
-import { Plus, Search, Loader2, CheckSquare, ChevronDown, ChevronRight, User } from "lucide-react";
+import {
+  Plus, Search, Loader2, CheckSquare, ChevronDown, ChevronRight,
+  User, Users, Building2, Globe, Info,
+} from "lucide-react";
 import type { Project, Department, UserProfileMini, Task } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +24,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 function NewTaskDialog({
   open,
@@ -170,6 +174,7 @@ function NewTaskDialog({
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="backlog">Backlog</SelectItem>
+                  <SelectItem value="new_tasks">New Tasks</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
                   <SelectItem value="in_review">In Review</SelectItem>
                   <SelectItem value="blocked">Blocked</SelectItem>
@@ -234,10 +239,34 @@ function NewTaskDialog({
   );
 }
 
-interface DeptGroup {
+type Scope = "mine" | "department" | "all";
+
+interface DeptBucket {
+  id: number | null;
   name: string;
   color: string | null;
   tasks: Task[];
+}
+
+interface ProjectBucket {
+  id: number | null;
+  name: string;
+  projectIdLabel: string | null;
+  company: string | null;
+  depts: DeptBucket[];
+  taskCount: number;
+  overdueCount: number;
+  completeCount: number;
+}
+
+const OTHER_PROJECT_KEY = -1;
+const OTHER_DEPT_KEY = -1;
+
+function isOverdue(t: Task): boolean {
+  if (!t.dueDate || t.status === "complete") return false;
+  const [y, m, d] = t.dueDate.split("-").map(Number);
+  if (!y || !m || !d) return false;
+  return new Date(y, m - 1, d).getTime() < new Date().setHours(0, 0, 0, 0);
 }
 
 export default function TasksPage() {
@@ -245,23 +274,25 @@ export default function TasksPage() {
   const params = new URLSearchParams(searchStr);
   const defaultProjectId = params.get("projectId") ? Number(params.get("projectId")) : undefined;
 
+  const { data: currentUser } = useCurrentUser();
+  const myId: number | undefined = currentUser?.id;
+  const myDeptIds: number[] = useMemo(() => {
+    const ids = new Set<number>();
+    if (currentUser?.departmentId) ids.add(currentUser.departmentId);
+    for (const id of (currentUser?.departmentIds ?? []) as number[]) ids.add(id);
+    return [...ids];
+  }, [currentUser?.departmentId, currentUser?.departmentIds]);
+
+  const [scope, setScope] = useState<Scope>("mine");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterProject, setFilterProject] = useState(defaultProjectId ? String(defaultProjectId) : "all");
   const [filterEmployee, setFilterEmployee] = useState("all");
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<number>>(new Set());
   const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
-
-  const autoSelectedRef = useRef(false);
-  const { data: currentUser } = useCurrentUser();
-
-  useEffect(() => {
-    if (!autoSelectedRef.current && currentUser?.id) {
-      setFilterEmployee(String(currentUser.id));
-      autoSelectedRef.current = true;
-    }
-  }, [currentUser?.id]);
+  const [didInitMobile, setDidInitMobile] = useState(false);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -273,63 +304,242 @@ export default function TasksPage() {
     queryFn: () => apiClient.get("/users").then(r => r.data),
   });
 
+  // Server-side filters: only project + status. Visibility scope, assignee
+  // membership, and subtask inclusion are applied client-side so the same
+  // single fetch can power all three scope modes without thrashing the cache.
+  // OA hidden-container filtering still runs server-side via the API guard.
   const queryParams = new URLSearchParams();
   if (filterProject !== "all") queryParams.set("projectId", filterProject);
   if (filterStatus !== "all") queryParams.set("status", filterStatus);
-  if (filterEmployee !== "all") queryParams.set("assigneeId", filterEmployee);
-  queryParams.set("topLevelOnly", "true");
 
   const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", filterProject, filterStatus, filterEmployee],
+    queryKey: ["tasks", filterProject, filterStatus],
     queryFn: () => apiClient.get(`/tasks?${queryParams.toString()}`).then(r => r.data),
   });
 
-  const filtered = (tasks as Task[]).filter(t => {
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterPriority !== "all" && t.priority !== filterPriority) return false;
-    return true;
-  });
+  const projectMap = useMemo(() => {
+    const m = new Map<number, Project>();
+    for (const p of projects as Project[]) m.set(p.id, p);
+    return m;
+  }, [projects]);
 
-  const deptGroups: DeptGroup[] = [];
-  const deptIndexMap: Record<string, number> = {};
+  // ── Visibility pipeline ───────────────────────────────────────────────────
+  // 1. Apply scope (mine / department / all)
+  // 2. Subtask rule: only include subtasks that are assigned to the current user
+  // 3. Apply secondary filters (employee, priority, search)
+  const visibleTasks = useMemo(() => {
+    const all = tasks as Task[];
+    const meAssigned = (t: Task) =>
+      myId !== undefined && (t.assigneeIds ?? []).includes(myId);
+    const inMyDept = (t: Task) =>
+      t.department?.id !== undefined && t.department?.id !== null &&
+      myDeptIds.includes(t.department.id);
 
-  for (const task of filtered) {
-    const deptName = task.department?.name ?? "Other";
-    const deptColor = task.department?.color ?? null;
-    if (deptIndexMap[deptName] === undefined) {
-      deptIndexMap[deptName] = deptGroups.length;
-      deptGroups.push({ name: deptName, color: deptColor, tasks: [] });
+    return all.filter(t => {
+      // Subtasks: only visible if assigned to me (regardless of scope).
+      if (t.parentTaskId !== null && t.parentTaskId !== undefined) {
+        if (!meAssigned(t)) return false;
+      }
+
+      // Scope gate
+      if (scope === "mine") {
+        if (!meAssigned(t)) return false;
+      } else if (scope === "department") {
+        if (!meAssigned(t) && !inMyDept(t)) return false;
+      }
+      // scope === "all": no additional scope gate
+
+      // Employee filter (independent of scope toggle)
+      if (filterEmployee !== "all") {
+        const empId = Number(filterEmployee);
+        if (!(t.assigneeIds ?? []).includes(empId)) return false;
+      }
+      if (filterPriority !== "all" && t.priority !== filterPriority) return false;
+      if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    });
+  }, [tasks, scope, myId, myDeptIds, filterEmployee, filterPriority, search]);
+
+  // ── Project → Department → Tasks bucketing ────────────────────────────────
+  const projectBuckets: ProjectBucket[] = useMemo(() => {
+    const byProject = new Map<number, ProjectBucket>();
+
+    for (const t of visibleTasks) {
+      const pid = t.projectId ?? OTHER_PROJECT_KEY;
+      let pb = byProject.get(pid);
+      if (!pb) {
+        const proj = projectMap.get(pid);
+        pb = {
+          id: proj ? proj.id : null,
+          name: proj?.name ?? "Other",
+          projectIdLabel: proj?.projectId ?? null,
+          company: proj?.company ?? null,
+          depts: [],
+          taskCount: 0,
+          overdueCount: 0,
+          completeCount: 0,
+        };
+        byProject.set(pid, pb);
+      }
+      const dId = t.department?.id ?? OTHER_DEPT_KEY;
+      let db = pb.depts.find(d => (d.id ?? OTHER_DEPT_KEY) === dId);
+      if (!db) {
+        db = {
+          id: t.department?.id ?? null,
+          name: t.department?.name ?? "Other",
+          color: t.department?.color ?? null,
+          tasks: [],
+        };
+        pb.depts.push(db);
+      }
+      db.tasks.push(t);
+      pb.taskCount += 1;
+      if (isOverdue(t)) pb.overdueCount += 1;
+      if (t.status === "complete") pb.completeCount += 1;
     }
-    deptGroups[deptIndexMap[deptName]].tasks.push(task);
+
+    const projectList = [...byProject.values()];
+    projectList.sort((a, b) => {
+      if (a.name === "Other") return 1;
+      if (b.name === "Other") return -1;
+      return a.name.localeCompare(b.name);
+    });
+    for (const pb of projectList) {
+      pb.depts.sort((a, b) => {
+        if (a.name === "Other") return 1;
+        if (b.name === "Other") return -1;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    return projectList;
+  }, [visibleTasks, projectMap]);
+
+  // Mobile default: collapse all projects on first paint of the bucket list.
+  // We do this once per "list shape" rather than on every render so the user's
+  // manual expand/collapse choices stick.
+  useEffect(() => {
+    if (didInitMobile) return;
+    if (projectBuckets.length === 0) return;
+    if (typeof window === "undefined") return;
+    const isMobile = window.matchMedia("(max-width: 639px)").matches;
+    if (isMobile) {
+      setCollapsedProjects(new Set(projectBuckets.map(p => p.id ?? OTHER_PROJECT_KEY)));
+    }
+    setDidInitMobile(true);
+  }, [projectBuckets, didInitMobile]);
+
+  function toggleProject(id: number) {
+    setCollapsedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
-
-  deptGroups.sort((a, b) => {
-    if (a.name === "Other") return 1;
-    if (b.name === "Other") return -1;
-    return a.name.localeCompare(b.name);
-  });
-
-  function toggleDept(name: string) {
+  function toggleDept(key: string) {
     setCollapsedDepts(prev => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
 
+  const scopeOptions: { value: Scope; label: string; Icon: typeof User; help: string }[] = [
+    { value: "mine",       label: "My Tasks",         Icon: User,     help: "Only tasks assigned to you" },
+    { value: "department", label: "Department Tasks", Icon: Users,    help: "Tasks in your department(s) + yours" },
+    { value: "all",        label: "All Visible",      Icon: Globe,    help: "Every task you have permission to see" },
+  ];
+
+  const activeScope = scopeOptions.find(o => o.value === scope)!;
+
+  const hiddenByScope = (() => {
+    if (scope === "all") return 0;
+    const total = (tasks as Task[]).filter(t => {
+      // Subtasks not assigned to me are ignored everywhere, including the count.
+      if (t.parentTaskId !== null && t.parentTaskId !== undefined) {
+        return myId !== undefined && (t.assigneeIds ?? []).includes(myId);
+      }
+      return true;
+    }).length;
+    // Use a scope-only visible count (ignoring search/priority/employee secondary filters)
+    // so the banner answers "how many more would appear if I widened scope?" not
+    // "how many more if I cleared every filter."
+    const scopeVisible = (tasks as Task[]).filter(t => {
+      if (t.parentTaskId !== null && t.parentTaskId !== undefined) {
+        return myId !== undefined && (t.assigneeIds ?? []).includes(myId);
+      }
+      const meAssigned = myId !== undefined && (t.assigneeIds ?? []).includes(myId);
+      const inMyDept = t.department?.id !== undefined && t.department?.id !== null &&
+        myDeptIds.includes(t.department.id);
+      if (scope === "mine") return meAssigned;
+      if (scope === "department") return meAssigned || inMyDept;
+      return true;
+    }).length;
+    return Math.max(0, total - scopeVisible);
+  })();
+
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">Tasks</h1>
-          <p className="text-muted-foreground text-sm mt-1">{filtered.length} task{filtered.length !== 1 ? "s" : ""}</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            {visibleTasks.length} task{visibleTasks.length !== 1 ? "s" : ""} shown
+          </p>
         </div>
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           New Task
         </Button>
       </div>
+
+      {/* Visibility scope toggle */}
+      <div className="mb-3">
+        <div className="inline-flex rounded-lg border bg-card p-1 gap-0.5" role="tablist" aria-label="Task visibility scope">
+          {scopeOptions.map(opt => {
+            const Icon = opt.Icon;
+            const active = scope === opt.value;
+            return (
+              <button
+                key={opt.value}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setScope(opt.value)}
+                title={opt.help}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                )}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Active scope hint banner */}
+      {scope !== "all" && hiddenByScope > 0 && (
+        <div className="mb-4 flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900/50 px-3 py-2 text-xs text-blue-900 dark:text-blue-200">
+          <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <div>
+            Showing <span className="font-semibold">{activeScope.label}</span>.{" "}
+            {hiddenByScope} more task{hiddenByScope !== 1 ? "s are" : " is"} visible to you
+            but hidden by this scope.{" "}
+            <button
+              type="button"
+              onClick={() => setScope(scope === "mine" ? "department" : "all")}
+              className="underline font-medium hover:no-underline"
+            >
+              {scope === "mine" ? "Widen to Department" : "Show All Visible"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-6">
@@ -372,6 +582,7 @@ export default function TasksPage() {
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
             <SelectItem value="backlog">Backlog</SelectItem>
+            <SelectItem value="new_tasks">New Tasks</SelectItem>
             <SelectItem value="in_progress">In Progress</SelectItem>
             <SelectItem value="in_review">In Review</SelectItem>
             <SelectItem value="blocked">Blocked</SelectItem>
@@ -396,55 +607,126 @@ export default function TasksPage() {
         <div className="flex justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : projectBuckets.length === 0 ? (
         <div className="flex flex-col items-center py-20 text-center">
           <CheckSquare className="w-12 h-12 text-muted-foreground mb-3" />
-          <p className="text-muted-foreground">No tasks found</p>
-          <Button className="mt-4" onClick={() => setDialogOpen(true)}>
+          <p className="text-muted-foreground">
+            No tasks match the current scope and filters.
+          </p>
+          {scope !== "all" && (
+            <Button variant="outline" className="mt-4" onClick={() => setScope("all")}>
+              <Globe className="w-4 h-4 mr-2" />
+              Show all visible tasks
+            </Button>
+          )}
+          <Button className="mt-3" onClick={() => setDialogOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Create first task
+            New Task
           </Button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {deptGroups.map(group => {
-            const isOpen = !collapsedDepts.has(group.name);
+        <div className="space-y-3">
+          {projectBuckets.map(pb => {
+            const pKey = pb.id ?? OTHER_PROJECT_KEY;
+            const pOpen = !collapsedProjects.has(pKey);
             return (
               <Collapsible
-                key={group.name}
-                open={isOpen}
-                onOpenChange={() => toggleDept(group.name)}
+                key={`p-${pKey}`}
+                open={pOpen}
+                onOpenChange={() => toggleProject(pKey)}
+                className="rounded-lg border bg-card"
               >
                 <CollapsibleTrigger asChild>
-                  <button className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-muted transition-colors group text-left">
-                    {isOpen
+                  <button className="flex items-center gap-2 w-full px-3 py-2.5 hover:bg-muted/50 transition-colors text-left rounded-lg">
+                    {pOpen
                       ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                       : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                     }
-                    {group.color && (
-                      <span
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: group.color }}
-                      />
-                    )}
-                    <span className="font-semibold text-sm">{group.name}</span>
-                    <span className="ml-1 text-xs text-muted-foreground font-normal bg-muted px-1.5 py-0.5 rounded-md">
-                      {group.tasks.length}
-                    </span>
+                    <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <div className="flex items-baseline gap-2 min-w-0 flex-1">
+                      <span className="font-semibold text-sm truncate">{pb.name}</span>
+                      {pb.projectIdLabel && (
+                        <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
+                          {pb.projectIdLabel}
+                        </span>
+                      )}
+                      {pb.company && (
+                        <span className="text-xs text-muted-foreground truncate hidden sm:inline">
+                          · {pb.company}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-md">
+                        {pb.taskCount}
+                      </span>
+                      {pb.overdueCount > 0 && (
+                        <span
+                          className="text-xs bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-2 py-0.5 rounded-md"
+                          title={`${pb.overdueCount} overdue`}
+                        >
+                          {pb.overdueCount} overdue
+                        </span>
+                      )}
+                      {pb.completeCount > 0 && (
+                        <span
+                          className="text-xs bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-2 py-0.5 rounded-md"
+                          title={`${pb.completeCount} complete`}
+                        >
+                          {pb.completeCount} done
+                        </span>
+                      )}
+                    </div>
                   </button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pt-2 pb-1 px-1">
-                    {group.tasks.map((task: Task, i: number) => (
-                      <motion.div
-                        key={task.id}
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.03 }}
-                      >
-                        <TaskCard task={task} />
-                      </motion.div>
-                    ))}
+                  <div className="px-2 sm:px-3 pb-3 pt-1 space-y-2">
+                    {pb.depts.map(db => {
+                      const dKey = `${pKey}:${db.id ?? OTHER_DEPT_KEY}`;
+                      const dOpen = !collapsedDepts.has(dKey);
+                      return (
+                        <Collapsible
+                          key={dKey}
+                          open={dOpen}
+                          onOpenChange={() => toggleDept(dKey)}
+                        >
+                          <CollapsibleTrigger asChild>
+                            <button className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-muted transition-colors text-left">
+                              {dOpen
+                                ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                              }
+                              {db.color && (
+                                <span
+                                  className="w-2 h-2 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: db.color }}
+                                />
+                              )}
+                              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                {db.name}
+                              </span>
+                              <span className="text-xs text-muted-foreground/70 font-normal">
+                                {db.tasks.length}
+                              </span>
+                            </button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pt-2 pb-1 px-1">
+                              {db.tasks.map((task: Task, i: number) => (
+                                <motion.div
+                                  key={task.id}
+                                  initial={{ opacity: 0, y: 8 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ delay: Math.min(i * 0.02, 0.2) }}
+                                >
+                                  <TaskCard task={task} />
+                                </motion.div>
+                              ))}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      );
+                    })}
                   </div>
                 </CollapsibleContent>
               </Collapsible>

@@ -11,6 +11,7 @@ export type UpdateTaskBodyStatus =
 
 export const UpdateTaskBodyStatus = {
   backlog: "backlog",
+  new_tasks: "new_tasks",
   in_progress: "in_progress",
   in_review: "in_review",
   blocked: "blocked",
