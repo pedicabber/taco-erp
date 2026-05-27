@@ -294,6 +294,14 @@ export default function TasksPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [didInitMobile, setDidInitMobile] = useState(false);
 
+  // Employee filter is administrative refinement only: visible when an admin
+  // has explicitly opened the scope to All Accessible. Otherwise the scope
+  // toggle already governs "whose tasks am I looking at."
+  const showEmployeeFilter = currentUser?.role === "admin" && scope === "all";
+  useEffect(() => {
+    if (!showEmployeeFilter && filterEmployee !== "all") setFilterEmployee("all");
+  }, [showEmployeeFilter, filterEmployee]);
+
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => apiClient.get("/projects").then(r => r.data),
@@ -446,9 +454,9 @@ export default function TasksPage() {
   }
 
   const scopeOptions: { value: Scope; label: string; Icon: typeof User; help: string }[] = [
-    { value: "mine",       label: "My Tasks",         Icon: User,     help: "Only tasks assigned to you" },
-    { value: "department", label: "Department Tasks", Icon: Users,    help: "Tasks in your department(s) + yours" },
-    { value: "all",        label: "All Visible",      Icon: Globe,    help: "Every task you have permission to see" },
+    { value: "mine",       label: "Assigned to Me",   Icon: User,     help: "Tasks directly assigned to you (including subtasks)" },
+    { value: "department", label: "My Departments",   Icon: Users,    help: "Tasks visible through your department membership" },
+    { value: "all",        label: "All Accessible",   Icon: Globe,    help: "Every task you have permission to see" },
   ];
 
   const activeScope = scopeOptions.find(o => o.value === scope)!;
@@ -524,25 +532,29 @@ export default function TasksPage() {
 
       {/* Active scope hint banner */}
       {scope !== "all" && hiddenByScope > 0 && (
-        <div className="mb-4 flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900/50 px-3 py-2 text-xs text-blue-900 dark:text-blue-200">
-          <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <div>
-            Showing <span className="font-semibold">{activeScope.label}</span>.{" "}
-            {hiddenByScope} more task{hiddenByScope !== 1 ? "s are" : " is"} visible to you
-            but hidden by this scope.{" "}
-            <button
-              type="button"
-              onClick={() => setScope(scope === "mine" ? "department" : "all")}
-              className="underline font-medium hover:no-underline"
-            >
-              {scope === "mine" ? "Widen to Department" : "Show All Visible"}
-            </button>
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900/50 px-3 py-2 text-xs text-blue-900 dark:text-blue-200">
+          <div className="flex items-start gap-2 flex-1 min-w-[200px]">
+            <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div>
+              Showing <span className="font-semibold">{activeScope.label}</span>.{" "}
+              {hiddenByScope} additional accessible task{hiddenByScope !== 1 ? "s" : ""} hidden.
+            </div>
           </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setScope(scope === "mine" ? "department" : "all")}
+            className="h-7 rounded-full px-3 text-xs font-medium text-blue-900 hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-900/40"
+          >
+            {scope === "mine" ? "Widen to My Departments" : "Show All Accessible"}
+          </Button>
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      {/* Filters — refinement only; visibility is controlled by the scope toggle above */}
+      <div className="-mx-4 sm:mx-0 mb-6 overflow-x-auto">
+        <div className="flex flex-nowrap sm:flex-wrap gap-3 px-4 sm:px-0 min-w-min">
         <div className="relative flex-1 min-w-[160px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -552,18 +564,20 @@ export default function TasksPage() {
             className="pl-9"
           />
         </div>
-        <Select value={filterEmployee} onValueChange={setFilterEmployee}>
-          <SelectTrigger className="w-[180px]">
-            <User className="w-3.5 h-3.5 mr-1.5 text-muted-foreground flex-shrink-0" />
-            <SelectValue placeholder="All employees" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All employees</SelectItem>
-            {(users as UserProfileMini[]).map(u => (
-              <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {showEmployeeFilter && (
+          <Select value={filterEmployee} onValueChange={setFilterEmployee}>
+            <SelectTrigger className="w-[180px] flex-shrink-0">
+              <User className="w-3.5 h-3.5 mr-1.5 text-muted-foreground flex-shrink-0" />
+              <SelectValue placeholder="All employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All employees</SelectItem>
+              {(users as UserProfileMini[]).map(u => (
+                <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={filterProject} onValueChange={setFilterProject}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="All projects" />
@@ -601,6 +615,7 @@ export default function TasksPage() {
             <SelectItem value="low">Low</SelectItem>
           </SelectContent>
         </Select>
+        </div>
       </div>
 
       {isLoading ? (
@@ -616,7 +631,7 @@ export default function TasksPage() {
           {scope !== "all" && (
             <Button variant="outline" className="mt-4" onClick={() => setScope("all")}>
               <Globe className="w-4 h-4 mr-2" />
-              Show all visible tasks
+              Show All Accessible
             </Button>
           )}
           <Button className="mt-3" onClick={() => setDialogOpen(true)}>

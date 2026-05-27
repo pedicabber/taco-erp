@@ -1,0 +1,168 @@
+#14 - Tasks Page UX Cleanup + Visibility Filter Simplification
+
+1. Module/page:
+Tasks page
+
+2. Current problem:
+Task visibility functionality was improved in Task #11, but the filtering UX now feels redundant and confusing.
+
+The page currently has:
+- top-level visibility scope buttons
+AND
+- an employee dropdown filter
+
+These overlap conceptually and create uncertainty about:
+- what tasks are being shown
+- why tasks appear/disappear
+- which filter has priority
+
+Current structure:
+Top buttons:
+- My Tasks
+- Department Tasks
+- All Visible
+
+Dropdown filters:
+- Employee
+- Project
+- Status
+- Priority
+
+The Employee dropdown now partially duplicates the purpose of the top-level visibility scope.
+
+3. Desired behavior:
+Simplify the Tasks page filtering model so it feels operationally intuitive.
+
+The Tasks page should clearly separate:
+1. visibility scope
+2. refinement filters
+
+Users should always understand:
+- WHY they are seeing a task
+- WHY they are NOT seeing a task
+- WHICH visibility mode is active
+
+4. Desired UX structure:
+Top-level visibility scope row:
+- Assigned to Me
+- My Departments
+- All Accessible
+
+These become the PRIMARY visibility modes.
+
+Meaning:
+Assigned to Me
+= tasks directly assigned to the user (including subtasks)
+
+My Departments
+= tasks visible through department membership
+
+All Accessible
+= every task the user has permission to see
+
+5. Filter row cleanup:
+For normal users:
+REMOVE:
+- Employee dropdown
+
+KEEP:
+- Search
+- Project
+- Status
+- Priority
+
+The dropdown row should now represent:
+"Refine the current visibility scope"
+
+NOT:
+"Define visibility"
+
+6. Admin behavior:
+Admins may still need employee filtering for operational oversight.
+
+Recommended behavior:
+- only show Employee filter when:
+  - current user is admin
+AND
+  - visibility scope = All Accessible
+
+This converts Employee filtering into:
+- administrative refinement
+instead of
+- primary visibility logic
+
+7. Visibility banner improvements:
+Current banner behavior is good:
+"298 more tasks are visible to you but hidden by this scope"
+
+Improve UX:
+- convert "Widen to Department" text into:
+  - ghost button
+  OR
+  - pill button
+
+The action should feel clickable and intentional.
+
+Also:
+- ensure banner wording updates correctly based on current scope:
+Examples:
+Assigned to Me:
+- "298 additional accessible tasks hidden"
+
+My Departments:
+- "120 additional accessible tasks hidden"
+
+All Accessible:
+- no banner shown
+
+8. Terminology cleanup:
+Rename:
+My Tasks
+→ Assigned to Me
+
+Department Tasks
+→ My Departments
+
+All Visible
+→ All Accessible
+
+Reason:
+These labels better explain:
+HOW visibility is being determined.
+
+9. What must NOT change:
+- Project → Department → Tasks hierarchy
+- TaskCard layout
+- click-through behavior
+- visibility logic
+- OA hidden-container protections
+- backend APIs
+- task assignment architecture
+- mobile collapse behavior
+- grouping architecture
+
+10. Mobile requirements:
+The simplified filters must remain:
+- compact
+- touch-friendly
+- obvious
+- horizontally scrollable if needed
+
+Avoid:
+- multi-row filter confusion
+- duplicated visibility controls
+
+11. Relevant files:
+artifacts/tacot3/src/pages/tasks.tsx
+artifacts/tacot3/src/components/tasks/TaskCard.tsx
+
+12. Implementation preference:
+This should be a lightweight frontend-only UX cleanup.
+
+Do NOT:
+- redesign the page
+- rewrite filtering architecture
+- add new backend logic
+- add persistence/state storage
+
+Just simplify and clarify the visibility model.
