@@ -2,6 +2,18 @@ import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+/**
+ * Office Ops tasks are persistent operational checklist rows.
+ *
+ * Recurring tasks (recurrence != 'none') are SINGLE ROWS that are dynamically
+ * interpreted against the current recurrence cycle (today / this ISO week /
+ * this calendar month, all UTC). Completing a recurring task only updates
+ * `status` + `completedAt`; it NEVER inserts another row. The next cycle
+ * implicitly reactivates the row when `completedAt < currentCycleStart`.
+ *
+ * One-time tasks (recurrence='none') behave traditionally: complete once,
+ * move to the Completed tab, no resurrection.
+ */
 export const officeOpsTasksTable = pgTable("office_ops_tasks", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -10,15 +22,10 @@ export const officeOpsTasksTable = pgTable("office_ops_tasks", {
   assigneeId: integer("assignee_id"),
   createdById: integer("created_by_id").notNull(),
   dueDate: text("due_date"),
+  // Last time this row was marked completed (UTC). For recurring tasks this
+  // is the cycle-completion timestamp; cycle reset is implicit on date change.
   completedAt: timestamp("completed_at", { withTimezone: true }),
   recurrence: text("recurrence").notNull().default("none"),
-  recurrenceAnchorDate: text("recurrence_anchor_date"),
-  parentRecurrenceId: integer("parent_recurrence_id"),
-  // Set the first time a recurring task completes and spawns its successor.
-  // Acts as a one-shot idempotency latch: once set, no further completions of
-  // THIS row will spawn another occurrence. Reopening does NOT clear it, so
-  // complete → reopen → complete cycles cannot duplicate the chain.
-  nextInstanceId: integer("next_instance_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

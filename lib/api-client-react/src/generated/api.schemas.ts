@@ -727,12 +727,6 @@ export interface OfficeOpsTask {
   /** @nullable */
   completedAt: string | null;
   recurrence: OfficeOpsTaskRecurrence;
-  /** @nullable */
-  recurrenceAnchorDate: string | null;
-  /** @nullable */
-  parentRecurrenceId: number | null;
-  /** @nullable */
-  nextInstanceId: number | null;
   createdAt: string;
   updatedAt: string;
 }

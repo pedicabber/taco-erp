@@ -1,0 +1,251 @@
+#18 - Office Ops Recurrence Model Rewrite (Operational Checklist Architecture)
+
+1. Module/page:
+Office Ops
+
+2. Why this rewrite is required:
+The current Office Ops recurrence implementation behaves like a traditional recurring task engine:
+- completing a recurring task creates a new task row
+- reopening tasks creates confusing states
+- weekly/monthly tasks show future-cycle tasks immediately
+- daily tasks accumulate completed duplicates
+- overdue logic feels incorrect for operational workflows
+
+This architecture is fundamentally wrong for the intended use-case.
+
+Office Ops is NOT a historical recurring-task tracker.
+
+It is an:
+- operational checklist
+- daily/weekly/monthly maintenance board
+- persistent workflow tracker
+
+Users care about:
+"Is this task done for the current cycle?"
+
+NOT:
+"Show me every historical recurrence instance forever."
+
+3. New architectural direction:
+STOP generating recurring child task rows entirely for Office Ops recurring tasks.
+
+Recurring Office Ops tasks should become:
+- single persistent checklist rows
+- cycle-aware
+- dynamically reset by recurrence window
+
+4. Core model:
+Recurring tasks remain ONE persistent database row.
+
+Do NOT create:
+- child recurrence rows
+- next occurrences
+- recurrence chains
+- next_instance_id logic
+
+Remove recurrence-row spawning entirely.
+
+5. New recurring task behavior:
+Recurring tasks use:
+- recurrence type
+- completion timestamps
+- computed cycle windows
+
+instead of child-row generation.
+
+6. Required schema changes:
+Investigate replacing/removing:
+- parentRecurrenceId
+- nextInstanceId
+- recurrenceAnchorDate recurrence-chain behavior
+
+Add/support fields like:
+- lastCompletedAt
+- nextDueAt
+- recurrence
+- optional recurrenceStartDate
+
+The final schema should support:
+"Has this task been completed for the current recurrence cycle?"
+
+NOT:
+"Generate the next task row."
+
+7. Desired recurrence behavior:
+A. Daily tasks
+Single persistent row.
+
+When completed:
+- remains visible for current day
+- line-through styling
+- muted appearance
+
+Next day:
+- automatically becomes active again
+- line-through disappears
+- no new row created
+
+Daily tasks should NEVER accumulate duplicate historical rows.
+
+B. Weekly tasks
+Single persistent row.
+
+When completed:
+- marked completed for the current weekly cycle
+- removed from active attention state
+- remains visible in Weekly section with subdued completed appearance OR hidden behind optional completed collapse (implementation decision)
+
+Next week:
+- automatically becomes active again
+- completion resets dynamically
+- no new row generated
+
+Weekly tasks should NEVER generate future visible duplicates.
+
+C. Monthly tasks
+Same philosophy as weekly:
+- persistent row
+- dynamic cycle reset
+- no generated children
+- no duplicate rows
+
+D. One-time tasks
+One-time tasks remain traditional:
+- complete once
+- move to completed
+- never reset
+- never regenerate
+
+8. Overdue logic rewrite:
+Current overdue logic is wrong for recurring operational tasks.
+
+Current behavior:
+dueDate < today = overdue
+
+New behavior:
+Overdue must be recurrence-cycle aware.
+
+Examples:
+
+Daily:
+- overdue only after today's operational window expires
+
+Weekly:
+- overdue only after current week window expires
+
+Monthly:
+- overdue only after current month window expires
+
+One-time:
+- traditional overdue logic remains
+
+Goal:
+Weekly/monthly tasks should not feel "late" immediately after their due date field passes if the operational cycle itself is still active.
+
+9. Completion logic:
+Recurring task completion should:
+- update timestamps/state ONLY
+- NEVER create another database row
+
+Suggested model:
+- complete task
+→ update lastCompletedAt
+→ UI dynamically determines if current cycle is completed
+
+10. Visibility logic:
+The UI should dynamically determine:
+- active for current cycle
+- completed for current cycle
+- overdue for current cycle
+
+based on:
+- recurrence type
+- current date
+- completion timestamps
+
+NOT:
+- generated task rows
+
+11. Completed tab behavior:
+Completed tab should primarily contain:
+- completed one-time tasks
+- optional historical recurring completions if lightweight history is retained
+
+BUT:
+Do NOT generate historical duplicate rows solely for completion history.
+
+If lightweight recurrence history is needed:
+- store lightweight completion events separately
+OR
+- defer history entirely to future versions
+
+MVP preference:
+Keep recurring tasks operationally focused, not historically focused.
+
+12. UI/UX goals:
+Office Ops should feel:
+- like a living operational checklist
+- stable
+- predictable
+- low clutter
+- low cognitive load
+
+Users should never see:
+- duplicate recurring rows
+- future-cycle rows prematurely
+- recurrence chain artifacts
+- growing stacks of completed daily tasks
+
+13. Layout requirements:
+Keep the grouped collapsible sections:
+- One-Time Tasks
+- Daily Tasks
+- Weekly Tasks
+- Monthly Tasks
+
+Preserve:
+- compact operational feel
+- line-through styling
+- muted completed styling
+- mobile usability
+
+14. Critical constraints:
+- no cron jobs
+- no schedulers
+- no background workers
+- no recurrence-row spawning
+- no infinite history accumulation
+- no complex recurrence rules
+- preserve lightweight architecture
+
+15. Migration requirements:
+Existing recurring Office Ops tasks must migrate safely.
+
+Investigate:
+- collapsing recurrence chains into a single persistent operational row
+OR
+- safely resetting Office Ops recurrence data in dev/prod if simpler and acceptable
+
+Report recommendation before destructive migration decisions.
+
+16. Required investigation BEFORE implementation:
+Audit:
+- current recurrence chain structure
+- current nextInstanceId usage
+- existing recurrence-generated rows
+- safest migration path
+- whether existing recurrence fields can be simplified
+
+Provide:
+- recommended new schema
+- migration strategy
+- how overdue windows should be computed per recurrence type
+- whether recurring-task history should exist at all in MVP
+
+Wait for approval before destructive migrations or schema removals.
+
+17. Relevant files:
+artifacts/api-server/src/routes/officeOps.ts
+artifacts/tacot3/src/pages/office-ops.tsx
+lib/db/src/schema/office_ops_tasks.ts
+lib/api-spec/openapi.yaml

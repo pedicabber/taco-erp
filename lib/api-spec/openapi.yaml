@@ -2251,12 +2251,6 @@ components:
         recurrence:
           type: string
           enum: [none, daily, weekly, monthly]
-        recurrenceAnchorDate:
-          type: ["string", "null"]
-        parentRecurrenceId:
-          type: ["integer", "null"]
-        nextInstanceId:
-          type: ["integer", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -2271,9 +2265,6 @@ components:
         - dueDate
         - completedAt
         - recurrence
-        - recurrenceAnchorDate
-        - parentRecurrenceId
-        - nextInstanceId
         - createdAt
         - updatedAt
 

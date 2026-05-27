@@ -70,18 +70,61 @@ function formatDueDate(date: string | null): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function isOverdue(t: OfficeOpsTask): boolean {
-  return !!t.dueDate && t.status === "open" && t.dueDate < todayIso();
+/** UTC start-of-day as a Date. */
+function startOfToday(): Date {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/** UTC start of the current ISO week (Monday 00:00 UTC). */
+function startOfThisWeek(): Date {
+  const d = startOfToday();
+  // getUTCDay: 0=Sun..6=Sat. ISO week starts Monday → offset to Monday.
+  const dayOfWeek = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+  d.setUTCDate(d.getUTCDate() - dayOfWeek);
+  return d;
+}
+
+/** UTC start of the current calendar month. */
+function startOfThisMonth(): Date {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 }
 
 /**
- * A daily recurring task that was completed at some point today (local UTC
- * day) — these stay visible in the Daily section with line-through styling
- * until the calendar day rolls over.
+ * Did this recurring task get completed inside its current operational
+ * cycle? If true, render it muted + line-through; the row stays on the board
+ * until the cycle boundary passes, at which point it implicitly reactivates.
+ *
+ * One-time tasks always return false here — their completion is permanent
+ * and they live in the Completed tab.
  */
-function isDailyCompletedToday(t: OfficeOpsTask): boolean {
-  if (t.recurrence !== "daily" || t.status !== "completed" || !t.completedAt) return false;
-  return t.completedAt.slice(0, 10) === todayIso();
+function isCompletedForCurrentCycle(t: OfficeOpsTask): boolean {
+  if (t.recurrence === "none") return false;
+  if (t.status !== "completed" || !t.completedAt) return false;
+  const completed = new Date(t.completedAt);
+  if (t.recurrence === "daily")   return completed >= startOfToday();
+  if (t.recurrence === "weekly")  return completed >= startOfThisWeek();
+  if (t.recurrence === "monthly") return completed >= startOfThisMonth();
+  return false;
+}
+
+/**
+ * Is this row currently overdue from the user's perspective?
+ *   • one-time: dueDate < today AND open.
+ *   • recurring: the current cycle is not yet completed.
+ * (Server-side overdue filter is stricter — it only matches rows whose
+ * previous cycle was missed. The UI badge is the looser "needs attention"
+ * variant so any uncompleted recurring task with a past due date flags.)
+ */
+function isOverdue(t: OfficeOpsTask): boolean {
+  if (t.recurrence === "none") {
+    return !!t.dueDate && t.status === "open" && t.dueDate < todayIso();
+  }
+  // Recurring tasks are "overdue" visually only when the current cycle has
+  // not been completed AND a due date is set in the past.
+  if (isCompletedForCurrentCycle(t)) return false;
+  return !!t.dueDate && t.dueDate < todayIso();
 }
 
 export default function OfficeOpsPage() {
@@ -137,7 +180,7 @@ export default function OfficeOpsPage() {
       const key = (t.recurrence as RecurrenceSectionKey) ?? "none";
       if (!(key in buckets)) continue;
       buckets[key].push(t);
-      if (t.status === "completed" && isDailyCompletedToday(t)) {
+      if (isCompletedForCurrentCycle(t)) {
         completedTodayCount[key] += 1;
       }
     }
@@ -239,10 +282,17 @@ export default function OfficeOpsPage() {
         <div className="space-y-3">
           {recurrenceSections.map((section) => {
             const isOpen = !collapsed[section.key];
+            // Recurring section header: "N active · M done this cycle".
+            // One-time section: just the active count.
+            const cycleWord =
+              section.key === "daily" ? "today"
+              : section.key === "weekly" ? "this week"
+              : section.key === "monthly" ? "this month"
+              : "";
             const countLabel =
-              section.key === "daily"
-                ? `${section.openCount} open · ${section.doneTodayCount} done today`
-                : `${section.openCount} open`;
+              section.key === "none"
+                ? `${section.openCount} open`
+                : `${section.openCount} active · ${section.doneTodayCount} done ${cycleWord}`;
             return (
               <Collapsible
                 key={section.key}
@@ -368,7 +418,10 @@ function TaskRow({
   const overdue = isOverdue(task);
   // Daily-completed-today rows live in the Open tab's Daily section. Render
   // them muted so the checklist reads at a glance.
-  const mutedDoneToday = completed && isDailyCompletedToday(task);
+  // Recurring task that's been completed within its current cycle window —
+  // render muted so the checklist reads at a glance. The row will implicitly
+  // reactivate at the next cycle boundary (no row creation, no server poke).
+  const mutedDoneToday = isCompletedForCurrentCycle(task);
   return (
     <Card
       className={`p-3 flex items-start gap-3 hover-elevate ${

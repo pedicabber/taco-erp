@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, officeOpsTasksTable } from "@workspace/db";
-import { and, eq, lt, or, isNull, desc, ne, sql } from "drizzle-orm";
+import { and, eq, lt, or, isNull, desc, sql } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
 import { requireOfficeOpsAccess } from "../lib/officeOpsAccess";
 import {
@@ -12,6 +12,7 @@ import {
 const router: IRouter = Router();
 
 type OfficeOpsRow = typeof officeOpsTasksTable.$inferSelect;
+type Recurrence = "none" | "daily" | "weekly" | "monthly";
 
 function serialize(t: OfficeOpsRow) {
   return {
@@ -23,10 +24,7 @@ function serialize(t: OfficeOpsRow) {
     createdById: t.createdById,
     dueDate: t.dueDate,
     completedAt: t.completedAt ? t.completedAt.toISOString() : null,
-    recurrence: t.recurrence as "none" | "daily" | "weekly" | "monthly",
-    recurrenceAnchorDate: t.recurrenceAnchorDate,
-    parentRecurrenceId: t.parentRecurrenceId,
-    nextInstanceId: t.nextInstanceId,
+    recurrence: t.recurrence as Recurrence,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
   };
@@ -35,16 +33,6 @@ function serialize(t: OfficeOpsRow) {
 /** Today as YYYY-MM-DD in UTC. dueDate is a calendar date, no timezone. */
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-/** Add `n` units to a YYYY-MM-DD string and return YYYY-MM-DD. */
-function addToDate(dateStr: string, recurrence: "daily" | "weekly" | "monthly"): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  if (recurrence === "daily") dt.setUTCDate(dt.getUTCDate() + 1);
-  else if (recurrence === "weekly") dt.setUTCDate(dt.getUTCDate() + 7);
-  else dt.setUTCMonth(dt.getUTCMonth() + 1);
-  return dt.toISOString().slice(0, 10);
 }
 
 function parseTaskId(raw: string | string[]): number | null {
@@ -64,37 +52,71 @@ router.get("/office-ops/tasks", requireAuth, async (req: AuthenticatedRequest, r
   const { filter, scope } = parsedQuery.data;
 
   const conditions = [] as Array<ReturnType<typeof eq>>;
-
-  // Daily tasks completed *today* are operationally "still on the board" and
-  // belong in the Daily section of the Open tab with line-through styling.
-  // The Completed tab must hide them so they don't appear in both views.
   const today = todayUtc();
-  const dailyCompletedToday = and(
-    eq(officeOpsTasksTable.status, "completed"),
-    eq(officeOpsTasksTable.recurrence, "daily"),
-    sql`${officeOpsTasksTable.completedAt} AT TIME ZONE 'UTC' >= ${today}::date`,
-    sql`${officeOpsTasksTable.completedAt} AT TIME ZONE 'UTC' <  (${today}::date + 1)`,
-  );
+
+  // ---------------------------------------------------------------------------
+  // Filter semantics under the persistent-row recurrence model
+  // ---------------------------------------------------------------------------
+  // open     → operational board. ALL recurring rows (the client decides muted
+  //            vs active based on the current cycle window) PLUS one-time
+  //            tasks still in status='open'.
+  // completed→ one-time completed tasks only. Recurring tasks have no
+  //            historical row to show; their "completed for this cycle" state
+  //            lives transiently on the open board.
+  // overdue  → cycle-aware. One-time: dueDate < today AND status='open'.
+  //            Recurring: cycle window has closed without completion (i.e.
+  //            previous cycle was never completed). Daily example: yesterday
+  //            passed with no completion this week start. We compute this with
+  //            UTC date math directly in SQL.
+  // ---------------------------------------------------------------------------
 
   if (filter === "open") {
-    const openOrDailyDoneToday = or(
-      eq(officeOpsTasksTable.status, "open"),
-      dailyCompletedToday,
+    const openOneTimeOrAnyRecurring = or(
+      and(eq(officeOpsTasksTable.recurrence, "none"), eq(officeOpsTasksTable.status, "open")),
+      sql`${officeOpsTasksTable.recurrence} <> 'none'`,
     );
-    if (openOrDailyDoneToday) conditions.push(openOrDailyDoneToday as ReturnType<typeof eq>);
+    if (openOneTimeOrAnyRecurring) conditions.push(openOneTimeOrAnyRecurring as ReturnType<typeof eq>);
   } else if (filter === "completed") {
+    conditions.push(eq(officeOpsTasksTable.recurrence, "none"));
     conditions.push(eq(officeOpsTasksTable.status, "completed"));
-    // Exclude daily completed-today (those live in the Open tab's Daily section).
-    const notDailyToday = or(
-      ne(officeOpsTasksTable.recurrence, "daily"),
-      isNull(officeOpsTasksTable.completedAt),
-      sql`${officeOpsTasksTable.completedAt} AT TIME ZONE 'UTC' <  ${today}::date`,
-    );
-    if (notDailyToday) conditions.push(notDailyToday as ReturnType<typeof eq>);
   } else {
     // overdue
-    conditions.push(eq(officeOpsTasksTable.status, "open"));
-    conditions.push(lt(officeOpsTasksTable.dueDate, today));
+    const oneTimeOverdue = and(
+      eq(officeOpsTasksTable.recurrence, "none"),
+      eq(officeOpsTasksTable.status, "open"),
+      lt(officeOpsTasksTable.dueDate, today),
+    );
+    // Recurring overdue: completedAt < start of CURRENT cycle (or null) AND
+    // we are past the start of the current cycle by at least one full window
+    // — i.e. the previous cycle closed unfinished. Implemented per recurrence
+    // by comparing completedAt to date_trunc('day'|'week'|'month', now()).
+    // UTC-anchored cycle start as a timestamptz: date_trunc on `now() AT TIME
+    // ZONE 'UTC'` returns a naive timestamp at UTC, then `AT TIME ZONE 'UTC'`
+    // re-attaches the UTC offset so the comparison with `completed_at`
+    // (timestamptz) is unambiguous regardless of session timezone.
+    const dailyOverdue = and(
+      eq(officeOpsTasksTable.recurrence, "daily"),
+      or(
+        isNull(officeOpsTasksTable.completedAt),
+        sql`${officeOpsTasksTable.completedAt} < (date_trunc('day',   now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')`,
+      ),
+    );
+    const weeklyOverdue = and(
+      eq(officeOpsTasksTable.recurrence, "weekly"),
+      or(
+        isNull(officeOpsTasksTable.completedAt),
+        sql`${officeOpsTasksTable.completedAt} < (date_trunc('week',  now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')`,
+      ),
+    );
+    const monthlyOverdue = and(
+      eq(officeOpsTasksTable.recurrence, "monthly"),
+      or(
+        isNull(officeOpsTasksTable.completedAt),
+        sql`${officeOpsTasksTable.completedAt} < (date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')`,
+      ),
+    );
+    const overdueAny = or(oneTimeOverdue, dailyOverdue, weeklyOverdue, monthlyOverdue);
+    if (overdueAny) conditions.push(overdueAny as ReturnType<typeof eq>);
   }
 
   if (scope === "mine") {
@@ -136,8 +158,6 @@ router.post("/office-ops/tasks", requireAuth, async (req: AuthenticatedRequest, 
       createdById: user.id,
       dueDate: dueDate ?? null,
       recurrence: recurrence ?? "none",
-      recurrenceAnchorDate: recurrence && recurrence !== "none" ? (dueDate ?? null) : null,
-      parentRecurrenceId: null,
     })
     .returning();
 
@@ -164,6 +184,7 @@ router.get("/office-ops/tasks/:taskId", requireAuth, async (req: AuthenticatedRe
 router.patch("/office-ops/tasks/:taskId", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
   const user = await requireOfficeOpsAccess(req, res);
   if (!user) return;
+  void user; // edit/complete authorization is the access gate alone (product decision #2)
 
   const id = parseTaskId(req.params.taskId);
   if (id === null) {
@@ -183,14 +204,14 @@ router.patch("/office-ops/tasks/:taskId", requireAuth, async (req: Authenticated
     return;
   }
 
-  // Per product decision #2 "all access-holders can create/assign", any user
-  // who passed `requireOfficeOpsAccess` is allowed to edit/complete. Delete
-  // remains admin-only (handled in the DELETE handler below).
-
   const updates = parsed.data;
   const willComplete = updates.status === "completed" && existing.status !== "completed";
   const reopening = updates.status === "open" && existing.status === "completed";
 
+  // Persistent-row model: completion is JUST status + completedAt. Reopening
+  // clears completedAt so the row appears active immediately. No INSERT path
+  // exists in this handler — recurring tasks reactivate implicitly on the
+  // next cycle boundary via the GET filter / client cycle calc.
   const setClause = {
     ...(updates.title !== undefined ? { title: updates.title } : {}),
     ...(updates.notes !== undefined ? { notes: updates.notes } : {}),
@@ -202,84 +223,11 @@ router.patch("/office-ops/tasks/:taskId", requireAuth, async (req: Authenticated
     ...(reopening ? { completedAt: null } : {}),
   };
 
-  // Race guard: when completing, scope the UPDATE to rows still in "open"
-  // status. Two concurrent completion PATCHes will both pass the `select`
-  // above, but only one UPDATE returns a row — the loser's `returning()` is
-  // empty and we skip rollover, preventing duplicate next-instance inserts.
-  const whereClause = willComplete
-    ? and(eq(officeOpsTasksTable.id, id), eq(officeOpsTasksTable.status, "open"))
-    : eq(officeOpsTasksTable.id, id);
-
-  const updatedRows = await db
+  const [updated] = await db
     .update(officeOpsTasksTable)
     .set(setClause)
-    .where(whereClause)
+    .where(eq(officeOpsTasksTable.id, id))
     .returning();
-
-  if (updatedRows.length === 0) {
-    // Another request completed it first. Return the current row, no rollover.
-    const [now] = await db.select().from(officeOpsTasksTable).where(eq(officeOpsTasksTable.id, id));
-    if (!now) {
-      res.status(404).json({ error: "Office Ops task not found" });
-      return;
-    }
-    res.json(serialize(now));
-    return;
-  }
-  const updated = updatedRows[0];
-
-  // On-completion recurrence rollover. Compute next instance from the MERGED
-  // post-update state, not the pre-update row, so same-request edits to
-  // title/notes/dueDate/assignee/recurrence are reflected in the new row.
-  // Honors completing while flipping recurrence to "none" (stops the chain).
-  const merged = {
-    title: updates.title ?? existing.title,
-    notes: updates.notes !== undefined ? updates.notes : existing.notes,
-    assigneeId: updates.assigneeId !== undefined ? updates.assigneeId : existing.assigneeId,
-    dueDate: updates.dueDate !== undefined ? updates.dueDate : existing.dueDate,
-    recurrence: updates.recurrence ?? existing.recurrence,
-  };
-  const finalRecurrence: "daily" | "weekly" | "monthly" | null =
-    merged.recurrence === "daily" || merged.recurrence === "weekly" || merged.recurrence === "monthly"
-      ? merged.recurrence
-      : null;
-  // Idempotency latch: once this row has spawned its successor, never spawn
-  // another from it — even across reopen → recomplete cycles. Reopening does
-  // NOT clear `nextInstanceId` (see PATCH set clause above).
-  if (willComplete && finalRecurrence && existing.nextInstanceId == null) {
-    const baseDate = merged.dueDate ?? existing.recurrenceAnchorDate ?? todayUtc();
-    const nextDue = addToDate(baseDate, finalRecurrence);
-    // Belt-and-suspenders against an in-flight concurrent rollover: only
-    // INSERT if this row's nextInstanceId is still NULL. The conditional
-    // UPDATE that follows is the actual atomic claim.
-    const [child] = await db.insert(officeOpsTasksTable).values({
-      title: merged.title,
-      notes: merged.notes,
-      status: "open",
-      assigneeId: merged.assigneeId,
-      createdById: existing.createdById,
-      dueDate: nextDue,
-      recurrence: finalRecurrence,
-      recurrenceAnchorDate: existing.recurrenceAnchorDate ?? merged.dueDate ?? nextDue,
-      parentRecurrenceId: existing.parentRecurrenceId ?? existing.id,
-    }).returning();
-
-    // Atomically claim the latch. If a concurrent request beat us to it, the
-    // WHERE clause matches zero rows and we delete the orphan child we just
-    // inserted, leaving the winning rollover intact.
-    const claimed = await db
-      .update(officeOpsTasksTable)
-      .set({ nextInstanceId: child.id })
-      .where(and(eq(officeOpsTasksTable.id, existing.id), isNull(officeOpsTasksTable.nextInstanceId)))
-      .returning({ id: officeOpsTasksTable.id });
-
-    if (claimed.length === 0) {
-      await db.delete(officeOpsTasksTable).where(eq(officeOpsTasksTable.id, child.id));
-    } else {
-      // Reflect the claim on the row we're about to return.
-      (updated as { nextInstanceId: number | null }).nextInstanceId = child.id;
-    }
-  }
 
   res.json(serialize(updated));
 });
@@ -300,9 +248,7 @@ router.delete("/office-ops/tasks/:taskId", requireAuth, async (req: Authenticate
     return;
   }
 
-  // Creator-or-admin delete: admins can remove anything; other Office Ops
-  // members can only remove tasks they created. Prevents accidental loss of
-  // someone else's recurring workflow while removing admin dependence.
+  // Creator-or-admin delete (preserved from Task #15).
   if (existing.createdById !== user.id && user.role !== "admin") {
     res.status(403).json({ error: "Only the creator or an admin may delete this task" });
     return;
