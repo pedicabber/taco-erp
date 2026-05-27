@@ -205,26 +205,33 @@ router.patch("/office-ops/tasks/:taskId", requireAuth, async (req: Authenticated
   }
   const updated = updatedRows[0];
 
-  // On-completion recurrence rollover. Honor any recurrence change made in
-  // the same PATCH (e.g. completing while flipping recurrence to "none"
-  // stops the chain). Only runs when we actually transitioned the row.
-  const finalRecurrenceRaw = updates.recurrence ?? existing.recurrence;
+  // On-completion recurrence rollover. Compute next instance from the MERGED
+  // post-update state, not the pre-update row, so same-request edits to
+  // title/notes/dueDate/assignee/recurrence are reflected in the new row.
+  // Honors completing while flipping recurrence to "none" (stops the chain).
+  const merged = {
+    title: updates.title ?? existing.title,
+    notes: updates.notes !== undefined ? updates.notes : existing.notes,
+    assigneeId: updates.assigneeId !== undefined ? updates.assigneeId : existing.assigneeId,
+    dueDate: updates.dueDate !== undefined ? updates.dueDate : existing.dueDate,
+    recurrence: updates.recurrence ?? existing.recurrence,
+  };
   const finalRecurrence: "daily" | "weekly" | "monthly" | null =
-    finalRecurrenceRaw === "daily" || finalRecurrenceRaw === "weekly" || finalRecurrenceRaw === "monthly"
-      ? finalRecurrenceRaw
+    merged.recurrence === "daily" || merged.recurrence === "weekly" || merged.recurrence === "monthly"
+      ? merged.recurrence
       : null;
   if (willComplete && finalRecurrence) {
-    const baseDate = existing.dueDate ?? existing.recurrenceAnchorDate ?? todayUtc();
+    const baseDate = merged.dueDate ?? existing.recurrenceAnchorDate ?? todayUtc();
     const nextDue = addToDate(baseDate, finalRecurrence);
     await db.insert(officeOpsTasksTable).values({
-      title: existing.title,
-      notes: existing.notes,
+      title: merged.title,
+      notes: merged.notes,
       status: "open",
-      assigneeId: existing.assigneeId,
+      assigneeId: merged.assigneeId,
       createdById: existing.createdById,
       dueDate: nextDue,
       recurrence: finalRecurrence,
-      recurrenceAnchorDate: existing.recurrenceAnchorDate ?? existing.dueDate ?? nextDue,
+      recurrenceAnchorDate: existing.recurrenceAnchorDate ?? merged.dueDate ?? nextDue,
       parentRecurrenceId: existing.parentRecurrenceId ?? existing.id,
     });
   }

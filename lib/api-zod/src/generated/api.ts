@@ -897,6 +897,366 @@ export const DeleteTaskParams = zod.object({
 });
 
 /**
+ * @summary Get the caller's currently-running task (or null)
+ */
+export const GetMyActiveTimerResponse = zod.union([
+  zod.object({
+    id: zod.number(),
+    title: zod.string(),
+    description: zod.string().nullable(),
+    status: zod.enum([
+      "backlog",
+      "new_tasks",
+      "in_progress",
+      "in_review",
+      "blocked",
+      "complete",
+    ]),
+    priority: zod.enum(["low", "medium", "high", "urgent"]),
+    projectId: zod.number(),
+    departmentId: zod.number().nullable(),
+    assigneeId: zod.number().nullable(),
+    assigneeIds: zod.array(zod.number()),
+    assignees: zod.array(
+      zod.object({
+        id: zod.number(),
+        name: zod.string(),
+        avatarUrl: zod.string().nullable(),
+        departmentName: zod.string().nullable(),
+      }),
+    ),
+    assignerId: zod.number().nullable(),
+    followerIds: zod.array(zod.number()),
+    expectedHours: zod.number().nullable(),
+    dueDate: zod.string().nullable(),
+    startDate: zod.string().nullable(),
+    elapsedSeconds: zod.number(),
+    timerRunning: zod.boolean(),
+    timerStartedAt: zod.string().nullable(),
+    completedAt: zod.string().nullable(),
+    notes: zod.string().nullable(),
+    safetyFlag: zod
+      .union([
+        zod.literal("near_miss"),
+        zod.literal("incident"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    qualityResult: zod
+      .union([
+        zod.literal("pass"),
+        zod.literal("rework"),
+        zod.literal("fail"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    deliveryStatus: zod
+      .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+      .nullish(),
+    costMaterialNotes: zod.string().nullish(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+    assignee: zod
+      .object({
+        id: zod.number(),
+        name: zod.string(),
+        avatarUrl: zod.string().nullable(),
+        departmentName: zod.string().nullable(),
+      })
+      .nullable(),
+    assigner: zod
+      .object({
+        id: zod.number(),
+        name: zod.string(),
+        avatarUrl: zod.string().nullable(),
+        departmentName: zod.string().nullable(),
+      })
+      .nullable(),
+    department: zod
+      .object({
+        id: zod.number(),
+        name: zod.string(),
+        color: zod.string().nullable(),
+      })
+      .nullable(),
+  }),
+  zod.null(),
+]);
+
+/**
+ * @summary Distinct tasks the caller recently clocked, newest first
+ */
+export const getMyRecentTimersQueryLimitMax = 20;
+
+export const GetMyRecentTimersQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getMyRecentTimersQueryLimitMax)
+    .optional(),
+});
+
+export const GetMyRecentTimersResponseItem = zod.object({
+  task: zod.object({
+    id: zod.number(),
+    title: zod.string(),
+    description: zod.string().nullable(),
+    status: zod.enum([
+      "backlog",
+      "new_tasks",
+      "in_progress",
+      "in_review",
+      "blocked",
+      "complete",
+    ]),
+    priority: zod.enum(["low", "medium", "high", "urgent"]),
+    projectId: zod.number(),
+    departmentId: zod.number().nullable(),
+    assigneeId: zod.number().nullable(),
+    assigneeIds: zod.array(zod.number()),
+    assignees: zod.array(
+      zod.object({
+        id: zod.number(),
+        name: zod.string(),
+        avatarUrl: zod.string().nullable(),
+        departmentName: zod.string().nullable(),
+      }),
+    ),
+    assignerId: zod.number().nullable(),
+    followerIds: zod.array(zod.number()),
+    expectedHours: zod.number().nullable(),
+    dueDate: zod.string().nullable(),
+    startDate: zod.string().nullable(),
+    elapsedSeconds: zod.number(),
+    timerRunning: zod.boolean(),
+    timerStartedAt: zod.string().nullable(),
+    completedAt: zod.string().nullable(),
+    notes: zod.string().nullable(),
+    safetyFlag: zod
+      .union([
+        zod.literal("near_miss"),
+        zod.literal("incident"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    qualityResult: zod
+      .union([
+        zod.literal("pass"),
+        zod.literal("rework"),
+        zod.literal("fail"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    deliveryStatus: zod
+      .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+      .nullish(),
+    costMaterialNotes: zod.string().nullish(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+    assignee: zod
+      .object({
+        id: zod.number(),
+        name: zod.string(),
+        avatarUrl: zod.string().nullable(),
+        departmentName: zod.string().nullable(),
+      })
+      .nullable(),
+    assigner: zod
+      .object({
+        id: zod.number(),
+        name: zod.string(),
+        avatarUrl: zod.string().nullable(),
+        departmentName: zod.string().nullable(),
+      })
+      .nullable(),
+    department: zod
+      .object({
+        id: zod.number(),
+        name: zod.string(),
+        color: zod.string().nullable(),
+      })
+      .nullable(),
+  }),
+  lastStartedAt: zod.coerce.date(),
+});
+export const GetMyRecentTimersResponse = zod.array(
+  GetMyRecentTimersResponseItem,
+);
+
+/**
+ * @summary Stop the caller's active task (if any) and start the target task
+ */
+export const SwitchTaskTimerParams = zod.object({
+  taskId: zod.coerce.number(),
+});
+
+export const SwitchTaskTimerResponse = zod.object({
+  stopped: zod.union([
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      description: zod.string().nullable(),
+      status: zod.enum([
+        "backlog",
+        "new_tasks",
+        "in_progress",
+        "in_review",
+        "blocked",
+        "complete",
+      ]),
+      priority: zod.enum(["low", "medium", "high", "urgent"]),
+      projectId: zod.number(),
+      departmentId: zod.number().nullable(),
+      assigneeId: zod.number().nullable(),
+      assigneeIds: zod.array(zod.number()),
+      assignees: zod.array(
+        zod.object({
+          id: zod.number(),
+          name: zod.string(),
+          avatarUrl: zod.string().nullable(),
+          departmentName: zod.string().nullable(),
+        }),
+      ),
+      assignerId: zod.number().nullable(),
+      followerIds: zod.array(zod.number()),
+      expectedHours: zod.number().nullable(),
+      dueDate: zod.string().nullable(),
+      startDate: zod.string().nullable(),
+      elapsedSeconds: zod.number(),
+      timerRunning: zod.boolean(),
+      timerStartedAt: zod.string().nullable(),
+      completedAt: zod.string().nullable(),
+      notes: zod.string().nullable(),
+      safetyFlag: zod
+        .union([
+          zod.literal("near_miss"),
+          zod.literal("incident"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      qualityResult: zod
+        .union([
+          zod.literal("pass"),
+          zod.literal("rework"),
+          zod.literal("fail"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      deliveryStatus: zod
+        .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+        .nullish(),
+      costMaterialNotes: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+      assignee: zod
+        .object({
+          id: zod.number(),
+          name: zod.string(),
+          avatarUrl: zod.string().nullable(),
+          departmentName: zod.string().nullable(),
+        })
+        .nullable(),
+      assigner: zod
+        .object({
+          id: zod.number(),
+          name: zod.string(),
+          avatarUrl: zod.string().nullable(),
+          departmentName: zod.string().nullable(),
+        })
+        .nullable(),
+      department: zod
+        .object({
+          id: zod.number(),
+          name: zod.string(),
+          color: zod.string().nullable(),
+        })
+        .nullable(),
+    }),
+    zod.null(),
+  ]),
+  started: zod.object({
+    id: zod.number(),
+    title: zod.string(),
+    description: zod.string().nullable(),
+    status: zod.enum([
+      "backlog",
+      "new_tasks",
+      "in_progress",
+      "in_review",
+      "blocked",
+      "complete",
+    ]),
+    priority: zod.enum(["low", "medium", "high", "urgent"]),
+    projectId: zod.number(),
+    departmentId: zod.number().nullable(),
+    assigneeId: zod.number().nullable(),
+    assigneeIds: zod.array(zod.number()),
+    assignees: zod.array(
+      zod.object({
+        id: zod.number(),
+        name: zod.string(),
+        avatarUrl: zod.string().nullable(),
+        departmentName: zod.string().nullable(),
+      }),
+    ),
+    assignerId: zod.number().nullable(),
+    followerIds: zod.array(zod.number()),
+    expectedHours: zod.number().nullable(),
+    dueDate: zod.string().nullable(),
+    startDate: zod.string().nullable(),
+    elapsedSeconds: zod.number(),
+    timerRunning: zod.boolean(),
+    timerStartedAt: zod.string().nullable(),
+    completedAt: zod.string().nullable(),
+    notes: zod.string().nullable(),
+    safetyFlag: zod
+      .union([
+        zod.literal("near_miss"),
+        zod.literal("incident"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    qualityResult: zod
+      .union([
+        zod.literal("pass"),
+        zod.literal("rework"),
+        zod.literal("fail"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    deliveryStatus: zod
+      .union([zod.literal("on_time"), zod.literal("late"), zod.literal(null)])
+      .nullish(),
+    costMaterialNotes: zod.string().nullish(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+    assignee: zod
+      .object({
+        id: zod.number(),
+        name: zod.string(),
+        avatarUrl: zod.string().nullable(),
+        departmentName: zod.string().nullable(),
+      })
+      .nullable(),
+    assigner: zod
+      .object({
+        id: zod.number(),
+        name: zod.string(),
+        avatarUrl: zod.string().nullable(),
+        departmentName: zod.string().nullable(),
+      })
+      .nullable(),
+    department: zod
+      .object({
+        id: zod.number(),
+        name: zod.string(),
+        color: zod.string().nullable(),
+      })
+      .nullable(),
+  }),
+});
+
+/**
  * @summary Start the timer for a task
  */
 export const StartTaskTimerParams = zod.object({

@@ -475,6 +475,16 @@ export interface UpdateTaskBody {
   costMaterialNotes?: string | null;
 }
 
+export interface RecentTimerEntry {
+  task: Task;
+  lastStartedAt: string;
+}
+
+export interface SwitchTimerResponse {
+  stopped: Task | null;
+  started: Task;
+}
+
 export interface EditTimerBody {
   elapsedSeconds: number;
 }
@@ -801,6 +811,14 @@ export type ListTasksParams = {
    * @nullable
    */
   status?: string | null;
+};
+
+export type GetMyRecentTimersParams = {
+  /**
+   * @minimum 1
+   * @maximum 20
+   */
+  limit?: number;
 };
 
 export type GetKanbanColumnsParams = {

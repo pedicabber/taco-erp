@@ -34,6 +34,7 @@ import type {
   GetActivityFeedParams,
   GetCalendarEventsParams,
   GetKanbanColumnsParams,
+  GetMyRecentTimersParams,
   HealthStatus,
   KanbanColumn,
   KanbanColumnConfig,
@@ -49,10 +50,12 @@ import type {
   ProjectAllAttachments,
   ProjectAttachment,
   ProjectSummary,
+  RecentTimerEntry,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
   RescheduleProjectBody,
   SentBroadcast,
+  SwitchTimerResponse,
   Task,
   TaskAttachment,
   UpdateDepartmentBody,
@@ -2339,6 +2342,262 @@ export const useDeleteTask = <
   TContext
 > => {
   return useMutation(getDeleteTaskMutationOptions(options));
+};
+
+/**
+ * @summary Get the caller's currently-running task (or null)
+ */
+export const getGetMyActiveTimerUrl = () => {
+  return `/api/tasks/me/active-timer`;
+};
+
+export const getMyActiveTimer = async (
+  options?: RequestInit,
+): Promise<Task | null> => {
+  return customFetch<Task | null>(getGetMyActiveTimerUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyActiveTimerQueryKey = () => {
+  return [`/api/tasks/me/active-timer`] as const;
+};
+
+export const getGetMyActiveTimerQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyActiveTimer>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyActiveTimer>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyActiveTimerQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyActiveTimer>>
+  > = ({ signal }) => getMyActiveTimer({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyActiveTimer>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyActiveTimerQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyActiveTimer>>
+>;
+export type GetMyActiveTimerQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the caller's currently-running task (or null)
+ */
+
+export function useGetMyActiveTimer<
+  TData = Awaited<ReturnType<typeof getMyActiveTimer>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyActiveTimer>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyActiveTimerQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Distinct tasks the caller recently clocked, newest first
+ */
+export const getGetMyRecentTimersUrl = (params?: GetMyRecentTimersParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/tasks/me/recent-timers?${stringifiedParams}`
+    : `/api/tasks/me/recent-timers`;
+};
+
+export const getMyRecentTimers = async (
+  params?: GetMyRecentTimersParams,
+  options?: RequestInit,
+): Promise<RecentTimerEntry[]> => {
+  return customFetch<RecentTimerEntry[]>(getGetMyRecentTimersUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyRecentTimersQueryKey = (
+  params?: GetMyRecentTimersParams,
+) => {
+  return [`/api/tasks/me/recent-timers`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMyRecentTimersQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyRecentTimers>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMyRecentTimersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyRecentTimers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyRecentTimersQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyRecentTimers>>
+  > = ({ signal }) => getMyRecentTimers(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyRecentTimers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyRecentTimersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyRecentTimers>>
+>;
+export type GetMyRecentTimersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Distinct tasks the caller recently clocked, newest first
+ */
+
+export function useGetMyRecentTimers<
+  TData = Awaited<ReturnType<typeof getMyRecentTimers>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMyRecentTimersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyRecentTimers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyRecentTimersQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Stop the caller's active task (if any) and start the target task
+ */
+export const getSwitchTaskTimerUrl = (taskId: number) => {
+  return `/api/tasks/${taskId}/timer/switch`;
+};
+
+export const switchTaskTimer = async (
+  taskId: number,
+  options?: RequestInit,
+): Promise<SwitchTimerResponse> => {
+  return customFetch<SwitchTimerResponse>(getSwitchTaskTimerUrl(taskId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSwitchTaskTimerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof switchTaskTimer>>,
+    TError,
+    { taskId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof switchTaskTimer>>,
+  TError,
+  { taskId: number },
+  TContext
+> => {
+  const mutationKey = ["switchTaskTimer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof switchTaskTimer>>,
+    { taskId: number }
+  > = (props) => {
+    const { taskId } = props ?? {};
+
+    return switchTaskTimer(taskId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SwitchTaskTimerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof switchTaskTimer>>
+>;
+
+export type SwitchTaskTimerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Stop the caller's active task (if any) and start the target task
+ */
+export const useSwitchTaskTimer = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof switchTaskTimer>>,
+    TError,
+    { taskId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof switchTaskTimer>>,
+  TError,
+  { taskId: number },
+  TContext
+> => {
+  return useMutation(getSwitchTaskTimerMutationOptions(options));
 };
 
 /**

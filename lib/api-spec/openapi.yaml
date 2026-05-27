@@ -559,6 +559,63 @@ paths:
         "204":
           description: Deleted
 
+  /tasks/me/active-timer:
+    get:
+      operationId: getMyActiveTimer
+      tags: [tasks]
+      summary: Get the caller's currently-running task (or null)
+      responses:
+        "200":
+          description: Active task or null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/Task"
+                  - type: "null"
+
+  /tasks/me/recent-timers:
+    get:
+      operationId: getMyRecentTimers
+      tags: [tasks]
+      summary: Distinct tasks the caller recently clocked, newest first
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+      responses:
+        "200":
+          description: Recent timer entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecentTimerEntry"
+
+  /tasks/{taskId}/timer/switch:
+    post:
+      operationId: switchTaskTimer
+      tags: [tasks]
+      summary: Stop the caller's active task (if any) and start the target task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Switch result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SwitchTimerResponse"
+
   /tasks/{taskId}/timer/start:
     post:
       operationId: startTaskTimer
@@ -1719,6 +1776,31 @@ components:
           enum: [on_time, late, null]
         costMaterialNotes:
           type: ["string", "null"]
+
+    RecentTimerEntry:
+      type: object
+      properties:
+        task:
+          $ref: "#/components/schemas/Task"
+        lastStartedAt:
+          type: string
+          format: date-time
+      required:
+        - task
+        - lastStartedAt
+
+    SwitchTimerResponse:
+      type: object
+      properties:
+        stopped:
+          oneOf:
+            - $ref: "#/components/schemas/Task"
+            - type: "null"
+        started:
+          $ref: "#/components/schemas/Task"
+      required:
+        - stopped
+        - started
 
     EditTimerBody:
       type: object

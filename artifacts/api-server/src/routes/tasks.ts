@@ -553,6 +553,197 @@ router.delete("/tasks/:taskId", requireAdmin, async (req, res): Promise<void> =>
   res.sendStatus(204);
 });
 
+/**
+ * Internal: stop the timer for a task without HTTP plumbing. Used by the
+ * /timer/stop route, the /timer/switch route, and the auto-stop-on-switch
+ * invariant in /timer/start. Returns the updated task row (post-stop) or
+ * `null` if no timer was running.
+ *
+ * Always closes ANY open `task_timer_sessions` row for this task (regardless
+ * of who started it) so we don't leak open sessions when a task is stopped.
+ */
+async function stopTimerInternal(
+  taskId: number,
+  actorUserId: number | null,
+): Promise<typeof tasksTable.$inferSelect | null> {
+  const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, taskId));
+  if (!current) return null;
+
+  if (!current.timerRunning || !current.timerStartedAt) {
+    // Clean up any orphaned open sessions on this task even if the task
+    // itself isn't marked running (defensive — prevents zombie sessions).
+    const stoppedAtClean = new Date();
+    await db
+      .update(taskTimerSessionsTable)
+      .set({ stoppedAt: stoppedAtClean, durationSeconds: 0 })
+      .where(and(eq(taskTimerSessionsTable.taskId, taskId), isNull(taskTimerSessionsTable.stoppedAt)));
+    return null;
+  }
+
+  const stoppedAt = new Date();
+  const extraSeconds = Math.floor((stoppedAt.getTime() - current.timerStartedAt.getTime()) / 1000);
+  const [updated] = await db
+    .update(tasksTable)
+    .set({
+      timerRunning: false,
+      timerStartedAt: null,
+      elapsedSeconds: (current.elapsedSeconds ?? 0) + extraSeconds,
+    })
+    .where(eq(tasksTable.id, taskId))
+    .returning();
+
+  await db
+    .update(taskTimerSessionsTable)
+    .set({ stoppedAt, durationSeconds: extraSeconds })
+    .where(and(eq(taskTimerSessionsTable.taskId, taskId), isNull(taskTimerSessionsTable.stoppedAt)));
+
+  if (actorUserId) await logActivity(taskId, actorUserId, "stopped timer");
+  await checkOverdueAndNotify(updated);
+  return updated;
+}
+
+/**
+ * Internal: start the timer for a task. Caller is responsible for visibility
+ * checks and for first calling `stopAllUserActiveTimers` to preserve the
+ * one-active-timer-per-user invariant.
+ */
+async function startTimerInternal(
+  current: typeof tasksTable.$inferSelect,
+  startedById: number,
+): Promise<typeof tasksTable.$inferSelect> {
+  if (current.timerRunning) return current;
+  const startedAt = new Date();
+  const [updated] = await db
+    .update(tasksTable)
+    .set({
+      timerRunning: true,
+      timerStartedAt: startedAt,
+      status: current.status === "backlog" ? "in_progress" : current.status,
+    })
+    .where(eq(tasksTable.id, current.id))
+    .returning();
+  await db.insert(taskTimerSessionsTable).values({
+    taskId: current.id,
+    startedById,
+    startedAt,
+  });
+  await logActivity(current.id, startedById, "started timer");
+  return updated;
+}
+
+/**
+ * Auto-stop every timer the user has open, optionally excluding one taskId
+ * (used by `/timer/switch` so the switch is idempotent if the target is
+ * already the active task). User-scoped via `task_timer_sessions.startedById`.
+ * Returns the tasks that were actually stopped.
+ */
+async function stopAllUserActiveTimers(
+  userId: number,
+  exceptTaskId?: number,
+): Promise<Array<typeof tasksTable.$inferSelect>> {
+  const open = await db
+    .select({ taskId: taskTimerSessionsTable.taskId })
+    .from(taskTimerSessionsTable)
+    .where(
+      and(eq(taskTimerSessionsTable.startedById, userId), isNull(taskTimerSessionsTable.stoppedAt)),
+    );
+  const seen = new Set<number>();
+  const stopped: Array<typeof tasksTable.$inferSelect> = [];
+  for (const row of open) {
+    if (exceptTaskId !== undefined && row.taskId === exceptTaskId) continue;
+    if (seen.has(row.taskId)) continue;
+    seen.add(row.taskId);
+    const result = await stopTimerInternal(row.taskId, userId);
+    if (result) stopped.push(result);
+  }
+  return stopped;
+}
+
+/**
+ * GET /tasks/me/active-timer
+ * Returns the caller's currently running task (or `null`). User-scoped via
+ * `task_timer_sessions.startedById` and the open-session predicate so it
+ * cannot leak another user's timer.
+ */
+router.get("/tasks/me/active-timer", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
+  if (!me) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const open = await db
+    .select({ taskId: taskTimerSessionsTable.taskId, startedAt: taskTimerSessionsTable.startedAt })
+    .from(taskTimerSessionsTable)
+    .where(
+      and(eq(taskTimerSessionsTable.startedById, me.id), isNull(taskTimerSessionsTable.stoppedAt)),
+    )
+    .orderBy(desc(taskTimerSessionsTable.startedAt));
+
+  // Self-heal: if multiple open sessions exist for this user (shouldn't, but
+  // defensively), keep the newest and close the rest.
+  if (open.length > 1) {
+    for (let i = 1; i < open.length; i++) {
+      await stopTimerInternal(open[i].taskId, me.id);
+    }
+  }
+
+  for (const sess of open) {
+    const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, sess.taskId));
+    if (!task) continue;
+    // Visibility guard — if the user lost access to the task, hide it.
+    if (await isHiddenOATaskFromUser(task, me.id)) continue;
+    // The task row is the source of truth for running state. If it's no
+    // longer running, close the stale session and skip.
+    if (!task.timerRunning) {
+      await stopTimerInternal(task.id, me.id);
+      continue;
+    }
+    const built = await buildTask(task);
+    res.json(built);
+    return;
+  }
+  res.json(null);
+});
+
+/**
+ * GET /tasks/me/recent-timers?limit=5
+ * Distinct tasks the caller has recently clocked, newest first. Visibility-
+ * filtered so OA-hidden tasks never appear.
+ */
+router.get("/tasks/me/recent-timers", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
+  if (!me) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const rawLimit = Number(req.query.limit ?? 5);
+  const limit = Math.min(20, Math.max(1, isNaN(rawLimit) ? 5 : rawLimit));
+
+  // Pull a generous window of sessions and dedupe to distinct tasks in JS
+  // (simpler than a window function and the volume per-user is small).
+  const rows = await db
+    .select({ taskId: taskTimerSessionsTable.taskId, startedAt: taskTimerSessionsTable.startedAt })
+    .from(taskTimerSessionsTable)
+    .where(eq(taskTimerSessionsTable.startedById, me.id))
+    .orderBy(desc(taskTimerSessionsTable.startedAt))
+    .limit(limit * 10);
+
+  const seen = new Set<number>();
+  const result: Array<{ task: unknown; lastStartedAt: string }> = [];
+  for (const r of rows) {
+    if (seen.has(r.taskId)) continue;
+    seen.add(r.taskId);
+    const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, r.taskId));
+    if (!task) continue;
+    if (await isHiddenOATaskFromUser(task, me.id)) continue;
+    const built = await buildTask(task);
+    result.push({ task: built, lastStartedAt: r.startedAt.toISOString() });
+    if (result.length >= limit) break;
+  }
+  res.json(result);
+});
+
 router.post("/tasks/:taskId/timer/start", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
   const user = await syncUserFromClerk(req);
   const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
@@ -570,21 +761,16 @@ router.post("/tasks/:taskId/timer/start", requireAuth, async (req: Authenticated
     return;
   }
 
-  const startedAt = new Date();
-  const [updated] = await db.update(tasksTable).set({
-    timerRunning: true,
-    timerStartedAt: startedAt,
-    status: current.status === "backlog" ? "in_progress" : current.status,
-  }).where(eq(tasksTable.id, id)).returning();
-
+  // One-active-timer-per-user invariant: stop anything else this user has
+  // running before starting the new one. Applies whether the caller is the
+  // popup or the task-detail page.
   if (user) {
-    await db.insert(taskTimerSessionsTable).values({
-      taskId: id,
-      startedById: user.id,
-      startedAt,
-    });
-    await logActivity(id, user.id, "started timer");
+    await stopAllUserActiveTimers(user.id, id);
   }
+
+  const updated = user
+    ? await startTimerInternal(current, user.id)
+    : current; // unauthenticated path is unreachable due to requireAuth, but TS
 
   const built = await buildTask(updated);
   res.json(StartTaskTimerResponse.parse(built));
@@ -663,6 +849,69 @@ router.patch("/tasks/:taskId/timer/edit", requireAuth, async (req: Authenticated
 
   const built = await buildTask(updated);
   res.json(EditTaskTimerResponse.parse(built));
+});
+
+/**
+ * POST /tasks/:taskId/timer/switch
+ * Atomically stop the caller's currently-running task (if any) and start the
+ * specified target task. Idempotent if the target is already the active task.
+ * Returns `{ stopped: Task | null, started: Task }`.
+ */
+router.post("/tasks/:taskId/timer/switch", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const user = await syncUserFromClerk(req);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid task ID" });
+    return;
+  }
+
+  const target = await loadVisibleTask(id, user.id, res);
+  if (!target) return;
+
+  // Idempotency is per-caller, not global: a switch is a no-op only when *this*
+  // user already has an open session on the target. A globally-running task that
+  // belongs to someone else does not count, otherwise we'd return `{ started }`
+  // without ever creating a session for the caller.
+  const [mySession] = await db
+    .select({ id: taskTimerSessionsTable.id })
+    .from(taskTimerSessionsTable)
+    .where(
+      and(
+        eq(taskTimerSessionsTable.taskId, id),
+        eq(taskTimerSessionsTable.startedById, user.id),
+        isNull(taskTimerSessionsTable.stoppedAt),
+      ),
+    )
+    .limit(1);
+
+  if (mySession) {
+    res.json({ stopped: null, started: await buildTask(target) });
+    return;
+  }
+
+  // Stop everything else this user has running first.
+  const stoppedTasks = await stopAllUserActiveTimers(user.id, id);
+
+  const [refreshed] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
+  const current = refreshed ?? target;
+
+  // Refuse if another user already holds the task-level run lock. This keeps
+  // the one-active-timer-per-task invariant honest instead of fabricating a
+  // session that startTimerInternal would silently skip creating.
+  if (current.timerRunning) {
+    res.status(409).json({ error: "Task is already running for another user" });
+    return;
+  }
+
+  const started = await startTimerInternal(current, user.id);
+
+  const builtStarted = await buildTask(started);
+  const builtStopped = stoppedTasks.length > 0 ? await buildTask(stoppedTasks[0]) : null;
+  res.json({ stopped: builtStopped, started: builtStarted });
 });
 
 router.get("/tasks/:taskId/timer/sessions", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {

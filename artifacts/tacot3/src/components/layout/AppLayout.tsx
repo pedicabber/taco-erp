@@ -31,6 +31,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import TimeclockPopover from "@/components/timeclock/TimeclockPopover";
 
 type NavUser = {
   role?: string | null;
@@ -284,6 +285,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Settings className="w-5 h-5" />
             </div>
           </Link>
+
+          {/* Global timeclock popup */}
+          <TimeclockPopover />
 
           {/* Notification bell */}
           <Link href="/notifications">

@@ -1,0 +1,188 @@
+#16 - Global Task Timeclock Popup (MVP)
+
+1. Module/pages:
+Global app header
+Task time tracking workflow
+
+2. Current problem:
+Users currently must:
+- remember the task
+- navigate through Projects or Tasks
+- locate the task again
+- open the task
+- manually start/stop time tracking
+
+This creates unnecessary friction during normal production use.
+
+The timer workflow should be:
+- immediate
+- globally accessible
+- always visible
+- easy to switch between tasks
+
+3. Desired behavior:
+Add a global timeclock popup accessible from the top-right app header.
+
+The popup becomes the PRIMARY task clock-in/out workflow.
+
+Task-detail timers remain functional as a secondary entry point.
+
+4. Header integration:
+Add a new icon/button near:
+- notifications bell
+- settings gear
+
+Recommended icon:
+- timer
+- stopwatch
+- clock-circle
+
+Clicking opens a lightweight popup/panel/modal.
+
+5. Popup behavior:
+Popup should always show:
+- currently running task
+- associated project
+- elapsed running time
+- running status
+
+Primary actions:
+- Start Task
+- Stop Task
+- Switch Task
+- Go To Task
+
+6. Start-task workflow:
+Inside popup:
+
+Step 1:
+Select Project
+
+Step 2:
+Select Task
+(filtered by selected project)
+
+Step 3:
+Start Task
+
+Behavior:
+- starting a new task automatically stops the currently-running task
+OR
+- prompts confirmation before switching
+
+Only ONE running task per user at any time.
+
+7. Stop-task workflow:
+If task currently running:
+- popup shows Stop Task button
+- stopping task saves time entry normally through existing backend logic
+
+8. Go To Task:
+Popup includes:
+"Go To Task" button
+
+Behavior:
+- navigates directly to current running task detail page
+
+Purpose:
+- eliminates searching/navigation friction
+- quick return to active work
+
+9. Recent tasks section:
+Popup should also display:
+- recently clocked tasks
+OR
+- recently active tasks
+
+Purpose:
+Users often return repeatedly to the same tasks.
+
+MVP behavior:
+Automatically populated from:
+- recent timer history
+- currently running task pinned to top
+
+No manual bookmarks yet.
+
+10. Time tracking behavior:
+Preserve existing task timer architecture where possible.
+
+Requirements:
+- only one active task timer per user
+- preserve current time-entry storage
+- preserve task-detail timer functionality
+- prevent duplicate running timers
+- popup reflects timer state live
+- switching tasks safely closes previous timer
+
+11. UI/UX requirements:
+Popup should:
+- open instantly
+- require minimal clicks
+- remain compact
+- remain usable on mobile/tablet
+
+Goal:
+User should be able to:
+- stop current task
+- start another
+- return to task
+
+within seconds.
+
+12. Out of scope:
+- payroll
+- attendance
+- shift scheduling
+- manual bookmarks
+- productivity analytics
+- dashboard redesign
+- biometric clock-ins
+- multi-task timers
+- offline support
+- advanced reporting
+
+13. Critical architectural constraints:
+- preserve existing timer backend if possible
+- preserve OA visibility guards
+- avoid polling-heavy implementation
+- avoid race conditions on rapid task switching
+- global popup becomes preferred UX layer only
+- task-detail timing remains intact
+
+14. Recommended implementation approach:
+Phase 1:
+- header icon
+- popup
+- current running task
+- start/stop workflow
+- Go To Task
+- recent-task list
+
+Phase 2 later:
+- dashboard personalization
+- manual bookmarks
+- favorites
+- analytics
+
+15. Relevant files:
+artifacts/tacot3/src/layouts/AppLayout.tsx
+artifacts/tacot3/src/pages/task-detail.tsx
+artifacts/api-server/src/routes/tasks.ts
+artifacts/tacot3/src/lib/queryClient.ts
+
+16. Required investigation before implementation:
+Audit:
+- current timer architecture
+- active timer persistence
+- single-active-task enforcement
+- timer race-condition handling
+- recent-task history availability
+
+Report:
+- safest reuse path
+- backend changes needed
+- popup architecture recommendation
+- whether current backend already supports single-active-task logic
+
+Wait for approval before implementation.
