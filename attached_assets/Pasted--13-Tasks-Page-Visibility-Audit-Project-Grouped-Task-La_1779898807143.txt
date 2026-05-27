@@ -1,0 +1,184 @@
+#13 - Tasks Page Visibility Audit + Project-Grouped Task Layout
+
+1. Module/page:
+Tasks page / Task visibility / User task assignment views
+
+2. Current problem:
+Some users are not seeing all tasks assigned to them.
+
+Additionally, the current Tasks page layout becomes difficult to use when users are involved in multiple projects because all tasks are shown together under department grouping only.
+
+Current behavior:
+- user sees tasks grouped primarily by department
+- tasks from multiple projects intermingle
+- project context gets lost
+- difficult to prioritize project-specific work
+- difficult to understand workload distribution across projects
+
+This is especially problematic for:
+- Engineering
+- Manufacturing
+- Controls
+- Install
+- Multi-project contributors
+
+3. Desired behavior:
+First:
+Investigate and resolve task visibility inconsistencies where users do not see all assigned tasks.
+
+Second:
+Redesign the Tasks page hierarchy to group tasks by:
+1. Project
+2. Department (if multiple)
+3. Tasks
+
+Desired structure example:
+
+PROJECT A
+  ENGINEERING
+    - Task 1
+    - Task 2
+  CONTROLS
+    - Task 3
+
+PROJECT B
+  MANUFACTURING
+    - Task 4
+    - Task 5
+
+PROJECT C
+  INSTALL
+    - Task 6
+
+This should preserve:
+- visibility clarity
+- project context
+- department organization
+- scalability across many projects
+
+4. Visibility investigation requirements:
+Audit the entire task visibility pipeline.
+
+Investigate:
+- assignment logic
+- assigneeIds vs assigneeId handling
+- department filtering
+- Office/Admin hidden-task filtering
+- project visibility filtering
+- task query scope logic
+- dashboard/task-page differences
+- current-user department membership resolution
+- secondary department handling
+- task caching/query invalidation issues
+- any route-level filtering inconsistencies
+
+Determine:
+- why assigned users sometimes cannot see their own tasks
+- whether visibility differs between:
+  - Tasks page
+  - Project detail page
+  - Dashboard
+  - Calendar
+  - Board
+
+Report findings before implementing visibility fixes.
+
+5. New Tasks page layout requirements:
+Primary grouping:
+- Project
+
+Secondary grouping:
+- Department
+
+Tertiary:
+- Task cards
+
+Behavior:
+- projects collapsible
+- departments collapsible inside projects
+- multiple projects open simultaneously
+- preserve compact TaskCard styling
+- preserve click-through behavior
+- preserve existing task-detail routing
+
+Project headers should show:
+- project name
+- project number
+- task counts
+- overdue count
+- completion count
+
+Department headers should show:
+- department color
+- department name
+- task count
+
+Tasks should retain:
+- priority indicators
+- due dates
+- SQDC indicators
+- assignee indicators
+- status indicators
+
+6. Filtering behavior:
+Users should still be able to:
+- filter by:
+  - mine
+  - overdue
+  - completed
+  - status
+  - department
+  - project
+
+But visual grouping remains:
+Project → Department → Tasks
+
+7. Mobile requirements:
+The new hierarchy must remain usable on mobile:
+- collapsible by default
+- avoid extremely long scroll stacks
+- preserve fast navigation
+- maintain touch usability
+
+8. Out of scope:
+- rewriting task architecture
+- changing task assignment model
+- changing SQDC logic
+- redesigning TaskCard
+- changing Board/Kanban layout
+- modifying Office Ops tasks
+- changing task creation flow
+- adding gantt/timeline view
+- introducing drag-and-drop scheduling
+
+9. Critical architectural constraints:
+- preserve existing API contracts unless absolutely necessary
+- avoid N+1 query regressions
+- grouping should preferably happen server-side if cleaner
+- preserve existing permissions and visibility guards
+- Office/Admin hidden-task logic must remain intact
+- do not break dashboard metrics
+- do not break task-detail pages
+- do not remove current filters
+
+10. Relevant files:
+artifacts/tacot3/src/pages/tasks.tsx
+artifacts/tacot3/src/components/tasks/TaskCard.tsx
+artifacts/api-server/src/routes/tasks.ts
+artifacts/api-server/src/lib/officeAdmin.ts
+artifacts/tacot3/src/lib/queryClient.ts
+
+11. Required investigation output BEFORE implementation:
+Report:
+- root cause(s) of missing assigned tasks
+- current task query hierarchy
+- safest grouping architecture
+- whether grouping should happen:
+  - frontend
+  - backend
+  - hybrid
+- expected performance impact
+- migration risk
+- recommended rollout strategy
+
+Wait for approval before implementation.
