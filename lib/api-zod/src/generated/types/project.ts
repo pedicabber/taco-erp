@@ -5,6 +5,7 @@
  * TacoTracker3 (TacoT3) API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ProjectPriority } from "./projectPriority";
 import type { ProjectSchedule } from "./projectSchedule";
 import type { ProjectStatus } from "./projectStatus";
 
@@ -19,6 +20,23 @@ export interface Project {
   startDate: string | null;
   /** @nullable */
   deliveryDate?: string | null;
+  /** @nullable */
+  fullDescription?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  totalPrice?: string | null;
+  /** @nullable */
+  scopeOfWork?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  priority: ProjectPriority;
   status: ProjectStatus;
   createdById: number;
   createdAt: string;

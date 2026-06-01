@@ -90,6 +90,15 @@ export interface ProjectSchedule {
   manufacturingPhase: PhaseWindow;
 }
 
+export type ProjectPriority =
+  (typeof ProjectPriority)[keyof typeof ProjectPriority];
+
+export const ProjectPriority = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+} as const;
+
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
 
 export const ProjectStatus = {
@@ -110,12 +119,38 @@ export interface Project {
   startDate: string | null;
   /** @nullable */
   deliveryDate?: string | null;
+  /** @nullable */
+  fullDescription?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  totalPrice?: string | null;
+  /** @nullable */
+  scopeOfWork?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  priority: ProjectPriority;
   status: ProjectStatus;
   createdById: number;
   createdAt: string;
   updatedAt: string;
   schedule: ProjectSchedule;
 }
+
+export type CreateProjectBodyPriority =
+  (typeof CreateProjectBodyPriority)[keyof typeof CreateProjectBodyPriority];
+
+export const CreateProjectBodyPriority = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+} as const;
 
 export type CreateProjectBodyStatus =
   (typeof CreateProjectBodyStatus)[keyof typeof CreateProjectBodyStatus];
@@ -137,8 +172,34 @@ export interface CreateProjectBody {
   startDate?: string | null;
   /** @nullable */
   deliveryDate?: string | null;
+  /** @nullable */
+  fullDescription?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  totalPrice?: string | null;
+  /** @nullable */
+  scopeOfWork?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  priority?: CreateProjectBodyPriority;
   status?: CreateProjectBodyStatus;
 }
+
+export type UpdateProjectBodyPriority =
+  (typeof UpdateProjectBodyPriority)[keyof typeof UpdateProjectBodyPriority];
+
+export const UpdateProjectBodyPriority = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+} as const;
 
 export type UpdateProjectBodyStatus =
   (typeof UpdateProjectBodyStatus)[keyof typeof UpdateProjectBodyStatus];
@@ -160,6 +221,23 @@ export interface UpdateProjectBody {
   startDate?: string | null;
   /** @nullable */
   deliveryDate?: string | null;
+  /** @nullable */
+  fullDescription?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  totalPrice?: string | null;
+  /** @nullable */
+  scopeOfWork?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  priority?: UpdateProjectBodyPriority;
   status?: UpdateProjectBodyStatus;
 }
 

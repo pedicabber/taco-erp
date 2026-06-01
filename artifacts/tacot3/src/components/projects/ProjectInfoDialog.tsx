@@ -28,16 +28,24 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   cancelled: "destructive",
 };
 
+const PRIORITY_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  low: "secondary",
+  medium: "default",
+  high: "destructive",
+};
+
 export default function ProjectInfoDialog({
   project,
   onClose,
+  initialEditing = false,
 }: {
   project: Project;
   onClose: () => void;
+  initialEditing?: boolean;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(initialEditing);
   const [form, setForm] = useState({
     name: project.name,
     company: project.company,
@@ -53,6 +61,8 @@ export default function ProjectInfoDialog({
     totalPrice: project.totalPrice ?? "",
     deliveryDate: (project as any).deliveryDate ?? "",
     scopeOfWork: (project as any).scopeOfWork ?? "",
+    notes: (project as any).notes ?? "",
+    priority: ((project as any).priority ?? "medium") as "low" | "medium" | "high",
   });
 
   const updateMutation = useMutation({
@@ -83,6 +93,8 @@ export default function ProjectInfoDialog({
       totalPrice: project.totalPrice ?? "",
       deliveryDate: (project as any).deliveryDate ?? "",
       scopeOfWork: (project as any).scopeOfWork ?? "",
+      notes: (project as any).notes ?? "",
+      priority: ((project as any).priority ?? "medium") as "low" | "medium" | "high",
     });
     setEditing(false);
   }
@@ -93,7 +105,7 @@ export default function ProjectInfoDialog({
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           {/* pr-10 leaves room for the shadcn close button (absolute top-4 right-4) */}
           <div className="flex items-center justify-between pr-10">
@@ -109,7 +121,7 @@ export default function ProjectInfoDialog({
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 -mx-1 px-1">
+        <ScrollArea className="flex-1 min-h-0 -mx-1 px-1">
           <div className="space-y-5 pb-2">
             {/* ─── Core identity ─── */}
             <section>
@@ -193,6 +205,25 @@ export default function ProjectInfoDialog({
                     </div>
                   )}
                 </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Priority</Label>
+                  {editing ? (
+                    <Select value={form.priority} onValueChange={v => setForm(p => ({ ...p, priority: v as typeof form.priority }))}>
+                      <SelectTrigger className="mt-0.5"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="mt-0.5">
+                      <Badge variant={PRIORITY_VARIANTS[form.priority] ?? "secondary"} className="capitalize">
+                        {form.priority}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
 
@@ -266,6 +297,25 @@ export default function ProjectInfoDialog({
 
             <Separator />
 
+            {/* ─── Notes ─── */}
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Notes</p>
+              {editing ? (
+                <Textarea
+                  value={form.notes}
+                  onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                  rows={4}
+                  placeholder="Internal project notes..."
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                  {form.notes?.trim() || "No notes."}
+                </p>
+              )}
+            </section>
+
+            <Separator />
+
             {/* ─── Scope of Work (parsed from quote) ─── */}
             <section>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Scope of Work</p>
@@ -281,7 +331,7 @@ export default function ProjectInfoDialog({
                   placeholder="Scope of work bullet points from quote..."
                 />
               ) : (
-                <div className="rounded-md bg-muted/40 border p-3 text-sm leading-relaxed whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
+                <div className="rounded-md bg-muted/40 border p-3 text-sm leading-relaxed whitespace-pre-wrap font-mono">
                   {form.scopeOfWork?.trim() || "No scope of work recorded."}
                 </div>
               )}
@@ -304,7 +354,7 @@ export default function ProjectInfoDialog({
                   placeholder="Full line items from quote..."
                 />
               ) : (
-                <div className="rounded-md bg-muted/40 border p-3 text-sm leading-relaxed whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
+                <div className="rounded-md bg-muted/40 border p-3 text-sm leading-relaxed whitespace-pre-wrap font-mono">
                   {form.fullDescription?.trim() || "No line items recorded."}
                 </div>
               )}

@@ -1,0 +1,1 @@
+- [OpenAPI/orval zod strips unknown keys](openapi-zod-field-stripping.md) — new model fields vanish in both directions unless added to ALL OpenAPI schemas + codegen + api-server restart.

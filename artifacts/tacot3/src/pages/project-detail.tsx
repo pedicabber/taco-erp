@@ -6,7 +6,7 @@ import type { Task, Project } from "@/lib/types";
 import {
   ArrowLeft, Loader2, Building2, FileText,
   Calendar, CheckSquare, FolderKanban, Info, Users, ChevronDown, ChevronRight, Package,
-  CalendarClock, AlertTriangle,
+  CalendarClock, AlertTriangle, Pencil,
 } from "lucide-react";
 import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,7 @@ export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = parseInt(params.projectId, 10);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(true);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const qc = useQueryClient();
@@ -156,6 +157,10 @@ export default function ProjectDetailPage() {
             <div className="flex items-start justify-between gap-2">
               <h1 className="text-xl sm:text-2xl font-bold leading-tight break-words min-w-0">{project.name}</h1>
               <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
+                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  Edit Project
+                </Button>
                 <button
                   onClick={() => setInfoOpen(true)}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
@@ -400,10 +405,11 @@ export default function ProjectDetailPage() {
         <ProjectAttachmentsPanel projectId={projectId} />
       </div>
 
-      {infoOpen && project && (
+      {(infoOpen || editOpen) && project && (
         <ProjectInfoDialog
           project={project as Project}
-          onClose={() => setInfoOpen(false)}
+          initialEditing={editOpen}
+          onClose={() => { setInfoOpen(false); setEditOpen(false); }}
         />
       )}
     </div>

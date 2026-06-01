@@ -142,6 +142,8 @@ function buildProject(p: typeof projectsTable.$inferSelect) {
     totalPrice: p.totalPrice,
     deliveryDate: p.deliveryDate,
     scopeOfWork: p.scopeOfWork,
+    notes: p.notes,
+    priority: p.priority as "low" | "medium" | "high",
     createdById: p.createdById,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),

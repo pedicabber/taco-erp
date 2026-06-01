@@ -1384,6 +1384,25 @@ components:
           type: ["string", "null"]
         deliveryDate:
           type: ["string", "null"]
+        fullDescription:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        contactName:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        totalPrice:
+          type: ["string", "null"]
+        scopeOfWork:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        priority:
+          type: string
+          enum: [low, medium, high]
         status:
           type: string
           enum: [active, completed, on_hold, cancelled]
@@ -1403,6 +1422,7 @@ components:
         - description
         - startDate
         - status
+        - priority
         - createdById
         - createdAt
         - updatedAt
@@ -1423,6 +1443,25 @@ components:
           type: ["string", "null"]
         deliveryDate:
           type: ["string", "null"]
+        fullDescription:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        contactName:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        totalPrice:
+          type: ["string", "null"]
+        scopeOfWork:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        priority:
+          type: string
+          enum: [low, medium, high]
         status:
           type: string
           enum: [active, completed, on_hold, cancelled]
@@ -1446,6 +1485,25 @@ components:
           type: ["string", "null"]
         deliveryDate:
           type: ["string", "null"]
+        fullDescription:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        contactName:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        totalPrice:
+          type: ["string", "null"]
+        scopeOfWork:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        priority:
+          type: string
+          enum: [low, medium, high]
         status:
           type: string
           enum: [active, completed, on_hold, cancelled]

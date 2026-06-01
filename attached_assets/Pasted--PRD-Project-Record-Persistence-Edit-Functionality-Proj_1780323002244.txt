@@ -1,0 +1,263 @@
+# PRD: Project Record Persistence, Edit Functionality & Project Overview Modal Improvements
+
+## Priority
+
+High Priority Bug Fix / Core ERP Functionality
+
+---
+
+# Problem Statement
+
+The current Project module does not reliably function as the single source of truth for project information.
+
+Users can create projects and enter project information, however:
+
+* Project details do not consistently persist after creation.
+* Existing projects cannot be reliably updated and maintained throughout the project lifecycle.
+* The Project Overview (ⓘ) modal is not scrollable, preventing users from viewing complete project information.
+* Long fields such as Brief Description and Scope of Work become inaccessible unless the user manually zooms out their browser.
+
+This limits the usefulness of the Project module and creates risk of project information becoming incomplete, inaccurate, or lost.
+
+---
+
+# Business Objective
+
+A project record should function as a living document that evolves throughout the entire project lifecycle:
+
+* Quote
+* Award
+* Kickoff
+* Concept
+* Design
+* Manufacturing
+* FAT
+* Installation
+* Closeout
+
+Project information must be editable, persistent, and accessible at all times.
+
+---
+
+# Issue #1: Project Details Do Not Persist Reliably
+
+## Current Behavior
+
+* Project is created successfully.
+* User enters or modifies project information.
+* Changes may appear in the UI temporarily.
+* Reopening the project often shows missing, reverted, or unsaved information.
+
+## Desired Behavior
+
+All project information must save reliably and persist permanently until modified again.
+
+The project record should serve as the authoritative source of project information throughout the life of the project.
+
+---
+
+# Required Functionality
+
+Users must be able to:
+
+* Create a project
+* Edit a project at any time
+* Save project updates
+* Reopen the project and view all previously saved information
+* Continue updating project information throughout the project lifecycle
+
+---
+
+# Required Editable Fields
+
+At minimum:
+
+* Project Name
+* Project Number
+* Customer
+* Status
+* Brief Description
+* Scope of Work
+* Notes
+* Milestones
+* Schedule Information
+* Assigned Personnel
+* Department Assignments
+* Priority
+* Target Completion Dates
+* Any existing custom project metadata
+
+---
+
+# New Requirement: Dedicated Edit Project Function
+
+## Current Problem
+
+The system appears focused on project creation but does not clearly support ongoing project maintenance.
+
+## Required Behavior
+
+Every project shall have a dedicated:
+
+### Edit Project
+
+action available from the Project page.
+
+The Edit Project function shall:
+
+* Open all editable project fields
+* Allow modifications to existing information
+* Save updates without requiring project recreation
+* Update all project views immediately after save
+
+---
+
+# Existing Project Compatibility
+
+## Requirement
+
+All persistence and editing improvements must apply to:
+
+* Newly created projects
+* Existing projects already stored in the database
+
+The solution must not only work for future projects.
+
+---
+
+# Existing Project Behavior
+
+Users must be able to:
+
+* Open existing projects
+* Modify project information
+* Save updates
+* Reload the project
+* See updated information correctly displayed
+
+No existing project should require recreation.
+
+---
+
+# Migration Requirements
+
+If database schema changes are required:
+
+* Existing projects must remain accessible
+* Existing project data must be preserved
+* New fields must receive appropriate default values
+* No project records may be corrupted during migration
+
+---
+
+# Acceptance Criteria – Project Persistence
+
+### New Projects
+
+* Create project
+* Enter all project information
+* Save
+* Refresh page
+* Verify all data persists
+
+### Existing Projects
+
+* Open existing project
+
+* Modify Brief Description
+
+* Save
+
+* Refresh page
+
+* Verify change persists
+
+* Open existing project
+
+* Modify Scope of Work
+
+* Save
+
+* Logout/Login
+
+* Verify change persists
+
+### Server Validation
+
+* Changes persist after application restart
+* Changes persist after deployment
+* Changes persist after logout/login
+
+---
+
+# Issue #2: Project Overview Modal Not Scrollable
+
+## Current Behavior
+
+When the Project Overview (ⓘ) button is selected:
+
+* Modal opens correctly
+* Long content exceeds viewport height
+* Lower content becomes inaccessible
+* User must zoom browser out to view remaining information
+
+---
+
+## Desired Behavior
+
+The Project Overview modal shall support scrolling whenever content exceeds available screen space.
+
+Users must be able to view all project information regardless of content length.
+
+---
+
+# Modal Requirements
+
+The Project Overview modal shall:
+
+* Support vertical scrolling
+* Display all project information
+* Remain usable on desktop
+* Remain usable on mobile
+* Support long descriptions and scope fields
+
+---
+
+# UI Requirements
+
+Recommended implementation:
+
+* Max Height: 85vh
+* Overflow-Y: Auto
+
+Example:
+
+overflow-y: auto;
+max-height: 85vh;
+
+---
+
+# Modal Acceptance Criteria
+
+* Users can scroll through entire project record
+* Brief Description displays fully
+* Scope of Work displays fully
+* Notes display fully
+* No content clipping occurs
+* No browser zoom workaround required
+
+---
+
+# Expected Result
+
+The Project module becomes the authoritative source of project information for all departments.
+
+Users can:
+
+* Create projects
+* Edit projects
+* Maintain projects throughout execution
+* Access complete project information at any time
+* View all project information through a fully scrollable Project Overview modal
+
+This eliminates project data loss, improves visibility across departments, and establishes the Project record as the foundation of the ERP system.

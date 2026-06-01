@@ -18,6 +18,8 @@ export const projectsTable = pgTable("projects", {
   totalPrice: text("total_price"),
   deliveryDate: text("delivery_date"),
   scopeOfWork: text("scope_of_work"),
+  notes: text("notes"),
+  priority: text("priority").notNull().default("medium"),
   // Baseline (original commitment, set once at create, never moved by edits)
   baselineStartDate: text("baseline_start_date"),
   baselineDeliveryDate: text("baseline_delivery_date"),
