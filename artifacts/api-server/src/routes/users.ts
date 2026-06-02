@@ -7,6 +7,7 @@ import { syncUserFromClerk, getOrCreateUser } from "../lib/userSync";
 import { UpdateMeBody, UpdateMeResponse, ListUsersResponse, GetUserResponse } from "@workspace/api-zod";
 import { getOADepartmentId, seedOATasksForUser } from "../lib/officeAdmin";
 import { userHasOfficeOpsAccess } from "../lib/officeOpsAccess";
+import { userHasSafetyAccess, getSafetyDepartmentId } from "../lib/safetyAccess";
 
 const router: IRouter = Router();
 
@@ -29,6 +30,7 @@ function buildUserProfile(
   departmentName: string | null,
   departmentIds: number[] = [],
   officeOpsAccess: boolean = false,
+  safetyAccess: boolean = false,
 ) {
   return {
     id: user.id,
@@ -40,6 +42,7 @@ function buildUserProfile(
     departmentName,
     departmentIds,
     officeOpsAccess,
+    safetyAccess,
     avatarUrl: user.avatarUrl,
     createdAt: user.createdAt.toISOString(),
   };
@@ -68,9 +71,10 @@ router.get("/users/me", requireAuth, async (req: AuthenticatedRequest, res): Pro
 
   const departmentIds = await getDeptIdsForUser(user.id);
   const officeOpsAccess = await userHasOfficeOpsAccess(user);
+  const safetyAccess = await userHasSafetyAccess(user);
 
   res.set("Cache-Control", "no-store");
-  res.json(buildUserProfile(user, departmentName, departmentIds, officeOpsAccess));
+  res.json(buildUserProfile(user, departmentName, departmentIds, officeOpsAccess, safetyAccess));
 });
 
 router.patch("/users/me", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
@@ -114,8 +118,9 @@ router.patch("/users/me", requireAuth, async (req: AuthenticatedRequest, res): P
 
   const departmentIds = await getDeptIdsForUser(updated.id);
   const officeOpsAccess = await userHasOfficeOpsAccess(updated);
+  const safetyAccess = await userHasSafetyAccess(updated);
 
-  res.json(UpdateMeResponse.parse(buildUserProfile(updated, departmentName, departmentIds, officeOpsAccess)));
+  res.json(UpdateMeResponse.parse(buildUserProfile(updated, departmentName, departmentIds, officeOpsAccess, safetyAccess)));
 });
 
 router.get("/users", requireAuth, async (_req, res): Promise<void> => {
@@ -145,6 +150,14 @@ router.get("/users", requireAuth, async (_req, res): Promise<void> => {
     return (userDeptsMap.get(u.id) ?? []).includes(oaDeptId);
   };
 
+  const safetyDeptId = await getSafetyDepartmentId();
+  const isSafety = (u: typeof usersTable.$inferSelect): boolean => {
+    if (u.role === "admin") return true;
+    if (safetyDeptId === null) return false;
+    if (u.departmentId === safetyDeptId) return true;
+    return (userDeptsMap.get(u.id) ?? []).includes(safetyDeptId);
+  };
+
   res.json(
     users.map(u =>
       buildUserProfile(
@@ -152,6 +165,7 @@ router.get("/users", requireAuth, async (_req, res): Promise<void> => {
         u.departmentId ? deptMap.get(u.departmentId) ?? null : null,
         userDeptsMap.get(u.id) ?? [],
         isOA(u),
+        isSafety(u),
       )
     )
   );
@@ -229,8 +243,9 @@ router.patch("/users/:userId", requireAdmin, async (req: AuthenticatedRequest, r
 
   const finalDeptIds = await getDeptIdsForUser(id);
   const officeOpsAccess = await userHasOfficeOpsAccess(updated);
+  const safetyAccess = await userHasSafetyAccess(updated);
 
-  res.json(buildUserProfile(updated, departmentName, finalDeptIds, officeOpsAccess));
+  res.json(buildUserProfile(updated, departmentName, finalDeptIds, officeOpsAccess, safetyAccess));
 });
 
 router.delete("/users/:userId", requireAdmin, async (req: AuthenticatedRequest, res): Promise<void> => {
@@ -273,8 +288,9 @@ router.get("/users/:userId", requireAuth, async (req, res): Promise<void> => {
 
   const departmentIds = await getDeptIdsForUser(id);
   const officeOpsAccess = await userHasOfficeOpsAccess(user);
+  const safetyAccess = await userHasSafetyAccess(user);
 
-  res.json(GetUserResponse.parse(buildUserProfile(user, departmentName, departmentIds, officeOpsAccess)));
+  res.json(GetUserResponse.parse(buildUserProfile(user, departmentName, departmentIds, officeOpsAccess, safetyAccess)));
 });
 
 export default router;

@@ -33,6 +33,7 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import ProjectAttachmentsPanel from "@/components/projects/ProjectAttachmentsPanel";
+import LotoActiveBanner from "@/components/safety/LotoActiveBanner";
 import {
   computePhaseWindows,
   computeDriftSeverity,
@@ -140,6 +141,9 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto overflow-x-hidden">
+      {/* Active LOTO warning — company-wide, links to the Safety record */}
+      <LotoActiveBanner projectId={projectId} />
+
       {/* Header */}
       <div className="mb-6">
         <Link href="/projects">

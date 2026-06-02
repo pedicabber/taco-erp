@@ -1,1 +1,1 @@
-- [OpenAPI/orval zod strips unknown keys](openapi-zod-field-stripping.md) — new model fields vanish in both directions unless added to ALL OpenAPI schemas + codegen + api-server restart.
+- [Storage object read authorization](storage-read-auth.md) — any new attachment type must be registered in the GET /storage/objects route's lookup or its objects 404 on read.

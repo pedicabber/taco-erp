@@ -17,6 +17,7 @@ import {
   Package,
   TrendingUp,
   ClipboardList,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
@@ -43,6 +44,7 @@ interface NavItem {
   label: string;
   href: string;
   visibleIf?: (user: NavUser) => boolean;
+  dividerBefore?: boolean;
 }
 
 const isAdminUser = (u: NavUser) => u?.role === "admin";
@@ -59,6 +61,8 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Package, label: "Inventory", href: "/inventory" },
   { icon: ClipboardList, label: "Office Ops", href: "/office-ops", visibleIf: isOfficeOpsUser },
   { icon: TrendingUp, label: "Sales Pipeline", href: "/sales", visibleIf: isAdminUser },
+  // Company-wide visibility — every authenticated user can view LOTO records.
+  { icon: ShieldAlert, label: "Safety", href: "/safety", dividerBefore: true },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -150,7 +154,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             const Icon = item.icon;
             const active = location.startsWith(item.href);
             return (
-              <Link key={item.href} href={item.href}>
+              <div key={item.href}>
+              {item.dividerBefore && (
+                <div className="my-2 border-t border-border" aria-hidden />
+              )}
+              <Link href={item.href}>
                 <div
                   className={cn(
                     "flex items-center cursor-pointer transition-colors group rounded-lg",
@@ -171,6 +179,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   )}
                 </div>
               </Link>
+              </div>
             );
           })}
         </nav>

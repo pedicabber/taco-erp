@@ -30,6 +30,8 @@ export interface UserProfile {
   departmentIds: number[];
   /** True when the caller is an admin or a member of the OFFICE/ADMIN department (primary or via user_departments). */
   officeOpsAccess: boolean;
+  /** True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create/manage actions. */
+  safetyAccess: boolean;
   /** @nullable */
   avatarUrl: string | null;
   createdAt: string;
@@ -717,6 +719,7 @@ export const NotificationType = {
   timer_alert: "timer_alert",
   followed: "followed",
   general: "general",
+  loto_release_request: "loto_release_request",
 } as const;
 
 export interface Notification {
@@ -864,6 +867,200 @@ export interface UpdateOfficeOpsTaskBody {
   recurrence?: UpdateOfficeOpsTaskBodyRecurrence;
 }
 
+export interface LotoChecklistSection {
+  key: string;
+  title: string;
+  complete: boolean;
+  /** @nullable */
+  notes: string | null;
+}
+
+export interface LotoChecklistSectionInput {
+  key: string;
+  complete: boolean;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export type LotoRecordSeverity =
+  (typeof LotoRecordSeverity)[keyof typeof LotoRecordSeverity];
+
+export const LotoRecordSeverity = {
+  standard: "standard",
+  critical: "critical",
+} as const;
+
+export type LotoRecordStatus =
+  (typeof LotoRecordStatus)[keyof typeof LotoRecordStatus];
+
+export const LotoRecordStatus = {
+  draft: "draft",
+  active: "active",
+  pending_release: "pending_release",
+  closed: "closed",
+} as const;
+
+export interface LotoRecord {
+  id: number;
+  lotoNumber: string;
+  projectId: number;
+  equipmentName: string;
+  /** @nullable */
+  equipmentLocation: string | null;
+  /** @nullable */
+  description: string | null;
+  severity: LotoRecordSeverity;
+  status: LotoRecordStatus;
+  /** @nullable */
+  commanderId: number | null;
+  checklist: LotoChecklistSection[];
+  createdById: number;
+  /** @nullable */
+  activatedAt: string | null;
+  /** @nullable */
+  releaseRequestedAt: string | null;
+  /** @nullable */
+  releaseRequestedById: number | null;
+  /** @nullable */
+  closedAt: string | null;
+  /** @nullable */
+  closedById: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ListLotoResponse = LotoRecord[];
+
+export type CreateLotoBodySeverity =
+  (typeof CreateLotoBodySeverity)[keyof typeof CreateLotoBodySeverity];
+
+export const CreateLotoBodySeverity = {
+  standard: "standard",
+  critical: "critical",
+} as const;
+
+export interface CreateLotoBody {
+  projectId: number;
+  /** @minLength 1 */
+  equipmentName: string;
+  /** @nullable */
+  equipmentLocation?: string | null;
+  /** @nullable */
+  description?: string | null;
+  severity?: CreateLotoBodySeverity;
+  /** @nullable */
+  commanderId?: number | null;
+}
+
+export type UpdateLotoBodySeverity =
+  (typeof UpdateLotoBodySeverity)[keyof typeof UpdateLotoBodySeverity];
+
+export const UpdateLotoBodySeverity = {
+  standard: "standard",
+  critical: "critical",
+} as const;
+
+export interface UpdateLotoBody {
+  /** @minLength 1 */
+  equipmentName?: string;
+  /** @nullable */
+  equipmentLocation?: string | null;
+  /** @nullable */
+  description?: string | null;
+  severity?: UpdateLotoBodySeverity;
+  /** @nullable */
+  commanderId?: number | null;
+  checklist?: LotoChecklistSectionInput[];
+}
+
+export interface ActivateLotoBody {
+  /** @nullable */
+  commanderId?: number | null;
+}
+
+export interface LotoReleaseActionBody {
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface LotoEvent {
+  id: number;
+  lotoId: number;
+  type: string;
+  /** @nullable */
+  message: string | null;
+  /** @nullable */
+  actorId: number | null;
+  createdAt: string;
+}
+
+export type ListLotoEventsResponse = LotoEvent[];
+
+export interface CreateLotoAuditNoteBody {
+  /** @minLength 1 */
+  message: string;
+}
+
+export interface LotoAttachment {
+  id: number;
+  lotoId: number;
+  fileName: string;
+  objectPath: string;
+  /** @nullable */
+  fileSize: number | null;
+  /** @nullable */
+  mimeType: string | null;
+  uploadedById: number;
+  createdAt: string;
+}
+
+export type ListLotoAttachmentsResponse = LotoAttachment[];
+
+export interface AddLotoAttachmentBody {
+  /** @minLength 1 */
+  fileName: string;
+  /** @minLength 1 */
+  objectPath: string;
+  /** @nullable */
+  fileSize?: number | null;
+  /** @nullable */
+  mimeType?: string | null;
+}
+
+export interface LotoDashboardSummary {
+  draft: number;
+  active: number;
+  pendingRelease: number;
+  closedThisMonth: number;
+  criticalActive: number;
+}
+
+export type LotoBannerItemSeverity =
+  (typeof LotoBannerItemSeverity)[keyof typeof LotoBannerItemSeverity];
+
+export const LotoBannerItemSeverity = {
+  standard: "standard",
+  critical: "critical",
+} as const;
+
+export type LotoBannerItemStatus =
+  (typeof LotoBannerItemStatus)[keyof typeof LotoBannerItemStatus];
+
+export const LotoBannerItemStatus = {
+  active: "active",
+  pending_release: "pending_release",
+} as const;
+
+export interface LotoBannerItem {
+  id: number;
+  lotoNumber: string;
+  equipmentName: string;
+  severity: LotoBannerItemSeverity;
+  status: LotoBannerItemStatus;
+}
+
+export type ListLotoBannerResponse = LotoBannerItem[];
+
 export type ParsePdfBody = {
   file: Blob;
 };
@@ -963,4 +1160,35 @@ export type ListOfficeOpsTasksScope =
 export const ListOfficeOpsTasksScope = {
   mine: "mine",
   all: "all",
+} as const;
+
+export type ListLotoParams = {
+  status?: ListLotoStatus;
+  /**
+   * @nullable
+   */
+  projectId?: number | null;
+  severity?: ListLotoSeverity;
+  /**
+   * @nullable
+   */
+  q?: string | null;
+};
+
+export type ListLotoStatus =
+  (typeof ListLotoStatus)[keyof typeof ListLotoStatus];
+
+export const ListLotoStatus = {
+  draft: "draft",
+  active: "active",
+  pending_release: "pending_release",
+  closed: "closed",
+} as const;
+
+export type ListLotoSeverity =
+  (typeof ListLotoSeverity)[keyof typeof ListLotoSeverity];
+
+export const ListLotoSeverity = {
+  standard: "standard",
+  critical: "critical",
 } as const;

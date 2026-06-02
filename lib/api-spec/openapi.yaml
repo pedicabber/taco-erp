@@ -26,6 +26,8 @@ tags:
     description: File storage
   - name: office-ops
     description: Office Ops lightweight task workspace
+  - name: safety
+    description: Safety module — Lockout/Tagout (LOTO) workflow
 
 paths:
   /healthz:
@@ -1242,6 +1244,377 @@ paths:
         "403":
           description: Caller is not an admin
 
+  # ─── Safety / LOTO ───────────────────────────────────────────────────────────
+
+  /loto/dashboard-summary:
+    get:
+      operationId: getLotoDashboardSummary
+      tags: [safety]
+      summary: Counts for the Safety dashboard cards
+      responses:
+        "200":
+          description: Dashboard counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoDashboardSummary"
+
+  /loto:
+    get:
+      operationId: listLoto
+      tags: [safety]
+      summary: List LOTO records (company-wide visibility)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [draft, active, pending_release, closed]
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: ["integer", "null"]
+        - name: severity
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [standard, critical]
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of LOTO records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLotoResponse"
+    post:
+      operationId: createLoto
+      tags: [safety]
+      summary: Create a draft LOTO record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLotoBody"
+      responses:
+        "201":
+          description: Created LOTO record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoRecord"
+        "403":
+          description: Caller lacks Safety access
+
+  /loto/{lotoId}:
+    get:
+      operationId: getLoto
+      tags: [safety]
+      summary: Get a single LOTO record
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: LOTO record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoRecord"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateLoto
+      tags: [safety]
+      summary: Update a draft LOTO record (fields + checklist). Allowed only while status=draft.
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLotoBody"
+      responses:
+        "200":
+          description: Updated LOTO record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoRecord"
+        "403":
+          description: Caller lacks Safety access
+        "404":
+          description: Not found
+        "409":
+          description: Record is not in draft and cannot be edited
+
+  /loto/{lotoId}/activate:
+    post:
+      operationId: activateLoto
+      tags: [safety]
+      summary: Activate a draft LOTO. Requires all 6 checklist sections complete and a commander assigned.
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivateLotoBody"
+      responses:
+        "200":
+          description: Activated LOTO record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoRecord"
+        "403":
+          description: Caller lacks Safety access
+        "409":
+          description: Not draft, checklist incomplete, or no commander assigned
+
+  /loto/{lotoId}/request-release:
+    post:
+      operationId: requestLotoRelease
+      tags: [safety]
+      summary: Request release of an active LOTO. Notifies the assigned commander.
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LotoReleaseActionBody"
+      responses:
+        "200":
+          description: LOTO record now pending release
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoRecord"
+        "403":
+          description: Caller lacks Safety access
+        "409":
+          description: Record is not active
+
+  /loto/{lotoId}/authorize-release:
+    post:
+      operationId: authorizeLotoRelease
+      tags: [safety]
+      summary: Authorize release (close) a pending LOTO. Restricted to the assigned commander or an admin.
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LotoReleaseActionBody"
+      responses:
+        "200":
+          description: Closed LOTO record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoRecord"
+        "403":
+          description: Caller is not the assigned commander or an admin
+        "409":
+          description: Record is not pending release
+
+  /loto/{lotoId}/reject-release:
+    post:
+      operationId: rejectLotoRelease
+      tags: [safety]
+      summary: Reject a pending release, returning the LOTO to active. Restricted to the assigned commander or an admin.
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LotoReleaseActionBody"
+      responses:
+        "200":
+          description: LOTO record returned to active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoRecord"
+        "403":
+          description: Caller is not the assigned commander or an admin
+        "409":
+          description: Record is not pending release
+
+  /loto/{lotoId}/events:
+    get:
+      operationId: listLotoEvents
+      tags: [safety]
+      summary: List the permanent audit trail for a LOTO record
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit trail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLotoEventsResponse"
+
+  /loto/{lotoId}/audit-notes:
+    post:
+      operationId: addLotoAuditNote
+      tags: [safety]
+      summary: Append a correction/audit note to a LOTO record (admin only). Permitted even on closed records.
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLotoAuditNoteBody"
+      responses:
+        "201":
+          description: Created audit event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoEvent"
+        "403":
+          description: Caller is not an admin
+
+  /loto/{lotoId}/attachments:
+    get:
+      operationId: listLotoAttachments
+      tags: [safety]
+      summary: List attachments for a LOTO record
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of attachments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLotoAttachmentsResponse"
+    post:
+      operationId: addLotoAttachment
+      tags: [safety]
+      summary: Attach an uploaded object to a LOTO record (images/PDF/office docs only)
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddLotoAttachmentBody"
+      responses:
+        "201":
+          description: Attachment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoAttachment"
+        "400":
+          description: Unsupported file type or size
+        "403":
+          description: Caller lacks Safety access
+
+  /loto/{lotoId}/attachments/{attachmentId}:
+    delete:
+      operationId: deleteLotoAttachment
+      tags: [safety]
+      summary: Delete a LOTO attachment
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Caller lacks Safety access
+
+  /projects/{projectId}/active-loto:
+    get:
+      operationId: getProjectActiveLoto
+      tags: [safety]
+      summary: >-
+        Active/pending LOTO records for a project, for the company-wide warning
+        banner. Available to any authenticated user (not gated by Safety access).
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Active/pending LOTO banner items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLotoBannerResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -1277,6 +1650,9 @@ components:
         officeOpsAccess:
           type: boolean
           description: True when the caller is an admin or a member of the OFFICE/ADMIN department (primary or via user_departments).
+        safetyAccess:
+          type: boolean
+          description: True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create/manage actions.
         avatarUrl:
           type: ["string", "null"]
         createdAt:
@@ -1291,6 +1667,7 @@ components:
         - departmentName
         - departmentIds
         - officeOpsAccess
+        - safetyAccess
         - avatarUrl
         - createdAt
 
@@ -2185,7 +2562,7 @@ components:
           type: ["integer", "null"]
         type:
           type: string
-          enum: [overdue, assigned, mentioned, status_changed, timer_alert, followed, general]
+          enum: [overdue, assigned, mentioned, status_changed, timer_alert, followed, general, loto_release_request]
         message:
           type: string
         isRead:
@@ -2368,3 +2745,290 @@ components:
         recurrence:
           type: string
           enum: [none, daily, weekly, monthly]
+
+    LotoChecklistSection:
+      type: object
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        complete:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+      required:
+        - key
+        - title
+        - complete
+        - notes
+
+    LotoChecklistSectionInput:
+      type: object
+      properties:
+        key:
+          type: string
+        complete:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+      required:
+        - key
+        - complete
+
+    LotoRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        lotoNumber:
+          type: string
+        projectId:
+          type: integer
+        equipmentName:
+          type: string
+        equipmentLocation:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        severity:
+          type: string
+          enum: [standard, critical]
+        status:
+          type: string
+          enum: [draft, active, pending_release, closed]
+        commanderId:
+          type: ["integer", "null"]
+        checklist:
+          type: array
+          items:
+            $ref: "#/components/schemas/LotoChecklistSection"
+        createdById:
+          type: integer
+        activatedAt:
+          type: ["string", "null"]
+        releaseRequestedAt:
+          type: ["string", "null"]
+        releaseRequestedById:
+          type: ["integer", "null"]
+        closedAt:
+          type: ["string", "null"]
+        closedById:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - lotoNumber
+        - projectId
+        - equipmentName
+        - equipmentLocation
+        - description
+        - severity
+        - status
+        - commanderId
+        - checklist
+        - createdById
+        - activatedAt
+        - releaseRequestedAt
+        - releaseRequestedById
+        - closedAt
+        - closedById
+        - createdAt
+        - updatedAt
+
+    ListLotoResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/LotoRecord"
+
+    CreateLotoBody:
+      type: object
+      properties:
+        projectId:
+          type: integer
+        equipmentName:
+          type: string
+          minLength: 1
+        equipmentLocation:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        severity:
+          type: string
+          enum: [standard, critical]
+          default: standard
+        commanderId:
+          type: ["integer", "null"]
+      required:
+        - projectId
+        - equipmentName
+
+    UpdateLotoBody:
+      type: object
+      properties:
+        equipmentName:
+          type: string
+          minLength: 1
+        equipmentLocation:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        severity:
+          type: string
+          enum: [standard, critical]
+        commanderId:
+          type: ["integer", "null"]
+        checklist:
+          type: array
+          items:
+            $ref: "#/components/schemas/LotoChecklistSectionInput"
+
+    ActivateLotoBody:
+      type: object
+      properties:
+        commanderId:
+          type: ["integer", "null"]
+
+    LotoReleaseActionBody:
+      type: object
+      properties:
+        note:
+          type: ["string", "null"]
+
+    LotoEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        lotoId:
+          type: integer
+        type:
+          type: string
+        message:
+          type: ["string", "null"]
+        actorId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - lotoId
+        - type
+        - message
+        - actorId
+        - createdAt
+
+    ListLotoEventsResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/LotoEvent"
+
+    CreateLotoAuditNoteBody:
+      type: object
+      properties:
+        message:
+          type: string
+          minLength: 1
+      required:
+        - message
+
+    LotoAttachment:
+      type: object
+      properties:
+        id:
+          type: integer
+        lotoId:
+          type: integer
+        fileName:
+          type: string
+        objectPath:
+          type: string
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+        uploadedById:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - lotoId
+        - fileName
+        - objectPath
+        - fileSize
+        - mimeType
+        - uploadedById
+        - createdAt
+
+    ListLotoAttachmentsResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/LotoAttachment"
+
+    AddLotoAttachmentBody:
+      type: object
+      properties:
+        fileName:
+          type: string
+          minLength: 1
+        objectPath:
+          type: string
+          minLength: 1
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+      required:
+        - fileName
+        - objectPath
+
+    LotoDashboardSummary:
+      type: object
+      properties:
+        draft:
+          type: integer
+        active:
+          type: integer
+        pendingRelease:
+          type: integer
+        closedThisMonth:
+          type: integer
+        criticalActive:
+          type: integer
+      required:
+        - draft
+        - active
+        - pendingRelease
+        - closedThisMonth
+        - criticalActive
+
+    LotoBannerItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        lotoNumber:
+          type: string
+        equipmentName:
+          type: string
+        severity:
+          type: string
+          enum: [standard, critical]
+        status:
+          type: string
+          enum: [active, pending_release]
+      required:
+        - id
+        - lotoNumber
+        - equipmentName
+        - severity
+        - status
+
+    ListLotoBannerResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/LotoBannerItem"

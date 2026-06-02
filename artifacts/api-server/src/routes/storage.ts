@@ -7,7 +7,7 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { requireAuth } from "../middlewares/requireAuth";
-import { db, projectAttachmentsTable, taskAttachmentsTable, tasksTable, usersTable } from "@workspace/db";
+import { db, projectAttachmentsTable, taskAttachmentsTable, tasksTable, usersTable, lotoAttachmentsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -156,7 +156,26 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
       .from(projectAttachmentsTable)
       .where(eq(projectAttachmentsTable.objectPath, objectPath));
 
-    if (!projectAttachment) {
+    // LOTO attachments have company-wide visibility (mirrors the Safety module's
+    // read model), so any object recorded in loto_attachments is served.
+    const [lotoAttachment] = projectAttachment
+      ? [undefined]
+      : await db
+          .select({ id: lotoAttachmentsTable.id })
+          .from(lotoAttachmentsTable)
+          .where(eq(lotoAttachmentsTable.objectPath, objectPath));
+
+    // LOTO attachments are visible company-wide, i.e. to any authenticated
+    // internal user — but not anonymously. Enforce auth before serving them.
+    if (lotoAttachment) {
+      const auth = getAuth(req);
+      if (!auth?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+    }
+
+    if (!projectAttachment && !lotoAttachment) {
       const [attachment] = await db
         .select({ uploadedById: taskAttachmentsTable.uploadedById, taskId: taskAttachmentsTable.taskId })
         .from(taskAttachmentsTable)

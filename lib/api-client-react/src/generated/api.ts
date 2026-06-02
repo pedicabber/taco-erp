@@ -17,14 +17,18 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  ActivateLotoBody,
   ActivityItem,
   AddAttachmentBody,
+  AddLotoAttachmentBody,
   AddProjectAttachmentBody,
   AddTaskRelationBody,
   CalendarEvent,
   CreateDepartmentBody,
   CreateGeneralNotificationBody,
   CreateKanbanColumnBody,
+  CreateLotoAuditNoteBody,
+  CreateLotoBody,
   CreateOfficeOpsTaskBody,
   CreateProjectBody,
   CreateTaskBody,
@@ -38,9 +42,19 @@ import type {
   HealthStatus,
   KanbanColumn,
   KanbanColumnConfig,
+  ListLotoAttachmentsResponse,
+  ListLotoBannerResponse,
+  ListLotoEventsResponse,
+  ListLotoParams,
+  ListLotoResponse,
   ListOfficeOpsTasksParams,
   ListOfficeOpsTasksResponse,
   ListTasksParams,
+  LotoAttachment,
+  LotoDashboardSummary,
+  LotoEvent,
+  LotoRecord,
+  LotoReleaseActionBody,
   MarkAllNotificationsRead200,
   Notification,
   OfficeOpsTask,
@@ -60,6 +74,7 @@ import type {
   TaskAttachment,
   UpdateDepartmentBody,
   UpdateKanbanColumnBody,
+  UpdateLotoBody,
   UpdateMeBody,
   UpdateOfficeOpsTaskBody,
   UpdateProjectBody,
@@ -5265,3 +5280,1304 @@ export const useDeleteOfficeOpsTask = <
 > => {
   return useMutation(getDeleteOfficeOpsTaskMutationOptions(options));
 };
+
+/**
+ * @summary Counts for the Safety dashboard cards
+ */
+export const getGetLotoDashboardSummaryUrl = () => {
+  return `/api/loto/dashboard-summary`;
+};
+
+export const getLotoDashboardSummary = async (
+  options?: RequestInit,
+): Promise<LotoDashboardSummary> => {
+  return customFetch<LotoDashboardSummary>(getGetLotoDashboardSummaryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetLotoDashboardSummaryQueryKey = () => {
+  return [`/api/loto/dashboard-summary`] as const;
+};
+
+export const getGetLotoDashboardSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLotoDashboardSummary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getLotoDashboardSummary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetLotoDashboardSummaryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getLotoDashboardSummary>>
+  > = ({ signal }) => getLotoDashboardSummary({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLotoDashboardSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetLotoDashboardSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLotoDashboardSummary>>
+>;
+export type GetLotoDashboardSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Counts for the Safety dashboard cards
+ */
+
+export function useGetLotoDashboardSummary<
+  TData = Awaited<ReturnType<typeof getLotoDashboardSummary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getLotoDashboardSummary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLotoDashboardSummaryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List LOTO records (company-wide visibility)
+ */
+export const getListLotoUrl = (params?: ListLotoParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/loto?${stringifiedParams}`
+    : `/api/loto`;
+};
+
+export const listLoto = async (
+  params?: ListLotoParams,
+  options?: RequestInit,
+): Promise<ListLotoResponse> => {
+  return customFetch<ListLotoResponse>(getListLotoUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListLotoQueryKey = (params?: ListLotoParams) => {
+  return [`/api/loto`, ...(params ? [params] : [])] as const;
+};
+
+export const getListLotoQueryOptions = <
+  TData = Awaited<ReturnType<typeof listLoto>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListLotoParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listLoto>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListLotoQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listLoto>>> = ({
+    signal,
+  }) => listLoto(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listLoto>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListLotoQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listLoto>>
+>;
+export type ListLotoQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List LOTO records (company-wide visibility)
+ */
+
+export function useListLoto<
+  TData = Awaited<ReturnType<typeof listLoto>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListLotoParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listLoto>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListLotoQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a draft LOTO record
+ */
+export const getCreateLotoUrl = () => {
+  return `/api/loto`;
+};
+
+export const createLoto = async (
+  createLotoBody: CreateLotoBody,
+  options?: RequestInit,
+): Promise<LotoRecord> => {
+  return customFetch<LotoRecord>(getCreateLotoUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createLotoBody),
+  });
+};
+
+export const getCreateLotoMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createLoto>>,
+    TError,
+    { data: BodyType<CreateLotoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createLoto>>,
+  TError,
+  { data: BodyType<CreateLotoBody> },
+  TContext
+> => {
+  const mutationKey = ["createLoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createLoto>>,
+    { data: BodyType<CreateLotoBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createLoto(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateLotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createLoto>>
+>;
+export type CreateLotoMutationBody = BodyType<CreateLotoBody>;
+export type CreateLotoMutationError = ErrorType<void>;
+
+/**
+ * @summary Create a draft LOTO record
+ */
+export const useCreateLoto = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createLoto>>,
+    TError,
+    { data: BodyType<CreateLotoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createLoto>>,
+  TError,
+  { data: BodyType<CreateLotoBody> },
+  TContext
+> => {
+  return useMutation(getCreateLotoMutationOptions(options));
+};
+
+/**
+ * @summary Get a single LOTO record
+ */
+export const getGetLotoUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}`;
+};
+
+export const getLoto = async (
+  lotoId: number,
+  options?: RequestInit,
+): Promise<LotoRecord> => {
+  return customFetch<LotoRecord>(getGetLotoUrl(lotoId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetLotoQueryKey = (lotoId: number) => {
+  return [`/api/loto/${lotoId}`] as const;
+};
+
+export const getGetLotoQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLoto>>,
+  TError = ErrorType<void>,
+>(
+  lotoId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getLoto>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetLotoQueryKey(lotoId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getLoto>>> = ({
+    signal,
+  }) => getLoto(lotoId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!lotoId,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getLoto>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetLotoQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLoto>>
+>;
+export type GetLotoQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a single LOTO record
+ */
+
+export function useGetLoto<
+  TData = Awaited<ReturnType<typeof getLoto>>,
+  TError = ErrorType<void>,
+>(
+  lotoId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getLoto>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLotoQueryOptions(lotoId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a draft LOTO record (fields + checklist). Allowed only while status=draft.
+ */
+export const getUpdateLotoUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}`;
+};
+
+export const updateLoto = async (
+  lotoId: number,
+  updateLotoBody: UpdateLotoBody,
+  options?: RequestInit,
+): Promise<LotoRecord> => {
+  return customFetch<LotoRecord>(getUpdateLotoUrl(lotoId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateLotoBody),
+  });
+};
+
+export const getUpdateLotoMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateLoto>>,
+    TError,
+    { lotoId: number; data: BodyType<UpdateLotoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateLoto>>,
+  TError,
+  { lotoId: number; data: BodyType<UpdateLotoBody> },
+  TContext
+> => {
+  const mutationKey = ["updateLoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateLoto>>,
+    { lotoId: number; data: BodyType<UpdateLotoBody> }
+  > = (props) => {
+    const { lotoId, data } = props ?? {};
+
+    return updateLoto(lotoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateLotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateLoto>>
+>;
+export type UpdateLotoMutationBody = BodyType<UpdateLotoBody>;
+export type UpdateLotoMutationError = ErrorType<void>;
+
+/**
+ * @summary Update a draft LOTO record (fields + checklist). Allowed only while status=draft.
+ */
+export const useUpdateLoto = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateLoto>>,
+    TError,
+    { lotoId: number; data: BodyType<UpdateLotoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateLoto>>,
+  TError,
+  { lotoId: number; data: BodyType<UpdateLotoBody> },
+  TContext
+> => {
+  return useMutation(getUpdateLotoMutationOptions(options));
+};
+
+/**
+ * @summary Activate a draft LOTO. Requires all 6 checklist sections complete and a commander assigned.
+ */
+export const getActivateLotoUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/activate`;
+};
+
+export const activateLoto = async (
+  lotoId: number,
+  activateLotoBody?: ActivateLotoBody,
+  options?: RequestInit,
+): Promise<LotoRecord> => {
+  return customFetch<LotoRecord>(getActivateLotoUrl(lotoId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(activateLotoBody),
+  });
+};
+
+export const getActivateLotoMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof activateLoto>>,
+    TError,
+    { lotoId: number; data: BodyType<ActivateLotoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof activateLoto>>,
+  TError,
+  { lotoId: number; data: BodyType<ActivateLotoBody> },
+  TContext
+> => {
+  const mutationKey = ["activateLoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof activateLoto>>,
+    { lotoId: number; data: BodyType<ActivateLotoBody> }
+  > = (props) => {
+    const { lotoId, data } = props ?? {};
+
+    return activateLoto(lotoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ActivateLotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof activateLoto>>
+>;
+export type ActivateLotoMutationBody = BodyType<ActivateLotoBody>;
+export type ActivateLotoMutationError = ErrorType<void>;
+
+/**
+ * @summary Activate a draft LOTO. Requires all 6 checklist sections complete and a commander assigned.
+ */
+export const useActivateLoto = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof activateLoto>>,
+    TError,
+    { lotoId: number; data: BodyType<ActivateLotoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof activateLoto>>,
+  TError,
+  { lotoId: number; data: BodyType<ActivateLotoBody> },
+  TContext
+> => {
+  return useMutation(getActivateLotoMutationOptions(options));
+};
+
+/**
+ * @summary Request release of an active LOTO. Notifies the assigned commander.
+ */
+export const getRequestLotoReleaseUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/request-release`;
+};
+
+export const requestLotoRelease = async (
+  lotoId: number,
+  lotoReleaseActionBody?: LotoReleaseActionBody,
+  options?: RequestInit,
+): Promise<LotoRecord> => {
+  return customFetch<LotoRecord>(getRequestLotoReleaseUrl(lotoId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(lotoReleaseActionBody),
+  });
+};
+
+export const getRequestLotoReleaseMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestLotoRelease>>,
+    TError,
+    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof requestLotoRelease>>,
+  TError,
+  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  TContext
+> => {
+  const mutationKey = ["requestLotoRelease"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof requestLotoRelease>>,
+    { lotoId: number; data: BodyType<LotoReleaseActionBody> }
+  > = (props) => {
+    const { lotoId, data } = props ?? {};
+
+    return requestLotoRelease(lotoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RequestLotoReleaseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof requestLotoRelease>>
+>;
+export type RequestLotoReleaseMutationBody = BodyType<LotoReleaseActionBody>;
+export type RequestLotoReleaseMutationError = ErrorType<void>;
+
+/**
+ * @summary Request release of an active LOTO. Notifies the assigned commander.
+ */
+export const useRequestLotoRelease = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestLotoRelease>>,
+    TError,
+    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof requestLotoRelease>>,
+  TError,
+  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  TContext
+> => {
+  return useMutation(getRequestLotoReleaseMutationOptions(options));
+};
+
+/**
+ * @summary Authorize release (close) a pending LOTO. Restricted to the assigned commander or an admin.
+ */
+export const getAuthorizeLotoReleaseUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/authorize-release`;
+};
+
+export const authorizeLotoRelease = async (
+  lotoId: number,
+  lotoReleaseActionBody?: LotoReleaseActionBody,
+  options?: RequestInit,
+): Promise<LotoRecord> => {
+  return customFetch<LotoRecord>(getAuthorizeLotoReleaseUrl(lotoId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(lotoReleaseActionBody),
+  });
+};
+
+export const getAuthorizeLotoReleaseMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof authorizeLotoRelease>>,
+    TError,
+    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof authorizeLotoRelease>>,
+  TError,
+  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  TContext
+> => {
+  const mutationKey = ["authorizeLotoRelease"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof authorizeLotoRelease>>,
+    { lotoId: number; data: BodyType<LotoReleaseActionBody> }
+  > = (props) => {
+    const { lotoId, data } = props ?? {};
+
+    return authorizeLotoRelease(lotoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AuthorizeLotoReleaseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof authorizeLotoRelease>>
+>;
+export type AuthorizeLotoReleaseMutationBody = BodyType<LotoReleaseActionBody>;
+export type AuthorizeLotoReleaseMutationError = ErrorType<void>;
+
+/**
+ * @summary Authorize release (close) a pending LOTO. Restricted to the assigned commander or an admin.
+ */
+export const useAuthorizeLotoRelease = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof authorizeLotoRelease>>,
+    TError,
+    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof authorizeLotoRelease>>,
+  TError,
+  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  TContext
+> => {
+  return useMutation(getAuthorizeLotoReleaseMutationOptions(options));
+};
+
+/**
+ * @summary Reject a pending release, returning the LOTO to active. Restricted to the assigned commander or an admin.
+ */
+export const getRejectLotoReleaseUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/reject-release`;
+};
+
+export const rejectLotoRelease = async (
+  lotoId: number,
+  lotoReleaseActionBody?: LotoReleaseActionBody,
+  options?: RequestInit,
+): Promise<LotoRecord> => {
+  return customFetch<LotoRecord>(getRejectLotoReleaseUrl(lotoId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(lotoReleaseActionBody),
+  });
+};
+
+export const getRejectLotoReleaseMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectLotoRelease>>,
+    TError,
+    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rejectLotoRelease>>,
+  TError,
+  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  TContext
+> => {
+  const mutationKey = ["rejectLotoRelease"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rejectLotoRelease>>,
+    { lotoId: number; data: BodyType<LotoReleaseActionBody> }
+  > = (props) => {
+    const { lotoId, data } = props ?? {};
+
+    return rejectLotoRelease(lotoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RejectLotoReleaseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rejectLotoRelease>>
+>;
+export type RejectLotoReleaseMutationBody = BodyType<LotoReleaseActionBody>;
+export type RejectLotoReleaseMutationError = ErrorType<void>;
+
+/**
+ * @summary Reject a pending release, returning the LOTO to active. Restricted to the assigned commander or an admin.
+ */
+export const useRejectLotoRelease = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectLotoRelease>>,
+    TError,
+    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rejectLotoRelease>>,
+  TError,
+  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  TContext
+> => {
+  return useMutation(getRejectLotoReleaseMutationOptions(options));
+};
+
+/**
+ * @summary List the permanent audit trail for a LOTO record
+ */
+export const getListLotoEventsUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/events`;
+};
+
+export const listLotoEvents = async (
+  lotoId: number,
+  options?: RequestInit,
+): Promise<ListLotoEventsResponse> => {
+  return customFetch<ListLotoEventsResponse>(getListLotoEventsUrl(lotoId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListLotoEventsQueryKey = (lotoId: number) => {
+  return [`/api/loto/${lotoId}/events`] as const;
+};
+
+export const getListLotoEventsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listLotoEvents>>,
+  TError = ErrorType<unknown>,
+>(
+  lotoId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listLotoEvents>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListLotoEventsQueryKey(lotoId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listLotoEvents>>> = ({
+    signal,
+  }) => listLotoEvents(lotoId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!lotoId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listLotoEvents>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListLotoEventsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listLotoEvents>>
+>;
+export type ListLotoEventsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List the permanent audit trail for a LOTO record
+ */
+
+export function useListLotoEvents<
+  TData = Awaited<ReturnType<typeof listLotoEvents>>,
+  TError = ErrorType<unknown>,
+>(
+  lotoId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listLotoEvents>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListLotoEventsQueryOptions(lotoId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Append a correction/audit note to a LOTO record (admin only). Permitted even on closed records.
+ */
+export const getAddLotoAuditNoteUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/audit-notes`;
+};
+
+export const addLotoAuditNote = async (
+  lotoId: number,
+  createLotoAuditNoteBody: CreateLotoAuditNoteBody,
+  options?: RequestInit,
+): Promise<LotoEvent> => {
+  return customFetch<LotoEvent>(getAddLotoAuditNoteUrl(lotoId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createLotoAuditNoteBody),
+  });
+};
+
+export const getAddLotoAuditNoteMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addLotoAuditNote>>,
+    TError,
+    { lotoId: number; data: BodyType<CreateLotoAuditNoteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addLotoAuditNote>>,
+  TError,
+  { lotoId: number; data: BodyType<CreateLotoAuditNoteBody> },
+  TContext
+> => {
+  const mutationKey = ["addLotoAuditNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addLotoAuditNote>>,
+    { lotoId: number; data: BodyType<CreateLotoAuditNoteBody> }
+  > = (props) => {
+    const { lotoId, data } = props ?? {};
+
+    return addLotoAuditNote(lotoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddLotoAuditNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addLotoAuditNote>>
+>;
+export type AddLotoAuditNoteMutationBody = BodyType<CreateLotoAuditNoteBody>;
+export type AddLotoAuditNoteMutationError = ErrorType<void>;
+
+/**
+ * @summary Append a correction/audit note to a LOTO record (admin only). Permitted even on closed records.
+ */
+export const useAddLotoAuditNote = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addLotoAuditNote>>,
+    TError,
+    { lotoId: number; data: BodyType<CreateLotoAuditNoteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addLotoAuditNote>>,
+  TError,
+  { lotoId: number; data: BodyType<CreateLotoAuditNoteBody> },
+  TContext
+> => {
+  return useMutation(getAddLotoAuditNoteMutationOptions(options));
+};
+
+/**
+ * @summary List attachments for a LOTO record
+ */
+export const getListLotoAttachmentsUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/attachments`;
+};
+
+export const listLotoAttachments = async (
+  lotoId: number,
+  options?: RequestInit,
+): Promise<ListLotoAttachmentsResponse> => {
+  return customFetch<ListLotoAttachmentsResponse>(
+    getListLotoAttachmentsUrl(lotoId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListLotoAttachmentsQueryKey = (lotoId: number) => {
+  return [`/api/loto/${lotoId}/attachments`] as const;
+};
+
+export const getListLotoAttachmentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listLotoAttachments>>,
+  TError = ErrorType<unknown>,
+>(
+  lotoId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listLotoAttachments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListLotoAttachmentsQueryKey(lotoId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listLotoAttachments>>
+  > = ({ signal }) =>
+    listLotoAttachments(lotoId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!lotoId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listLotoAttachments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListLotoAttachmentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listLotoAttachments>>
+>;
+export type ListLotoAttachmentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List attachments for a LOTO record
+ */
+
+export function useListLotoAttachments<
+  TData = Awaited<ReturnType<typeof listLotoAttachments>>,
+  TError = ErrorType<unknown>,
+>(
+  lotoId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listLotoAttachments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListLotoAttachmentsQueryOptions(lotoId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Attach an uploaded object to a LOTO record (images/PDF/office docs only)
+ */
+export const getAddLotoAttachmentUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/attachments`;
+};
+
+export const addLotoAttachment = async (
+  lotoId: number,
+  addLotoAttachmentBody: AddLotoAttachmentBody,
+  options?: RequestInit,
+): Promise<LotoAttachment> => {
+  return customFetch<LotoAttachment>(getAddLotoAttachmentUrl(lotoId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addLotoAttachmentBody),
+  });
+};
+
+export const getAddLotoAttachmentMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addLotoAttachment>>,
+    TError,
+    { lotoId: number; data: BodyType<AddLotoAttachmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addLotoAttachment>>,
+  TError,
+  { lotoId: number; data: BodyType<AddLotoAttachmentBody> },
+  TContext
+> => {
+  const mutationKey = ["addLotoAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addLotoAttachment>>,
+    { lotoId: number; data: BodyType<AddLotoAttachmentBody> }
+  > = (props) => {
+    const { lotoId, data } = props ?? {};
+
+    return addLotoAttachment(lotoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddLotoAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addLotoAttachment>>
+>;
+export type AddLotoAttachmentMutationBody = BodyType<AddLotoAttachmentBody>;
+export type AddLotoAttachmentMutationError = ErrorType<void>;
+
+/**
+ * @summary Attach an uploaded object to a LOTO record (images/PDF/office docs only)
+ */
+export const useAddLotoAttachment = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addLotoAttachment>>,
+    TError,
+    { lotoId: number; data: BodyType<AddLotoAttachmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addLotoAttachment>>,
+  TError,
+  { lotoId: number; data: BodyType<AddLotoAttachmentBody> },
+  TContext
+> => {
+  return useMutation(getAddLotoAttachmentMutationOptions(options));
+};
+
+/**
+ * @summary Delete a LOTO attachment
+ */
+export const getDeleteLotoAttachmentUrl = (
+  lotoId: number,
+  attachmentId: number,
+) => {
+  return `/api/loto/${lotoId}/attachments/${attachmentId}`;
+};
+
+export const deleteLotoAttachment = async (
+  lotoId: number,
+  attachmentId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteLotoAttachmentUrl(lotoId, attachmentId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteLotoAttachmentMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteLotoAttachment>>,
+    TError,
+    { lotoId: number; attachmentId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteLotoAttachment>>,
+  TError,
+  { lotoId: number; attachmentId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteLotoAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteLotoAttachment>>,
+    { lotoId: number; attachmentId: number }
+  > = (props) => {
+    const { lotoId, attachmentId } = props ?? {};
+
+    return deleteLotoAttachment(lotoId, attachmentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteLotoAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteLotoAttachment>>
+>;
+
+export type DeleteLotoAttachmentMutationError = ErrorType<void>;
+
+/**
+ * @summary Delete a LOTO attachment
+ */
+export const useDeleteLotoAttachment = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteLotoAttachment>>,
+    TError,
+    { lotoId: number; attachmentId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteLotoAttachment>>,
+  TError,
+  { lotoId: number; attachmentId: number },
+  TContext
+> => {
+  return useMutation(getDeleteLotoAttachmentMutationOptions(options));
+};
+
+/**
+ * @summary Active/pending LOTO records for a project, for the company-wide warning banner. Available to any authenticated user (not gated by Safety access).
+ */
+export const getGetProjectActiveLotoUrl = (projectId: number) => {
+  return `/api/projects/${projectId}/active-loto`;
+};
+
+export const getProjectActiveLoto = async (
+  projectId: number,
+  options?: RequestInit,
+): Promise<ListLotoBannerResponse> => {
+  return customFetch<ListLotoBannerResponse>(
+    getGetProjectActiveLotoUrl(projectId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProjectActiveLotoQueryKey = (projectId: number) => {
+  return [`/api/projects/${projectId}/active-loto`] as const;
+};
+
+export const getGetProjectActiveLotoQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProjectActiveLoto>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProjectActiveLoto>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProjectActiveLotoQueryKey(projectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProjectActiveLoto>>
+  > = ({ signal }) =>
+    getProjectActiveLoto(projectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProjectActiveLoto>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProjectActiveLotoQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProjectActiveLoto>>
+>;
+export type GetProjectActiveLotoQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Active/pending LOTO records for a project, for the company-wide warning banner. Available to any authenticated user (not gated by Safety access).
+ */
+
+export function useGetProjectActiveLoto<
+  TData = Awaited<ReturnType<typeof getProjectActiveLoto>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProjectActiveLoto>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProjectActiveLotoQueryOptions(projectId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

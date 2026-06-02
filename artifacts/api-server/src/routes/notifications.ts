@@ -30,7 +30,8 @@ function buildNotification(n: NotificationRow, senderName: string | null = null)
       | "status_changed"
       | "timer_alert"
       | "followed"
-      | "general",
+      | "general"
+      | "loto_release_request",
     message: n.message,
     isRead: n.isRead,
     createdAt: n.createdAt.toISOString(),

@@ -15,3 +15,6 @@ export * from "./settings";
 export * from "./inventory";
 export * from "./user_departments";
 export * from "./office_ops_tasks";
+export * from "./loto_records";
+export * from "./loto_attachments";
+export * from "./loto_events";

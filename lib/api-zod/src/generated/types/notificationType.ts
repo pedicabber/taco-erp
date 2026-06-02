@@ -17,4 +17,5 @@ export const NotificationType = {
   timer_alert: "timer_alert",
   followed: "followed",
   general: "general",
+  loto_release_request: "loto_release_request",
 } as const;

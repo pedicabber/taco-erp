@@ -20,6 +20,8 @@ export interface UserProfile {
   departmentIds: number[];
   /** True when the caller is an admin or a member of the OFFICE/ADMIN department (primary or via user_departments). */
   officeOpsAccess: boolean;
+  /** True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create/manage actions. */
+  safetyAccess: boolean;
   /** @nullable */
   avatarUrl: string | null;
   createdAt: string;

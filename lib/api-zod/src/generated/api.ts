@@ -31,6 +31,11 @@ export const GetMeResponse = zod.object({
     .describe(
       "True when the caller is an admin or a member of the OFFICE\/ADMIN department (primary or via user_departments).",
     ),
+  safetyAccess: zod
+    .boolean()
+    .describe(
+      "True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create\/manage actions.",
+    ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
 });
@@ -58,6 +63,11 @@ export const UpdateMeResponse = zod.object({
     .describe(
       "True when the caller is an admin or a member of the OFFICE\/ADMIN department (primary or via user_departments).",
     ),
+  safetyAccess: zod
+    .boolean()
+    .describe(
+      "True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create\/manage actions.",
+    ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
 });
@@ -78,6 +88,11 @@ export const ListUsersResponseItem = zod.object({
     .boolean()
     .describe(
       "True when the caller is an admin or a member of the OFFICE\/ADMIN department (primary or via user_departments).",
+    ),
+  safetyAccess: zod
+    .boolean()
+    .describe(
+      "True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create\/manage actions.",
     ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
@@ -104,6 +119,11 @@ export const GetUserResponse = zod.object({
     .boolean()
     .describe(
       "True when the caller is an admin or a member of the OFFICE\/ADMIN department (primary or via user_departments).",
+    ),
+  safetyAccess: zod
+    .boolean()
+    .describe(
+      "True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create\/manage actions.",
     ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
@@ -2134,6 +2154,7 @@ export const ListNotificationsResponseItem = zod.object({
     "timer_alert",
     "followed",
     "general",
+    "loto_release_request",
   ]),
   message: zod.string(),
   isRead: zod.boolean(),
@@ -2201,6 +2222,7 @@ export const MarkNotificationReadResponse = zod.object({
     "timer_alert",
     "followed",
     "general",
+    "loto_release_request",
   ]),
   message: zod.string(),
   isRead: zod.boolean(),
@@ -2349,3 +2371,402 @@ export const UpdateOfficeOpsTaskResponse = zod.object({
 export const DeleteOfficeOpsTaskParams = zod.object({
   taskId: zod.coerce.number(),
 });
+
+/**
+ * @summary Counts for the Safety dashboard cards
+ */
+export const GetLotoDashboardSummaryResponse = zod.object({
+  draft: zod.number(),
+  active: zod.number(),
+  pendingRelease: zod.number(),
+  closedThisMonth: zod.number(),
+  criticalActive: zod.number(),
+});
+
+/**
+ * @summary List LOTO records (company-wide visibility)
+ */
+export const ListLotoQueryParams = zod.object({
+  status: zod.enum(["draft", "active", "pending_release", "closed"]).optional(),
+  projectId: zod.coerce.number().nullish(),
+  severity: zod.enum(["standard", "critical"]).optional(),
+  q: zod.coerce.string().nullish(),
+});
+
+export const ListLotoResponseItem = zod.object({
+  id: zod.number(),
+  lotoNumber: zod.string(),
+  projectId: zod.number(),
+  equipmentName: zod.string(),
+  equipmentLocation: zod.string().nullable(),
+  description: zod.string().nullable(),
+  severity: zod.enum(["standard", "critical"]),
+  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  commanderId: zod.number().nullable(),
+  checklist: zod.array(
+    zod.object({
+      key: zod.string(),
+      title: zod.string(),
+      complete: zod.boolean(),
+      notes: zod.string().nullable(),
+    }),
+  ),
+  createdById: zod.number(),
+  activatedAt: zod.string().nullable(),
+  releaseRequestedAt: zod.string().nullable(),
+  releaseRequestedById: zod.number().nullable(),
+  closedAt: zod.string().nullable(),
+  closedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListLotoResponse = zod.array(ListLotoResponseItem);
+
+/**
+ * @summary Create a draft LOTO record
+ */
+
+export const createLotoBodySeverityDefault = `standard`;
+
+export const CreateLotoBody = zod.object({
+  projectId: zod.number(),
+  equipmentName: zod.string().min(1),
+  equipmentLocation: zod.string().nullish(),
+  description: zod.string().nullish(),
+  severity: zod
+    .enum(["standard", "critical"])
+    .default(createLotoBodySeverityDefault),
+  commanderId: zod.number().nullish(),
+});
+
+/**
+ * @summary Get a single LOTO record
+ */
+export const GetLotoParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const GetLotoResponse = zod.object({
+  id: zod.number(),
+  lotoNumber: zod.string(),
+  projectId: zod.number(),
+  equipmentName: zod.string(),
+  equipmentLocation: zod.string().nullable(),
+  description: zod.string().nullable(),
+  severity: zod.enum(["standard", "critical"]),
+  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  commanderId: zod.number().nullable(),
+  checklist: zod.array(
+    zod.object({
+      key: zod.string(),
+      title: zod.string(),
+      complete: zod.boolean(),
+      notes: zod.string().nullable(),
+    }),
+  ),
+  createdById: zod.number(),
+  activatedAt: zod.string().nullable(),
+  releaseRequestedAt: zod.string().nullable(),
+  releaseRequestedById: zod.number().nullable(),
+  closedAt: zod.string().nullable(),
+  closedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update a draft LOTO record (fields + checklist). Allowed only while status=draft.
+ */
+export const UpdateLotoParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const UpdateLotoBody = zod.object({
+  equipmentName: zod.string().min(1).optional(),
+  equipmentLocation: zod.string().nullish(),
+  description: zod.string().nullish(),
+  severity: zod.enum(["standard", "critical"]).optional(),
+  commanderId: zod.number().nullish(),
+  checklist: zod
+    .array(
+      zod.object({
+        key: zod.string(),
+        complete: zod.boolean(),
+        notes: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+});
+
+export const UpdateLotoResponse = zod.object({
+  id: zod.number(),
+  lotoNumber: zod.string(),
+  projectId: zod.number(),
+  equipmentName: zod.string(),
+  equipmentLocation: zod.string().nullable(),
+  description: zod.string().nullable(),
+  severity: zod.enum(["standard", "critical"]),
+  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  commanderId: zod.number().nullable(),
+  checklist: zod.array(
+    zod.object({
+      key: zod.string(),
+      title: zod.string(),
+      complete: zod.boolean(),
+      notes: zod.string().nullable(),
+    }),
+  ),
+  createdById: zod.number(),
+  activatedAt: zod.string().nullable(),
+  releaseRequestedAt: zod.string().nullable(),
+  releaseRequestedById: zod.number().nullable(),
+  closedAt: zod.string().nullable(),
+  closedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Activate a draft LOTO. Requires all 6 checklist sections complete and a commander assigned.
+ */
+export const ActivateLotoParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const ActivateLotoBody = zod.object({
+  commanderId: zod.number().nullish(),
+});
+
+export const ActivateLotoResponse = zod.object({
+  id: zod.number(),
+  lotoNumber: zod.string(),
+  projectId: zod.number(),
+  equipmentName: zod.string(),
+  equipmentLocation: zod.string().nullable(),
+  description: zod.string().nullable(),
+  severity: zod.enum(["standard", "critical"]),
+  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  commanderId: zod.number().nullable(),
+  checklist: zod.array(
+    zod.object({
+      key: zod.string(),
+      title: zod.string(),
+      complete: zod.boolean(),
+      notes: zod.string().nullable(),
+    }),
+  ),
+  createdById: zod.number(),
+  activatedAt: zod.string().nullable(),
+  releaseRequestedAt: zod.string().nullable(),
+  releaseRequestedById: zod.number().nullable(),
+  closedAt: zod.string().nullable(),
+  closedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Request release of an active LOTO. Notifies the assigned commander.
+ */
+export const RequestLotoReleaseParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const RequestLotoReleaseBody = zod.object({
+  note: zod.string().nullish(),
+});
+
+export const RequestLotoReleaseResponse = zod.object({
+  id: zod.number(),
+  lotoNumber: zod.string(),
+  projectId: zod.number(),
+  equipmentName: zod.string(),
+  equipmentLocation: zod.string().nullable(),
+  description: zod.string().nullable(),
+  severity: zod.enum(["standard", "critical"]),
+  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  commanderId: zod.number().nullable(),
+  checklist: zod.array(
+    zod.object({
+      key: zod.string(),
+      title: zod.string(),
+      complete: zod.boolean(),
+      notes: zod.string().nullable(),
+    }),
+  ),
+  createdById: zod.number(),
+  activatedAt: zod.string().nullable(),
+  releaseRequestedAt: zod.string().nullable(),
+  releaseRequestedById: zod.number().nullable(),
+  closedAt: zod.string().nullable(),
+  closedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Authorize release (close) a pending LOTO. Restricted to the assigned commander or an admin.
+ */
+export const AuthorizeLotoReleaseParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const AuthorizeLotoReleaseBody = zod.object({
+  note: zod.string().nullish(),
+});
+
+export const AuthorizeLotoReleaseResponse = zod.object({
+  id: zod.number(),
+  lotoNumber: zod.string(),
+  projectId: zod.number(),
+  equipmentName: zod.string(),
+  equipmentLocation: zod.string().nullable(),
+  description: zod.string().nullable(),
+  severity: zod.enum(["standard", "critical"]),
+  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  commanderId: zod.number().nullable(),
+  checklist: zod.array(
+    zod.object({
+      key: zod.string(),
+      title: zod.string(),
+      complete: zod.boolean(),
+      notes: zod.string().nullable(),
+    }),
+  ),
+  createdById: zod.number(),
+  activatedAt: zod.string().nullable(),
+  releaseRequestedAt: zod.string().nullable(),
+  releaseRequestedById: zod.number().nullable(),
+  closedAt: zod.string().nullable(),
+  closedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Reject a pending release, returning the LOTO to active. Restricted to the assigned commander or an admin.
+ */
+export const RejectLotoReleaseParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const RejectLotoReleaseBody = zod.object({
+  note: zod.string().nullish(),
+});
+
+export const RejectLotoReleaseResponse = zod.object({
+  id: zod.number(),
+  lotoNumber: zod.string(),
+  projectId: zod.number(),
+  equipmentName: zod.string(),
+  equipmentLocation: zod.string().nullable(),
+  description: zod.string().nullable(),
+  severity: zod.enum(["standard", "critical"]),
+  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  commanderId: zod.number().nullable(),
+  checklist: zod.array(
+    zod.object({
+      key: zod.string(),
+      title: zod.string(),
+      complete: zod.boolean(),
+      notes: zod.string().nullable(),
+    }),
+  ),
+  createdById: zod.number(),
+  activatedAt: zod.string().nullable(),
+  releaseRequestedAt: zod.string().nullable(),
+  releaseRequestedById: zod.number().nullable(),
+  closedAt: zod.string().nullable(),
+  closedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary List the permanent audit trail for a LOTO record
+ */
+export const ListLotoEventsParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const ListLotoEventsResponseItem = zod.object({
+  id: zod.number(),
+  lotoId: zod.number(),
+  type: zod.string(),
+  message: zod.string().nullable(),
+  actorId: zod.number().nullable(),
+  createdAt: zod.string(),
+});
+export const ListLotoEventsResponse = zod.array(ListLotoEventsResponseItem);
+
+/**
+ * @summary Append a correction/audit note to a LOTO record (admin only). Permitted even on closed records.
+ */
+export const AddLotoAuditNoteParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const AddLotoAuditNoteBody = zod.object({
+  message: zod.string().min(1),
+});
+
+/**
+ * @summary List attachments for a LOTO record
+ */
+export const ListLotoAttachmentsParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const ListLotoAttachmentsResponseItem = zod.object({
+  id: zod.number(),
+  lotoId: zod.number(),
+  fileName: zod.string(),
+  objectPath: zod.string(),
+  fileSize: zod.number().nullable(),
+  mimeType: zod.string().nullable(),
+  uploadedById: zod.number(),
+  createdAt: zod.string(),
+});
+export const ListLotoAttachmentsResponse = zod.array(
+  ListLotoAttachmentsResponseItem,
+);
+
+/**
+ * @summary Attach an uploaded object to a LOTO record (images/PDF/office docs only)
+ */
+export const AddLotoAttachmentParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const AddLotoAttachmentBody = zod.object({
+  fileName: zod.string().min(1),
+  objectPath: zod.string().min(1),
+  fileSize: zod.number().nullish(),
+  mimeType: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete a LOTO attachment
+ */
+export const DeleteLotoAttachmentParams = zod.object({
+  lotoId: zod.coerce.number(),
+  attachmentId: zod.coerce.number(),
+});
+
+/**
+ * @summary Active/pending LOTO records for a project, for the company-wide warning banner. Available to any authenticated user (not gated by Safety access).
+ */
+export const GetProjectActiveLotoParams = zod.object({
+  projectId: zod.coerce.number(),
+});
+
+export const GetProjectActiveLotoResponseItem = zod.object({
+  id: zod.number(),
+  lotoNumber: zod.string(),
+  equipmentName: zod.string(),
+  severity: zod.enum(["standard", "critical"]),
+  status: zod.enum(["active", "pending_release"]),
+});
+export const GetProjectActiveLotoResponse = zod.array(
+  GetProjectActiveLotoResponseItem,
+);
