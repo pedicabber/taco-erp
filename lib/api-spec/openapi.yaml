@@ -2643,6 +2643,8 @@ components:
           type: ["string", "null"]
         broadcastId:
           type: ["string", "null"]
+        linkPath:
+          type: ["string", "null"]
       required:
         - id
         - userId
@@ -2655,6 +2657,7 @@ components:
         - senderName
         - title
         - broadcastId
+        - linkPath
 
     CreateGeneralNotificationBody:
       type: object

@@ -24,4 +24,6 @@ export interface Notification {
   title: string | null;
   /** @nullable */
   broadcastId: string | null;
+  /** @nullable */
+  linkPath: string | null;
 }

@@ -372,6 +372,20 @@ router.patch("/loto/:lotoId", requireAuth, async (req: AuthenticatedRequest, res
     return;
   }
 
+  // SECURITY: commander/personnel reassignment is locked once a record enters
+  // the commander-review cycle. The review/authorize/close gates key off the
+  // current commanderId, so allowing reassignment during pending_review would
+  // let a Safety user make themselves commander and then self-authorize/close.
+  // Reassignment is only permitted while draft or active.
+  const personnelEdit =
+    u.commanderId !== undefined ||
+    u.lockedOutById !== undefined ||
+    u.additionalPersonnel !== undefined;
+  if (personnelEdit && existing.status !== "draft" && existing.status !== "active") {
+    res.status(409).json({ error: "Personnel cannot be reassigned once the LOTO is pending commander review" });
+    return;
+  }
+
   if (u.commanderId != null && !(await commanderExists(u.commanderId))) {
     res.status(400).json({ error: "Assigned LOTO Commander not found" });
     return;
@@ -582,7 +596,13 @@ router.post("/loto/:lotoId/request-release", requireAuth, async (req: Authentica
       `Project: ${project?.name ?? `#${updated.projectId}`} · ` +
       `Equipment: ${updated.equipmentName} · ` +
       `Requested by: ${user.name}`;
-    await createNotification(updated.commanderId, null, "loto_release_request", message);
+    await createNotification(
+      updated.commanderId,
+      null,
+      "loto_release_request",
+      message,
+      `/safety?loto=${updated.id}`,
+    );
   }
 
   res.json(serialize(updated));

@@ -2163,6 +2163,7 @@ export const ListNotificationsResponseItem = zod.object({
   senderName: zod.string().nullable(),
   title: zod.string().nullable(),
   broadcastId: zod.string().nullable(),
+  linkPath: zod.string().nullable(),
 });
 export const ListNotificationsResponse = zod.array(
   ListNotificationsResponseItem,
@@ -2231,6 +2232,7 @@ export const MarkNotificationReadResponse = zod.object({
   senderName: zod.string().nullable(),
   title: zod.string().nullable(),
   broadcastId: zod.string().nullable(),
+  linkPath: zod.string().nullable(),
 });
 
 /**

@@ -39,6 +39,7 @@ function buildNotification(n: NotificationRow, senderName: string | null = null)
     senderName,
     title: n.title,
     broadcastId: n.broadcastId,
+    linkPath: n.linkPath,
   };
 }
 
@@ -251,9 +252,10 @@ export async function createNotification(
   userId: number,
   taskId: number | null,
   type: string,
-  message: string
+  message: string,
+  linkPath: string | null = null
 ): Promise<void> {
-  await db.insert(notificationsTable).values({ userId, taskId, type, message });
+  await db.insert(notificationsTable).values({ userId, taskId, type, message, linkPath });
 }
 
 export default router;

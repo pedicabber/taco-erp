@@ -24,6 +24,10 @@ export const notificationsTable = pgTable("notifications", {
   // Sent tab can collapse them to one entry per broadcast (with an aggregate
   // recipient count). NULL for system rows.
   broadcastId: text("broadcast_id"),
+  // Optional in-app deep link for notifications that point at a non-task entity
+  // (e.g. a LOTO record: "/safety?loto=12"). NULL for task and general rows
+  // which use taskId or carry no navigable target.
+  linkPath: text("link_path"),
 });
 
 export const insertNotificationSchema = createInsertSchema(notificationsTable).omit({ id: true, createdAt: true });

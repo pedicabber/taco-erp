@@ -17,6 +17,7 @@ import {
   X,
   Search,
   Users as UsersIcon,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,6 +47,7 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
   timer_alert: Clock,
   followed: Bell,
   general: Megaphone,
+  loto_release_request: ShieldAlert,
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -56,6 +58,7 @@ const TYPE_COLORS: Record<string, string> = {
   timer_alert: "text-orange-500",
   followed: "text-primary",
   general: "text-indigo-500",
+  loto_release_request: "text-amber-500",
 };
 
 type SentBroadcast = {
@@ -198,6 +201,13 @@ export default function NotificationsPage() {
                             {n.taskId && (
                               <Link href={`/tasks/${n.taskId}`}>
                                 <span className="text-xs text-primary hover:underline cursor-pointer">View task</span>
+                              </Link>
+                            )}
+                            {!n.taskId && n.linkPath && (
+                              <Link href={n.linkPath} onClick={() => !n.isRead && markReadMutation.mutate(n.id)}>
+                                <span className="text-xs text-primary hover:underline cursor-pointer">
+                                  {n.type === "loto_release_request" ? "View LOTO record" : "View"}
+                                </span>
                               </Link>
                             )}
                             {!n.isRead && (
