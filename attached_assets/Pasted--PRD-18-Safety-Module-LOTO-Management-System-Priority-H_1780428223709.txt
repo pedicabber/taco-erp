@@ -1,0 +1,309 @@
+# PRD #18 – Safety Module (LOTO Management System)
+
+## Priority
+
+High Priority
+
+---
+
+# Objective
+
+Create a Safety module within the ERP that provides a fully digital Lockout/Tagout (LOTO) workflow.
+
+The system will eliminate paper checklists, establish accountability through a designated LOTO Commander, create a permanent audit trail, and provide real-time visibility into active lockouts across projects, installations, FATs, service work, and shop operations.
+
+---
+
+# Navigation
+
+Add a new primary navigation item:
+
+Safety
+
+Recommended placement:
+
+Projects
+Tasks
+Office Ops
+Sales Pipeline
+
+---
+
+Safety
+
+Settings
+
+The divider visually separates operational functions from safety and administration functions.
+
+---
+
+# Safety Module Structure
+
+Safety
+
+* Active LOTO
+* Pending Commander Review
+* LOTO History
+
+Future Expansion:
+
+* Safety Audits
+* Incident Reports
+* Training Records
+
+---
+
+# Dashboard
+
+Display summary cards:
+
+🔴 Active LOTO Count
+
+⚠ Pending Commander Review Count
+
+🟢 Closed LOTO This Month
+
+🚨 Critical Lockouts Active
+
+---
+
+# LOTO Record
+
+Each LOTO shall contain:
+
+## General Information
+
+* LOTO Number (auto-generated)
+* Project
+* Equipment / Machine
+* Location
+* Reason
+* Severity
+
+  * Low
+  * Medium
+  * High
+  * Critical
+
+---
+
+## Personnel
+
+* LOTO Commander
+* Locked Out By
+* Additional Personnel
+
+---
+
+## Status
+
+* Draft
+* Active
+* Pending Commander Review
+* Closed
+
+---
+
+# Workflow
+
+Create LOTO
+
+↓
+
+Preparation
+
+↓
+
+Shutdown
+
+↓
+
+Isolation
+
+↓
+
+Lock Application
+
+↓
+
+Stored Energy Release
+
+↓
+
+Verify Zero Energy
+
+↓
+
+Activate LOTO
+
+↓
+
+Work Phase
+
+↓
+
+Request Release
+
+↓
+
+Commander Review
+
+↓
+
+Authorize Energization
+
+↓
+
+Closeout
+
+↓
+
+Archive to History
+
+---
+
+# Checklist Sections
+
+## Preparation
+
+* Energy sources identified
+* Shutdown procedure reviewed
+* Personnel notified
+* Locks/tags available
+
+---
+
+## Shutdown
+
+* Equipment shut down
+* Equipment fully stopped
+
+---
+
+## Isolation
+
+* Electrical
+* Pneumatic
+* Hydraulic
+* Mechanical
+* Gravity
+* Other
+
+---
+
+## Lock Application
+
+* Lock applied
+* Tag applied
+* Name entered
+* Date entered
+* Reason entered
+
+---
+
+## Stored Energy
+
+* Pressure relieved
+* Capacitors discharged
+* Moving parts secured
+* Residual energy removed
+
+---
+
+## Verify Zero Energy
+
+* Startup attempted
+* No movement
+* Energy absent
+* Controls returned OFF
+
+Completion changes status to ACTIVE.
+
+---
+
+# Work Phase
+
+Allow:
+
+* Notes
+* Photos
+* Personnel additions
+* Issue documentation
+
+---
+
+# Request Release
+
+Technician completes:
+
+* Work complete
+* Tools removed
+* Guards installed
+* Area cleaned
+* Personnel clear
+
+Status becomes:
+
+Pending Commander Review
+
+---
+
+# Commander Review
+
+LOTO Commander verifies:
+
+* Work complete
+* Guards installed
+* Personnel clear
+* Area safe
+* Safe to energize
+
+Commander may add comments.
+
+---
+
+# Authorize Energization
+
+LOTO Commander authorizes power restoration.
+
+System records:
+
+* User
+* Date
+* Time
+* Comments
+
+---
+
+# Closeout
+
+Status changes to CLOSED.
+
+Record automatically moves into LOTO History.
+
+---
+
+# LOTO History
+
+Store permanently:
+
+* Project
+* Equipment
+* Commander
+* Locked Out By
+* Start Time
+* End Time
+* Notes
+* Photos
+* Authorization Records
+
+---
+
+# Acceptance Criteria
+
+* Users can create a LOTO from desktop or mobile.
+* Active LOTO records are visible company-wide.
+* Commander approval is required before closure.
+* Full audit trail is retained.
+* Closed records are searchable.
+* No paper forms required.

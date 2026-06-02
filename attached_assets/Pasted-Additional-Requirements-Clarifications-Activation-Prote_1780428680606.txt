@@ -1,0 +1,136 @@
+Additional Requirements & Clarifications
+
+### Activation Protection
+
+A LOTO record shall not transition to ACTIVE status unless all required checklist items in the following sections are completed:
+
+* Preparation
+* Shutdown
+* Isolation
+* Lock Application
+* Stored Energy
+* Verify Zero Energy
+
+Partial completion shall not permit activation.
+
+---
+
+### Project Visibility
+
+Because every LOTO record is tied to a Project, active lockouts shall be visible directly from the associated Project page.
+
+If a Project contains one or more active lockouts, display a prominent warning banner.
+
+Example:
+
+⚠ ACTIVE LOTO EXISTS
+
+LOTO #25
+Commander: Justin Ferris
+Status: ACTIVE
+
+Selecting the banner shall navigate directly to the LOTO record.
+
+---
+
+### Draft Visibility
+
+The Safety Dashboard shall include:
+
+🟡 Draft LOTO Count
+
+This allows incomplete or abandoned lockout records to be identified and managed.
+
+Dashboard Summary Cards:
+
+* Draft LOTO
+* Active LOTO
+* Pending Commander Review
+* Closed This Month
+* Critical Lockouts Active
+
+---
+
+### Commander Notification
+
+When a technician submits Request Release and a LOTO transitions to Pending Commander Review:
+
+* The assigned LOTO Commander shall receive an in-app notification.
+* The notification shall contain:
+
+  * LOTO Number
+  * Project
+  * Equipment
+  * Requesting User
+
+Selecting the notification shall open the LOTO record.
+
+---
+
+### Attachment Restrictions
+
+Supported attachment types:
+
+* Images / Photos
+* PDF Documents
+* Common Office Documents
+
+Maximum upload size shall follow the existing attachment standards used elsewhere in the ERP.
+
+Unsupported file types shall be rejected.
+
+---
+
+### Historical Record Protection
+
+Closed LOTO records shall be immutable.
+
+Users may:
+
+* View
+* Search
+* Filter
+* Export
+
+Users may not modify:
+
+* Checklist responses
+* Commander approvals
+* Authorization timestamps
+* Attachments
+* Audit history
+
+after closure.
+
+Any future corrections shall require creation of a new administrative audit record rather than modification of the original LOTO.
+
+---
+
+### Future Safety Expansion
+
+The Safety module architecture shall allow future addition of:
+
+* Safety Audits
+* Incident Reports
+* Training Records
+
+without requiring redesign of the existing LOTO system.
+
+---
+
+### Sidebar Placement
+
+Add a divider within the primary navigation:
+
+Projects
+Tasks
+Office Ops
+Sales Pipeline
+
+────────────
+
+Safety
+
+Settings
+
+The divider visually separates operational workflows from safety and administration functions and provides room for future modules such as Quality and Maintenance.
