@@ -58,6 +58,7 @@ import {
   Search,
   Notebook,
   Zap,
+  Users,
 } from "lucide-react";
 
 type View = "active" | "review" | "history";
@@ -1065,6 +1066,65 @@ function LotoDetailDialog({
                 busy={lifecycleMut.isPending}
                 onLog={(kind, message) => lifecycleMut.mutate({ action: "work-log", body: { kind, message } })}
               />
+            )}
+
+            {/* Work phase personnel (active) */}
+            {isActive && canWrite && (
+              <section className="space-y-3 border-t pt-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wide flex items-center gap-2">
+                  <Users className="w-4 h-4" /> Personnel
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">LOTO Commander</Label>
+                    <Select
+                      value={record.commanderId != null ? String(record.commanderId) : "unassigned"}
+                      onValueChange={(v) =>
+                        patchMut.mutate({ commanderId: v === "unassigned" ? null : Number(v) })
+                      }
+                    >
+                      <SelectTrigger data-testid="select-active-commander">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {users.map((u) => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Locked out by</Label>
+                    <Select
+                      value={record.lockedOutById != null ? String(record.lockedOutById) : "unassigned"}
+                      onValueChange={(v) =>
+                        patchMut.mutate({ lockedOutById: v === "unassigned" ? null : Number(v) })
+                      }
+                    >
+                      <SelectTrigger data-testid="select-active-locked-out-by">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {users.map((u) => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <PersonnelPicker
+                  users={users}
+                  selected={record.additionalPersonnel}
+                  onChange={(ids) => patchMut.mutate({ additionalPersonnel: ids })}
+                  disabled={patchMut.isPending}
+                />
+              </section>
             )}
 
             {/* Request release (active) */}
