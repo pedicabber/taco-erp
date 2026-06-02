@@ -10,6 +10,8 @@ export type LotoBannerItemSeverity =
   (typeof LotoBannerItemSeverity)[keyof typeof LotoBannerItemSeverity];
 
 export const LotoBannerItemSeverity = {
-  standard: "standard",
+  low: "low",
+  medium: "medium",
+  high: "high",
   critical: "critical",
 } as const;

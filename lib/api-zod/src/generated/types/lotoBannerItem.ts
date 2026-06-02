@@ -14,4 +14,6 @@ export interface LotoBannerItem {
   equipmentName: string;
   severity: LotoBannerItemSeverity;
   status: LotoBannerItemStatus;
+  /** @nullable */
+  commanderId: number | null;
 }

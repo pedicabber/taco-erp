@@ -1,1 +1,2 @@
 - [Storage object read authorization](storage-read-auth.md) — any new attachment type must be registered in the GET /storage/objects route's lookup or its objects 404 on read.
+- [LOTO lifecycle cycle guards](loto-lifecycle-cycle-guards.md) — staged approval endpoints must guard exact predecessor state server-side and clear all downstream fields on reject/restart; UI hiding is not enough.

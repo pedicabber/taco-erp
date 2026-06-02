@@ -37,6 +37,7 @@ import TimeclockPopover from "@/components/timeclock/TimeclockPopover";
 type NavUser = {
   role?: string | null;
   officeOpsAccess?: boolean | null;
+  safetyAccess?: boolean | null;
 } | null | undefined;
 
 interface NavItem {
@@ -51,6 +52,9 @@ const isAdminUser = (u: NavUser) => u?.role === "admin";
 // Server is the source of truth for OA membership (handles admin + primary
 // dept + secondary dept via user_departments). See `/users/me` payload.
 const isOfficeOpsUser = (u: NavUser) => !!u?.officeOpsAccess;
+// Likewise, Safety-department membership is server-resolved (admin + primary +
+// secondary dept). Only Safety-access users may see the Safety/LOTO module.
+const isSafetyUser = (u: NavUser) => !!u?.safetyAccess;
 
 const NAV_ITEMS: NavItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
@@ -61,8 +65,8 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Package, label: "Inventory", href: "/inventory" },
   { icon: ClipboardList, label: "Office Ops", href: "/office-ops", visibleIf: isOfficeOpsUser },
   { icon: TrendingUp, label: "Sales Pipeline", href: "/sales", visibleIf: isAdminUser },
-  // Company-wide visibility — every authenticated user can view LOTO records.
-  { icon: ShieldAlert, label: "Safety", href: "/safety", dividerBefore: true },
+  // Safety/LOTO is restricted to Safety-access users (admin + Safety dept).
+  { icon: ShieldAlert, label: "Safety", href: "/safety", visibleIf: isSafetyUser, dividerBefore: true },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

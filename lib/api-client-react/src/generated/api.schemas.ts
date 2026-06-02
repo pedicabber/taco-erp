@@ -886,7 +886,9 @@ export type LotoRecordSeverity =
   (typeof LotoRecordSeverity)[keyof typeof LotoRecordSeverity];
 
 export const LotoRecordSeverity = {
-  standard: "standard",
+  low: "low",
+  medium: "medium",
+  high: "high",
   critical: "critical",
 } as const;
 
@@ -896,9 +898,31 @@ export type LotoRecordStatus =
 export const LotoRecordStatus = {
   draft: "draft",
   active: "active",
-  pending_release: "pending_release",
+  pending_review: "pending_review",
   closed: "closed",
 } as const;
+
+/**
+ * @nullable
+ */
+export type LotoRecordReviewDecision =
+  | (typeof LotoRecordReviewDecision)[keyof typeof LotoRecordReviewDecision]
+  | null;
+
+export const LotoRecordReviewDecision = {
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+export interface LotoReleaseChecklist {
+  workComplete: boolean;
+  toolsRemoved: boolean;
+  guardsInstalled: boolean;
+  areaCleaned: boolean;
+  personnelClear: boolean;
+  /** @nullable */
+  note: string | null;
+}
 
 export interface LotoRecord {
   id: number;
@@ -913,6 +937,9 @@ export interface LotoRecord {
   status: LotoRecordStatus;
   /** @nullable */
   commanderId: number | null;
+  /** @nullable */
+  lockedOutById: number | null;
+  additionalPersonnel: number[];
   checklist: LotoChecklistSection[];
   createdById: number;
   /** @nullable */
@@ -921,6 +948,21 @@ export interface LotoRecord {
   releaseRequestedAt: string | null;
   /** @nullable */
   releaseRequestedById: number | null;
+  releaseChecklist: LotoReleaseChecklist | null;
+  /** @nullable */
+  reviewDecision: LotoRecordReviewDecision;
+  /** @nullable */
+  reviewComments: string | null;
+  /** @nullable */
+  reviewedById: number | null;
+  /** @nullable */
+  reviewedAt: string | null;
+  /** @nullable */
+  authorizedById: number | null;
+  /** @nullable */
+  authorizedAt: string | null;
+  /** @nullable */
+  authorizationComments: string | null;
   /** @nullable */
   closedAt: string | null;
   /** @nullable */
@@ -935,7 +977,9 @@ export type CreateLotoBodySeverity =
   (typeof CreateLotoBodySeverity)[keyof typeof CreateLotoBodySeverity];
 
 export const CreateLotoBodySeverity = {
-  standard: "standard",
+  low: "low",
+  medium: "medium",
+  high: "high",
   critical: "critical",
 } as const;
 
@@ -950,13 +994,18 @@ export interface CreateLotoBody {
   severity?: CreateLotoBodySeverity;
   /** @nullable */
   commanderId?: number | null;
+  /** @nullable */
+  lockedOutById?: number | null;
+  additionalPersonnel?: number[];
 }
 
 export type UpdateLotoBodySeverity =
   (typeof UpdateLotoBodySeverity)[keyof typeof UpdateLotoBodySeverity];
 
 export const UpdateLotoBodySeverity = {
-  standard: "standard",
+  low: "low",
+  medium: "medium",
+  high: "high",
   critical: "critical",
 } as const;
 
@@ -970,6 +1019,9 @@ export interface UpdateLotoBody {
   severity?: UpdateLotoBodySeverity;
   /** @nullable */
   commanderId?: number | null;
+  /** @nullable */
+  lockedOutById?: number | null;
+  additionalPersonnel?: number[];
   checklist?: LotoChecklistSectionInput[];
 }
 
@@ -978,9 +1030,52 @@ export interface ActivateLotoBody {
   commanderId?: number | null;
 }
 
-export interface LotoReleaseActionBody {
+export interface RequestLotoReleaseBody {
+  workComplete: boolean;
+  toolsRemoved: boolean;
+  guardsInstalled: boolean;
+  areaCleaned: boolean;
+  personnelClear: boolean;
   /** @nullable */
   note?: string | null;
+}
+
+export type CommanderReviewBodyDecision =
+  (typeof CommanderReviewBodyDecision)[keyof typeof CommanderReviewBodyDecision];
+
+export const CommanderReviewBodyDecision = {
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+export interface CommanderReviewBody {
+  decision: CommanderReviewBodyDecision;
+  /** @nullable */
+  comments?: string | null;
+}
+
+export interface AuthorizeEnergizationBody {
+  /** @nullable */
+  comments?: string | null;
+}
+
+export interface CloseLotoBody {
+  /** @nullable */
+  note?: string | null;
+}
+
+export type LotoWorkLogBodyKind =
+  (typeof LotoWorkLogBodyKind)[keyof typeof LotoWorkLogBodyKind];
+
+export const LotoWorkLogBodyKind = {
+  note: "note",
+  issue: "issue",
+} as const;
+
+export interface LotoWorkLogBody {
+  kind: LotoWorkLogBodyKind;
+  /** @minLength 1 */
+  message: string;
 }
 
 export interface LotoEvent {
@@ -1030,7 +1125,7 @@ export interface AddLotoAttachmentBody {
 export interface LotoDashboardSummary {
   draft: number;
   active: number;
-  pendingRelease: number;
+  pendingReview: number;
   closedThisMonth: number;
   criticalActive: number;
 }
@@ -1039,7 +1134,9 @@ export type LotoBannerItemSeverity =
   (typeof LotoBannerItemSeverity)[keyof typeof LotoBannerItemSeverity];
 
 export const LotoBannerItemSeverity = {
-  standard: "standard",
+  low: "low",
+  medium: "medium",
+  high: "high",
   critical: "critical",
 } as const;
 
@@ -1048,7 +1145,7 @@ export type LotoBannerItemStatus =
 
 export const LotoBannerItemStatus = {
   active: "active",
-  pending_release: "pending_release",
+  pending_review: "pending_review",
 } as const;
 
 export interface LotoBannerItem {
@@ -1057,6 +1154,8 @@ export interface LotoBannerItem {
   equipmentName: string;
   severity: LotoBannerItemSeverity;
   status: LotoBannerItemStatus;
+  /** @nullable */
+  commanderId: number | null;
 }
 
 export type ListLotoBannerResponse = LotoBannerItem[];
@@ -1181,7 +1280,7 @@ export type ListLotoStatus =
 export const ListLotoStatus = {
   draft: "draft",
   active: "active",
-  pending_release: "pending_release",
+  pending_review: "pending_review",
   closed: "closed",
 } as const;
 
@@ -1189,6 +1288,8 @@ export type ListLotoSeverity =
   (typeof ListLotoSeverity)[keyof typeof ListLotoSeverity];
 
 export const ListLotoSeverity = {
-  standard: "standard",
+  low: "low",
+  medium: "medium",
+  high: "high",
   critical: "critical",
 } as const;

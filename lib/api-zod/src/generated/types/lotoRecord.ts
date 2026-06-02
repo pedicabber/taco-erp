@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LotoChecklistSection } from "./lotoChecklistSection";
+import type { LotoRecordReviewDecision } from "./lotoRecordReviewDecision";
 import type { LotoRecordSeverity } from "./lotoRecordSeverity";
 import type { LotoRecordStatus } from "./lotoRecordStatus";
+import type { LotoReleaseChecklist } from "./lotoReleaseChecklist";
 
 export interface LotoRecord {
   id: number;
@@ -22,6 +24,9 @@ export interface LotoRecord {
   status: LotoRecordStatus;
   /** @nullable */
   commanderId: number | null;
+  /** @nullable */
+  lockedOutById: number | null;
+  additionalPersonnel: number[];
   checklist: LotoChecklistSection[];
   createdById: number;
   /** @nullable */
@@ -30,6 +35,21 @@ export interface LotoRecord {
   releaseRequestedAt: string | null;
   /** @nullable */
   releaseRequestedById: number | null;
+  releaseChecklist: LotoReleaseChecklist | null;
+  /** @nullable */
+  reviewDecision: LotoRecordReviewDecision;
+  /** @nullable */
+  reviewComments: string | null;
+  /** @nullable */
+  reviewedById: number | null;
+  /** @nullable */
+  reviewedAt: string | null;
+  /** @nullable */
+  authorizedById: number | null;
+  /** @nullable */
+  authorizedAt: string | null;
+  /** @nullable */
+  authorizationComments: string | null;
   /** @nullable */
   closedAt: string | null;
   /** @nullable */

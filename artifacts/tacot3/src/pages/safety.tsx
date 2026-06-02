@@ -9,6 +9,7 @@ import type {
   LotoAttachment,
   LotoChecklistSection,
   LotoDashboardSummary,
+  LotoReleaseChecklist,
   UserProfileMini,
 } from "@workspace/api-client-react";
 import type { Project } from "@/lib/types";
@@ -18,6 +19,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -51,23 +54,52 @@ import {
   ChevronRight,
   Unlock,
   ShieldCheck,
+  Download,
+  Search,
+  Notebook,
+  Zap,
 } from "lucide-react";
 
-type View = "active" | "drafts" | "closed";
+type View = "active" | "review" | "history";
 
 const STATUS_LABEL: Record<LotoRecord["status"], string> = {
   draft: "Draft",
   active: "Active",
-  pending_release: "Pending Release",
+  pending_review: "Pending Review",
   closed: "Closed",
 };
 
-const STATUS_VARIANT: Record<LotoRecord["status"], "default" | "secondary" | "outline" | "destructive"> = {
+const STATUS_VARIANT: Record<
+  LotoRecord["status"],
+  "default" | "secondary" | "outline" | "destructive"
+> = {
   draft: "outline",
   active: "default",
-  pending_release: "secondary",
+  pending_review: "secondary",
   closed: "secondary",
 };
+
+type Severity = LotoRecord["severity"];
+
+const SEVERITY_META: Record<
+  Severity,
+  { label: string; className: string }
+> = {
+  low: { label: "Low", className: "bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30" },
+  medium: { label: "Medium", className: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30" },
+  high: { label: "High", className: "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/30" },
+  critical: { label: "Critical", className: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/40" },
+};
+
+const SEVERITY_ORDER: Severity[] = ["low", "medium", "high", "critical"];
+
+const RELEASE_CHECKS: { key: keyof Omit<LotoReleaseChecklist, "note">; label: string }[] = [
+  { key: "workComplete", label: "Work complete" },
+  { key: "toolsRemoved", label: "Tools removed" },
+  { key: "guardsInstalled", label: "Guards / covers reinstalled" },
+  { key: "areaCleaned", label: "Area cleaned" },
+  { key: "personnelClear", label: "All personnel clear" },
+];
 
 const ALLOWED_MIME_TYPES = new Set<string>([
   "image/png",
@@ -108,6 +140,16 @@ function formatSize(bytes: number | null | undefined): string | null {
 function userName(users: UserProfileMini[], id: number | null | undefined): string {
   if (id == null) return "—";
   return users.find((u) => u.id === id)?.name ?? `#${id}`;
+}
+
+function SeverityBadge({ severity }: { severity: Severity }) {
+  const meta = SEVERITY_META[severity];
+  return (
+    <Badge variant="outline" className={`gap-1 ${meta.className}`}>
+      {severity === "critical" && <AlertTriangle className="w-3 h-3" />}
+      {meta.label}
+    </Badge>
+  );
 }
 
 export default function SafetyPage() {
@@ -154,10 +196,15 @@ export default function SafetyPage() {
 
   const grouped = useMemo(() => {
     const all = records ?? [];
+    // "Active LOTO" view holds the live working set: drafts being set up and
+    // active lockouts. Pending Review and History are their own tabs.
+    const active = all
+      .filter((r) => r.status === "draft" || r.status === "active")
+      .sort((a, b) => (a.status === b.status ? 0 : a.status === "active" ? -1 : 1));
     return {
-      active: all.filter((r) => r.status === "active" || r.status === "pending_release"),
-      drafts: all.filter((r) => r.status === "draft"),
-      closed: all.filter((r) => r.status === "closed"),
+      active,
+      review: all.filter((r) => r.status === "pending_review"),
+      history: all.filter((r) => r.status === "closed"),
     };
   }, [records]);
 
@@ -167,15 +214,17 @@ export default function SafetyPage() {
       equipmentName: string;
       equipmentLocation: string | null;
       description: string | null;
-      severity: "standard" | "critical";
+      severity: Severity;
       commanderId: number | null;
+      lockedOutById: number | null;
+      additionalPersonnel: number[];
     }) => apiClient.post("/loto", body).then((r) => r.data as LotoRecord),
     onSuccess: (rec) => {
       qc.invalidateQueries({ queryKey: ["loto-list"] });
       qc.invalidateQueries({ queryKey: ["loto-summary"] });
       setCreateOpen(false);
       setSelectedId(rec.id);
-      setView("drafts");
+      setView("active");
       toast({ title: "LOTO draft created", description: rec.lotoNumber });
     },
     onError: (err: Error) =>
@@ -185,12 +234,10 @@ export default function SafetyPage() {
   const cards = [
     { label: "Draft", value: summary?.draft ?? 0, icon: FileText, tone: "text-muted-foreground" },
     { label: "Active", value: summary?.active ?? 0, icon: Lock, tone: "text-amber-500" },
-    { label: "Pending Release", value: summary?.pendingRelease ?? 0, icon: Clock, tone: "text-blue-500" },
+    { label: "Pending Review", value: summary?.pendingReview ?? 0, icon: Clock, tone: "text-blue-500" },
     { label: "Closed (month)", value: summary?.closedThisMonth ?? 0, icon: ShieldCheck, tone: "text-green-500" },
     { label: "Critical Active", value: summary?.criticalActive ?? 0, icon: AlertTriangle, tone: "text-red-500" },
   ];
-
-  const viewRecords = grouped[view];
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-5xl" data-testid="page-safety">
@@ -234,26 +281,36 @@ export default function SafetyPage() {
       <Tabs value={view} onValueChange={(v) => setView(v as View)} className="mb-4">
         <TabsList>
           <TabsTrigger value="active" data-testid="tab-active">
-            Active ({grouped.active.length})
+            Active LOTO ({grouped.active.length})
           </TabsTrigger>
-          <TabsTrigger value="drafts" data-testid="tab-drafts">
-            Drafts ({grouped.drafts.length})
+          <TabsTrigger value="review" data-testid="tab-review">
+            Pending Commander Review ({grouped.review.length})
           </TabsTrigger>
-          <TabsTrigger value="closed" data-testid="tab-closed">
-            Closed ({grouped.closed.length})
+          <TabsTrigger value="history" data-testid="tab-history">
+            LOTO History ({grouped.history.length})
           </TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {isLoading ? (
+      {view === "history" ? (
+        <HistoryView
+          records={grouped.history}
+          users={users ?? []}
+          projects={projects ?? []}
+          loading={isLoading}
+          onOpen={(id) => setSelectedId(id)}
+        />
+      ) : isLoading ? (
         <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
-      ) : viewRecords.length === 0 ? (
+      ) : grouped[view].length === 0 ? (
         <Card className="p-10 text-center text-muted-foreground">
-          No {view === "active" ? "active" : view} LOTO records.
+          {view === "active"
+            ? "No active or draft LOTO records."
+            : "No LOTO records awaiting commander review."}
         </Card>
       ) : (
         <div className="space-y-2">
-          {viewRecords.map((r) => (
+          {grouped[view].map((r) => (
             <LotoRow
               key={r.id}
               record={r}
@@ -318,25 +375,176 @@ function LotoRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-sm font-semibold">{record.lotoNumber}</span>
           <span className="font-medium truncate">{record.equipmentName}</span>
-          <Badge variant={STATUS_VARIANT[record.status]} className="capitalize">
-            {STATUS_LABEL[record.status]}
-          </Badge>
-          {record.severity === "critical" && (
-            <Badge variant="destructive" className="gap-1">
-              <AlertTriangle className="w-3 h-3" /> Critical
-            </Badge>
-          )}
+          <Badge variant={STATUS_VARIANT[record.status]}>{STATUS_LABEL[record.status]}</Badge>
+          <SeverityBadge severity={record.severity} />
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1.5">
           <span>Project: {project?.name ?? `#${record.projectId}`}</span>
           <span>Commander: {userName(users, record.commanderId)}</span>
           {record.status === "draft" && <span>Checklist: {doneCount}/{record.checklist.length}</span>}
           {record.status === "active" && <span>Activated: {fmtDateTime(record.activatedAt)}</span>}
+          {record.status === "pending_review" && (
+            <span>Requested: {fmtDateTime(record.releaseRequestedAt)}</span>
+          )}
           {record.status === "closed" && <span>Closed: {fmtDateTime(record.closedAt)}</span>}
         </div>
       </div>
       <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
     </Card>
+  );
+}
+
+function HistoryView({
+  records,
+  users,
+  projects,
+  loading,
+  onOpen,
+}: {
+  records: LotoRecord[];
+  users: UserProfileMini[];
+  projects: Project[];
+  loading: boolean;
+  onOpen: (id: number) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [severity, setSeverity] = useState<string>("all");
+  const [projectId, setProjectId] = useState<string>("all");
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return records.filter((r) => {
+      if (severity !== "all" && r.severity !== severity) return false;
+      if (projectId !== "all" && String(r.projectId) !== projectId) return false;
+      if (!needle) return true;
+      const project = projects.find((p) => p.id === r.projectId);
+      const haystack = [
+        r.lotoNumber,
+        r.equipmentName,
+        r.equipmentLocation ?? "",
+        r.description ?? "",
+        project?.name ?? "",
+        userName(users, r.commanderId),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [records, q, severity, projectId, projects, users]);
+
+  function exportCsv() {
+    const header = [
+      "LOTO Number",
+      "Equipment",
+      "Location",
+      "Project",
+      "Severity",
+      "Commander",
+      "Locked Out By",
+      "Created By",
+      "Activated",
+      "Closed By",
+      "Closed At",
+    ];
+    const rows = filtered.map((r) => {
+      const project = projects.find((p) => p.id === r.projectId);
+      return [
+        r.lotoNumber,
+        r.equipmentName,
+        r.equipmentLocation ?? "",
+        project?.name ?? `#${r.projectId}`,
+        SEVERITY_META[r.severity].label,
+        userName(users, r.commanderId),
+        userName(users, r.lockedOutById),
+        userName(users, r.createdById),
+        r.activatedAt ? new Date(r.activatedAt).toISOString() : "",
+        userName(users, r.closedById),
+        r.closedAt ? new Date(r.closedAt).toISOString() : "",
+      ];
+    });
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `loto-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search closed LOTO records…"
+            className="pl-8"
+            data-testid="input-history-search"
+          />
+        </div>
+        <Select value={severity} onValueChange={setSeverity}>
+          <SelectTrigger className="w-[150px]" data-testid="select-history-severity">
+            <SelectValue placeholder="Severity" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All severities</SelectItem>
+            {SEVERITY_ORDER.map((s) => (
+              <SelectItem key={s} value={s}>
+                {SEVERITY_META[s].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={projectId} onValueChange={setProjectId}>
+          <SelectTrigger className="w-[170px]" data-testid="select-history-project">
+            <SelectValue placeholder="Project" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All projects</SelectItem>
+            {projects.map((p) => (
+              <SelectItem key={p.id} value={String(p.id)}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="outline"
+          onClick={exportCsv}
+          disabled={filtered.length === 0}
+          data-testid="button-export-csv"
+        >
+          <Download className="w-4 h-4 mr-1" /> Export CSV
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
+      ) : filtered.length === 0 ? (
+        <Card className="p-10 text-center text-muted-foreground">
+          {records.length === 0
+            ? "No closed LOTO records yet."
+            : "No records match your filters."}
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((r) => (
+            <LotoRow
+              key={r.id}
+              record={r}
+              users={users}
+              projects={projects}
+              onOpen={() => onOpen(r.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -358,24 +566,30 @@ function CreateLotoDialog({
     equipmentName: string;
     equipmentLocation: string | null;
     description: string | null;
-    severity: "standard" | "critical";
+    severity: Severity;
     commanderId: number | null;
+    lockedOutById: number | null;
+    additionalPersonnel: number[];
   }) => void;
 }) {
   const [projectId, setProjectId] = useState<string>("");
   const [equipmentName, setEquipmentName] = useState("");
   const [equipmentLocation, setEquipmentLocation] = useState("");
   const [description, setDescription] = useState("");
-  const [severity, setSeverity] = useState<"standard" | "critical">("standard");
+  const [severity, setSeverity] = useState<Severity>("medium");
   const [commanderId, setCommanderId] = useState<string>("unassigned");
+  const [lockedOutById, setLockedOutById] = useState<string>("unassigned");
+  const [personnel, setPersonnel] = useState<number[]>([]);
 
   function reset() {
     setProjectId("");
     setEquipmentName("");
     setEquipmentLocation("");
     setDescription("");
-    setSeverity("standard");
+    setSeverity("medium");
     setCommanderId("unassigned");
+    setLockedOutById("unassigned");
+    setPersonnel([]);
   }
 
   function handleSubmit() {
@@ -387,6 +601,8 @@ function CreateLotoDialog({
       description: description.trim() || null,
       severity,
       commanderId: commanderId === "unassigned" ? null : Number(commanderId),
+      lockedOutById: lockedOutById === "unassigned" ? null : Number(lockedOutById),
+      additionalPersonnel: personnel,
     });
   }
 
@@ -398,7 +614,7 @@ function CreateLotoDialog({
         onOpenChange(o);
       }}
     >
-      <DialogContent data-testid="dialog-create-loto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto" data-testid="dialog-create-loto">
         <DialogHeader>
           <DialogTitle>New LOTO record</DialogTitle>
         </DialogHeader>
@@ -453,13 +669,16 @@ function CreateLotoDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Severity</Label>
-              <Select value={severity} onValueChange={(v) => setSeverity(v as "standard" | "critical")}>
+              <Select value={severity} onValueChange={(v) => setSeverity(v as Severity)}>
                 <SelectTrigger data-testid="select-severity">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="standard">Standard</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
+                  {SEVERITY_ORDER.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {SEVERITY_META[s].label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -480,6 +699,23 @@ function CreateLotoDialog({
               </Select>
             </div>
           </div>
+          <div className="space-y-1.5">
+            <Label>Locked out by</Label>
+            <Select value={lockedOutById} onValueChange={setLockedOutById}>
+              <SelectTrigger data-testid="select-locked-out-by">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <PersonnelPicker users={users} selected={personnel} onChange={setPersonnel} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -496,6 +732,52 @@ function CreateLotoDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function PersonnelPicker({
+  users,
+  selected,
+  onChange,
+  disabled,
+}: {
+  users: UserProfileMini[];
+  selected: number[];
+  onChange: (ids: number[]) => void;
+  disabled?: boolean;
+}) {
+  function toggle(id: number, checked: boolean) {
+    if (checked) onChange(Array.from(new Set([...selected, id])));
+    else onChange(selected.filter((x) => x !== id));
+  }
+  return (
+    <div className="space-y-1.5">
+      <Label>Additional personnel</Label>
+      <ScrollArea className="h-32 rounded-lg border p-2">
+        <div className="space-y-1.5">
+          {users.length === 0 && (
+            <p className="text-xs text-muted-foreground">No users available.</p>
+          )}
+          {users.map((u) => (
+            <label
+              key={u.id}
+              className="flex items-center gap-2 text-sm cursor-pointer"
+              data-testid={`personnel-${u.id}`}
+            >
+              <Checkbox
+                checked={selected.includes(u.id)}
+                disabled={disabled}
+                onCheckedChange={(c) => toggle(u.id, c === true)}
+              />
+              <span>{u.name}</span>
+            </label>
+          ))}
+        </div>
+      </ScrollArea>
+      <p className="text-xs text-muted-foreground">
+        {selected.length} selected — workers applying personal locks alongside the commander.
+      </p>
+    </div>
   );
 }
 
@@ -545,8 +827,12 @@ function LotoDetailDialog({
     mutationFn: (body: Record<string, unknown>) =>
       apiClient.patch(`/loto/${lotoId}`, body).then((r) => r.data as LotoRecord),
     onSuccess: () => invalidateAll(),
-    onError: (err: Error) =>
-      toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        (err as Error).message;
+      toast({ title: "Update failed", description: msg, variant: "destructive" });
+    },
   });
 
   const lifecycleMut = useMutation({
@@ -557,8 +843,10 @@ function LotoDetailDialog({
       const labels: Record<string, string> = {
         activate: "LOTO activated",
         "request-release": "Release requested — commander notified",
-        "authorize-release": "Release authorized — LOTO closed",
-        "reject-release": "Release rejected — returned to active",
+        "commander-review": "Review recorded",
+        "authorize-energization": "Energization authorized",
+        close: "LOTO closed",
+        "work-log": "Work note logged",
       };
       toast({ title: labels[vars.action] ?? "Done" });
     },
@@ -582,9 +870,10 @@ function LotoDetailDialog({
   });
 
   const isDraft = record?.status === "draft";
+  const isActive = record?.status === "active";
   const isClosed = record?.status === "closed";
-  const isPending = record?.status === "pending_release";
-  const canReview = isPending && (isAdmin || record?.commanderId === currentUserId);
+  const isPending = record?.status === "pending_review";
+  const isCommander = isAdmin || (record != null && record.commanderId === currentUserId);
   const checklistDone = record ? record.checklist.every((s) => s.complete) : false;
   const hasCommander = record?.commanderId != null;
 
@@ -620,11 +909,7 @@ function LotoDetailDialog({
                 <span className="font-mono">{record.lotoNumber}</span>
                 <span>{record.equipmentName}</span>
                 <Badge variant={STATUS_VARIANT[record.status]}>{STATUS_LABEL[record.status]}</Badge>
-                {record.severity === "critical" && (
-                  <Badge variant="destructive" className="gap-1">
-                    <AlertTriangle className="w-3 h-3" /> Critical
-                  </Badge>
-                )}
+                <SeverityBadge severity={record.severity} />
               </DialogTitle>
             </DialogHeader>
 
@@ -640,26 +925,75 @@ function LotoDetailDialog({
               <Meta label="Project" value={project?.name ?? `#${record.projectId}`} />
               <Meta label="Location" value={record.equipmentLocation ?? "—"} />
               <Meta label="Commander" value={userName(users, record.commanderId)} />
+              <Meta label="Locked out by" value={userName(users, record.lockedOutById)} />
               <Meta label="Created by" value={userName(users, record.createdById)} />
               <Meta label="Activated" value={fmtDateTime(record.activatedAt)} />
-              <Meta label="Closed" value={fmtDateTime(record.closedAt)} />
             </div>
+            {record.additionalPersonnel.length > 0 && (
+              <p className="text-sm">
+                <span className="text-xs text-muted-foreground">Additional personnel: </span>
+                <span className="font-medium">
+                  {record.additionalPersonnel.map((id) => userName(users, id)).join(", ")}
+                </span>
+              </p>
+            )}
             {record.description && (
               <p className="text-sm text-muted-foreground border-l-2 pl-3">{record.description}</p>
             )}
 
-            {/* Draft: commander + severity quick-edit */}
+            {/* Draft: personnel + severity quick-edit */}
             {isDraft && canWrite && (
-              <div className="grid grid-cols-2 gap-3 border-t pt-4">
+              <div className="space-y-3 border-t pt-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">LOTO Commander</Label>
+                    <Select
+                      value={record.commanderId != null ? String(record.commanderId) : "unassigned"}
+                      onValueChange={(v) =>
+                        patchMut.mutate({ commanderId: v === "unassigned" ? null : Number(v) })
+                      }
+                    >
+                      <SelectTrigger data-testid="select-detail-commander">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {users.map((u) => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Severity</Label>
+                    <Select
+                      value={record.severity}
+                      onValueChange={(v) => patchMut.mutate({ severity: v })}
+                    >
+                      <SelectTrigger data-testid="select-detail-severity">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SEVERITY_ORDER.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {SEVERITY_META[s].label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">LOTO Commander</Label>
+                  <Label className="text-xs">Locked out by</Label>
                   <Select
-                    value={record.commanderId != null ? String(record.commanderId) : "unassigned"}
+                    value={record.lockedOutById != null ? String(record.lockedOutById) : "unassigned"}
                     onValueChange={(v) =>
-                      patchMut.mutate({ commanderId: v === "unassigned" ? null : Number(v) })
+                      patchMut.mutate({ lockedOutById: v === "unassigned" ? null : Number(v) })
                     }
                   >
-                    <SelectTrigger data-testid="select-detail-commander">
+                    <SelectTrigger data-testid="select-detail-locked-out-by">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -672,21 +1006,12 @@ function LotoDetailDialog({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Severity</Label>
-                  <Select
-                    value={record.severity}
-                    onValueChange={(v) => patchMut.mutate({ severity: v })}
-                  >
-                    <SelectTrigger data-testid="select-detail-severity">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="standard">Standard</SelectItem>
-                      <SelectItem value="critical">Critical</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <PersonnelPicker
+                  users={users}
+                  selected={record.additionalPersonnel}
+                  onChange={(ids) => patchMut.mutate({ additionalPersonnel: ids })}
+                  disabled={patchMut.isPending}
+                />
               </div>
             )}
 
@@ -712,67 +1037,98 @@ function LotoDetailDialog({
               </div>
             </section>
 
-            {/* Lifecycle actions */}
-            {canWrite && (
-              <section className="border-t pt-4 flex flex-wrap gap-2">
-                {isDraft && (
-                  <Button
-                    onClick={() => lifecycleMut.mutate({ action: "activate" })}
-                    disabled={!checklistDone || !hasCommander || lifecycleMut.isPending}
-                    data-testid="button-activate"
-                  >
-                    <Lock className="w-4 h-4 mr-1" /> Activate LOTO
-                  </Button>
-                )}
-                {isDraft && (!checklistDone || !hasCommander) && (
-                  <p className="text-xs text-muted-foreground self-center">
+            {/* Activate (draft) */}
+            {isDraft && canWrite && (
+              <section className="border-t pt-4 flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={() => lifecycleMut.mutate({ action: "activate" })}
+                  disabled={!checklistDone || !hasCommander || lifecycleMut.isPending}
+                  data-testid="button-activate"
+                >
+                  <Lock className="w-4 h-4 mr-1" /> Activate LOTO
+                </Button>
+                {(!checklistDone || !hasCommander) && (
+                  <p className="text-xs text-muted-foreground">
                     {!hasCommander && "Assign a commander. "}
-                    {!checklistDone && "Complete all 6 sections to activate."}
+                    {!checklistDone && "Complete all sections to activate."}
                   </p>
-                )}
-                {record.status === "active" && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => lifecycleMut.mutate({ action: "request-release" })}
-                    disabled={lifecycleMut.isPending}
-                    data-testid="button-request-release"
-                  >
-                    <Unlock className="w-4 h-4 mr-1" /> Request Release
-                  </Button>
                 )}
               </section>
             )}
 
-            {/* Commander review gate */}
-            {canReview && (
-              <section className="border-t pt-4">
-                <div className="rounded-lg border-2 border-blue-500 bg-blue-500/10 px-3 py-3">
-                  <p className="text-sm font-semibold mb-2 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" /> Commander Review
-                  </p>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Release was requested by {userName(users, record.releaseRequestedById)} on{" "}
-                    {fmtDateTime(record.releaseRequestedAt)}. Authorize to close, or reject to keep active.
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => lifecycleMut.mutate({ action: "authorize-release" })}
-                      disabled={lifecycleMut.isPending}
-                      data-testid="button-authorize"
-                    >
-                      <ShieldCheck className="w-4 h-4 mr-1" /> Authorize & Close
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => lifecycleMut.mutate({ action: "reject-release" })}
-                      disabled={lifecycleMut.isPending}
-                      data-testid="button-reject"
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                </div>
-              </section>
+            {/* Work phase (active) */}
+            {isActive && (
+              <WorkPhaseSection
+                events={events ?? []}
+                users={users}
+                canWrite={canWrite}
+                busy={lifecycleMut.isPending}
+                onLog={(kind, message) => lifecycleMut.mutate({ action: "work-log", body: { kind, message } })}
+              />
+            )}
+
+            {/* Request release (active) */}
+            {isActive && canWrite && (
+              <RequestReleaseSection
+                busy={lifecycleMut.isPending}
+                onSubmit={(body) => lifecycleMut.mutate({ action: "request-release", body })}
+              />
+            )}
+
+            {/* Pending review: show submitted release checklist */}
+            {(isPending || isClosed) && record.releaseChecklist && (
+              <ReleaseChecklistSummary
+                checklist={record.releaseChecklist}
+                requestedBy={userName(users, record.releaseRequestedById)}
+                requestedAt={fmtDateTime(record.releaseRequestedAt)}
+              />
+            )}
+
+            {/* Commander review gate (pending, not yet decided) */}
+            {isPending && record.reviewDecision == null && isCommander && (
+              <CommanderReviewSection
+                busy={lifecycleMut.isPending}
+                onSubmit={(decision, comments) =>
+                  lifecycleMut.mutate({ action: "commander-review", body: { decision, comments } })
+                }
+              />
+            )}
+
+            {/* Review outcome (approved → awaiting authorization, or recorded) */}
+            {(record.reviewDecision != null) && (
+              <ReviewOutcome
+                decision={record.reviewDecision}
+                comments={record.reviewComments}
+                reviewer={userName(users, record.reviewedById)}
+                at={fmtDateTime(record.reviewedAt)}
+              />
+            )}
+
+            {/* Authorize energization (approved, pending, not yet authorized) */}
+            {isPending && record.reviewDecision === "approved" && record.authorizedAt == null && isCommander && (
+              <AuthorizeEnergizationSection
+                busy={lifecycleMut.isPending}
+                onSubmit={(comments) =>
+                  lifecycleMut.mutate({ action: "authorize-energization", body: { comments } })
+                }
+              />
+            )}
+
+            {/* Authorization record */}
+            {record.authorizedAt != null && (
+              <AuthorizationRecord
+                authorizer={userName(users, record.authorizedById)}
+                at={fmtDateTime(record.authorizedAt)}
+                comments={record.authorizationComments}
+              />
+            )}
+
+            {/* Close (authorized, pending) */}
+            {isPending && record.authorizedAt != null && isCommander && (
+              <CloseSection
+                busy={lifecycleMut.isPending}
+                onSubmit={(note) => lifecycleMut.mutate({ action: "close", body: { note } })}
+              />
             )}
 
             {/* Attachments */}
@@ -797,6 +1153,8 @@ function LotoDetailDialog({
                     <p className="text-xs text-muted-foreground">
                       {userName(users, e.actorId)} · {fmtDateTime(e.createdAt)}
                       {e.type === "audit_note" && " · audit note"}
+                      {e.type === "work_issue" && " · issue"}
+                      {e.type === "work_note" && " · work note"}
                     </p>
                   </li>
                 ))}
@@ -821,6 +1179,370 @@ function Meta({ label, value }: { label: string; value: string }) {
       <span className="text-xs text-muted-foreground">{label}: </span>
       <span className="font-medium">{value}</span>
     </div>
+  );
+}
+
+function WorkPhaseSection({
+  events,
+  users,
+  canWrite,
+  busy,
+  onLog,
+}: {
+  events: LotoEvent[];
+  users: UserProfileMini[];
+  canWrite: boolean;
+  busy: boolean;
+  onLog: (kind: "note" | "issue", message: string) => void;
+}) {
+  const [kind, setKind] = useState<"note" | "issue">("note");
+  const [msg, setMsg] = useState("");
+  const workEvents = events.filter((e) => e.type === "work_note" || e.type === "work_issue");
+
+  return (
+    <section className="border-t pt-4">
+      <h3 className="text-sm font-semibold uppercase tracking-wide mb-3 flex items-center gap-2">
+        <Notebook className="w-4 h-4" /> Work Phase Log
+        <span className="text-xs font-normal text-muted-foreground">({workEvents.length})</span>
+      </h3>
+      {workEvents.length > 0 ? (
+        <ul className="space-y-1.5 mb-3">
+          {workEvents.map((e) => (
+            <li
+              key={e.id}
+              className="flex items-start gap-2 text-sm rounded-lg border p-2"
+              data-testid={`work-event-${e.id}`}
+            >
+              {e.type === "work_issue" ? (
+                <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              ) : (
+                <Notebook className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+              )}
+              <div className="min-w-0">
+                <p>{e.message}</p>
+                <p className="text-xs text-muted-foreground">
+                  {userName(users, e.actorId)} · {fmtDateTime(e.createdAt)}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted-foreground mb-3">
+          No work-phase entries yet. Log notes or issues observed during the work.
+        </p>
+      )}
+      {canWrite && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Select value={kind} onValueChange={(v) => setKind(v as "note" | "issue")}>
+              <SelectTrigger className="w-[130px]" data-testid="select-work-kind">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="note">Note</SelectItem>
+                <SelectItem value="issue">Issue</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-start gap-2">
+            <Textarea
+              value={msg}
+              onChange={(e) => setMsg(e.target.value)}
+              placeholder="Describe the note or issue…"
+              rows={2}
+              className="text-sm"
+              data-testid="input-work-log"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || !msg.trim()}
+              onClick={() => {
+                onLog(kind, msg.trim());
+                setMsg("");
+              }}
+              data-testid="button-add-work-log"
+            >
+              Log
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RequestReleaseSection({
+  busy,
+  onSubmit,
+}: {
+  busy: boolean;
+  onSubmit: (body: LotoReleaseChecklist) => void;
+}) {
+  const [checks, setChecks] = useState<Record<string, boolean>>({});
+  const [note, setNote] = useState("");
+  const allChecked = RELEASE_CHECKS.every((c) => checks[c.key]);
+
+  return (
+    <section className="border-t pt-4">
+      <div className="rounded-lg border-2 border-amber-500/60 bg-amber-500/5 px-3 py-3">
+        <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+          <Unlock className="w-4 h-4 text-amber-600" /> Request Release
+        </p>
+        <p className="text-xs text-muted-foreground mb-3">
+          Confirm the equipment is safe to re-energize. All checks are required before submission.
+        </p>
+        <div className="space-y-2 mb-3">
+          {RELEASE_CHECKS.map((c) => (
+            <label key={c.key} className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox
+                checked={!!checks[c.key]}
+                onCheckedChange={(v) => setChecks((prev) => ({ ...prev, [c.key]: v === true }))}
+                data-testid={`release-check-${c.key}`}
+              />
+              <span>{c.label}</span>
+            </label>
+          ))}
+        </div>
+        <Textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Optional note for the commander…"
+          rows={2}
+          className="text-sm mb-3"
+          data-testid="input-release-note"
+        />
+        <Button
+          onClick={() =>
+            onSubmit({
+              workComplete: !!checks.workComplete,
+              toolsRemoved: !!checks.toolsRemoved,
+              guardsInstalled: !!checks.guardsInstalled,
+              areaCleaned: !!checks.areaCleaned,
+              personnelClear: !!checks.personnelClear,
+              note: note.trim() || null,
+            })
+          }
+          disabled={!allChecked || busy}
+          data-testid="button-request-release"
+        >
+          <Unlock className="w-4 h-4 mr-1" /> Submit for Commander Review
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function ReleaseChecklistSummary({
+  checklist,
+  requestedBy,
+  requestedAt,
+}: {
+  checklist: LotoReleaseChecklist;
+  requestedBy: string;
+  requestedAt: string;
+}) {
+  return (
+    <section className="border-t pt-4">
+      <h3 className="text-sm font-semibold uppercase tracking-wide mb-2">Request-Release Checklist</h3>
+      <p className="text-xs text-muted-foreground mb-2">
+        Submitted by {requestedBy} on {requestedAt}.
+      </p>
+      <div className="space-y-1.5">
+        {RELEASE_CHECKS.map((c) => (
+          <div key={c.key} className="flex items-center gap-2 text-sm">
+            {checklist[c.key] ? (
+              <CheckCircle2 className="w-4 h-4 text-green-600" />
+            ) : (
+              <Circle className="w-4 h-4 text-muted-foreground" />
+            )}
+            <span>{c.label}</span>
+          </div>
+        ))}
+      </div>
+      {checklist.note && (
+        <p className="text-sm text-muted-foreground border-l-2 pl-3 mt-2">{checklist.note}</p>
+      )}
+    </section>
+  );
+}
+
+function CommanderReviewSection({
+  busy,
+  onSubmit,
+}: {
+  busy: boolean;
+  onSubmit: (decision: "approved" | "rejected", comments: string | null) => void;
+}) {
+  const [comments, setComments] = useState("");
+  return (
+    <section className="border-t pt-4">
+      <div className="rounded-lg border-2 border-blue-500 bg-blue-500/10 px-3 py-3">
+        <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-blue-600" /> Commander Review
+        </p>
+        <p className="text-xs text-muted-foreground mb-3">
+          Approve to proceed to energization authorization, or reject to return the LOTO to the work phase.
+        </p>
+        <Textarea
+          value={comments}
+          onChange={(e) => setComments(e.target.value)}
+          placeholder="Review comments (optional)…"
+          rows={2}
+          className="text-sm mb-3"
+          data-testid="input-review-comments"
+        />
+        <div className="flex gap-2">
+          <Button
+            onClick={() => onSubmit("approved", comments.trim() || null)}
+            disabled={busy}
+            data-testid="button-review-approve"
+          >
+            <ShieldCheck className="w-4 h-4 mr-1" /> Approve
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onSubmit("rejected", comments.trim() || null)}
+            disabled={busy}
+            data-testid="button-review-reject"
+          >
+            Reject
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ReviewOutcome({
+  decision,
+  comments,
+  reviewer,
+  at,
+}: {
+  decision: "approved" | "rejected";
+  comments: string | null;
+  reviewer: string;
+  at: string;
+}) {
+  return (
+    <section className="border-t pt-4">
+      <div
+        className={`rounded-lg border px-3 py-2 ${
+          decision === "approved"
+            ? "border-green-500/40 bg-green-500/5"
+            : "border-red-500/40 bg-red-500/5"
+        }`}
+      >
+        <p className="text-sm font-medium flex items-center gap-2">
+          {decision === "approved" ? (
+            <ShieldCheck className="w-4 h-4 text-green-600" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-red-600" />
+          )}
+          Review {decision === "approved" ? "approved" : "rejected"} by {reviewer}
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">{at}</p>
+        {comments && <p className="text-sm mt-1.5">{comments}</p>}
+      </div>
+    </section>
+  );
+}
+
+function AuthorizeEnergizationSection({
+  busy,
+  onSubmit,
+}: {
+  busy: boolean;
+  onSubmit: (comments: string | null) => void;
+}) {
+  const [comments, setComments] = useState("");
+  return (
+    <section className="border-t pt-4">
+      <div className="rounded-lg border-2 border-orange-500 bg-orange-500/10 px-3 py-3">
+        <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+          <Zap className="w-4 h-4 text-orange-600" /> Authorize Energization
+        </p>
+        <p className="text-xs text-muted-foreground mb-3">
+          Records that you authorize re-energizing this equipment. Required before close-out.
+        </p>
+        <Textarea
+          value={comments}
+          onChange={(e) => setComments(e.target.value)}
+          placeholder="Authorization comments (optional)…"
+          rows={2}
+          className="text-sm mb-3"
+          data-testid="input-authorize-comments"
+        />
+        <Button
+          onClick={() => onSubmit(comments.trim() || null)}
+          disabled={busy}
+          data-testid="button-authorize-energization"
+        >
+          <Zap className="w-4 h-4 mr-1" /> Authorize Energization
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function AuthorizationRecord({
+  authorizer,
+  at,
+  comments,
+}: {
+  authorizer: string;
+  at: string;
+  comments: string | null;
+}) {
+  return (
+    <section className="border-t pt-4">
+      <div className="rounded-lg border border-orange-500/40 bg-orange-500/5 px-3 py-2">
+        <p className="text-sm font-medium flex items-center gap-2">
+          <Zap className="w-4 h-4 text-orange-600" /> Energization authorized by {authorizer}
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">{at}</p>
+        {comments && <p className="text-sm mt-1.5">{comments}</p>}
+      </div>
+    </section>
+  );
+}
+
+function CloseSection({
+  busy,
+  onSubmit,
+}: {
+  busy: boolean;
+  onSubmit: (note: string | null) => void;
+}) {
+  const [note, setNote] = useState("");
+  return (
+    <section className="border-t pt-4">
+      <div className="rounded-lg border-2 border-green-600 bg-green-500/10 px-3 py-3">
+        <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-green-600" /> Close Out
+        </p>
+        <p className="text-xs text-muted-foreground mb-3">
+          Closing seals this record permanently — it becomes immutable. This cannot be undone.
+        </p>
+        <Textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Close-out note (optional)…"
+          rows={2}
+          className="text-sm mb-3"
+          data-testid="input-close-note"
+        />
+        <Button
+          onClick={() => onSubmit(note.trim() || null)}
+          disabled={busy}
+          data-testid="button-close-loto"
+        >
+          <Lock className="w-4 h-4 mr-1" /> Close LOTO
+        </Button>
+      </div>
+    </section>
   );
 }
 

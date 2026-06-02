@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { apiClient } from "@/lib/apiClient";
-import type { LotoBannerItem } from "@workspace/api-client-react";
+import type { LotoBannerItem, UserProfileMini } from "@workspace/api-client-react";
 import { AlertTriangle } from "lucide-react";
 
 /**
  * Company-wide warning banner shown on a project page whenever the project has
- * one or more LOTO records that are active or pending release. Visible to any
- * authenticated user (the underlying endpoint is not gated by Safety access).
+ * one or more LOTO records that are active or pending commander review. Visible
+ * to any authenticated user (the underlying endpoint is not gated by Safety
+ * access).
  */
 export default function LotoActiveBanner({ projectId }: { projectId: number }) {
   const { data } = useQuery<LotoBannerItem[]>({
@@ -16,8 +17,18 @@ export default function LotoActiveBanner({ projectId }: { projectId: number }) {
     refetchInterval: 60000,
   });
 
+  const { data: users } = useQuery<UserProfileMini[]>({
+    queryKey: ["users"],
+    queryFn: () => apiClient.get("/users").then((r) => r.data),
+  });
+
   const items = data ?? [];
   if (items.length === 0) return null;
+
+  const commanderName = (id: number | null): string => {
+    if (id == null) return "Unassigned";
+    return (users ?? []).find((u) => u.id === id)?.name ?? `#${id}`;
+  };
 
   const hasCritical = items.some((i) => i.severity === "critical");
 
@@ -49,14 +60,17 @@ export default function LotoActiveBanner({ projectId }: { projectId: number }) {
             {items.map((i) => (
               <li key={i.id}>
                 <Link href={`/safety?loto=${i.id}`}>
-                  <span className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer hover:underline">
+                  <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-medium cursor-pointer hover:underline">
                     <span className="font-mono">{i.lotoNumber}</span>
                     <span className="truncate">{i.equipmentName}</span>
                     {i.severity === "critical" && (
                       <span className="text-xs font-semibold uppercase text-red-600">critical</span>
                     )}
                     <span className="text-xs text-muted-foreground">
-                      {i.status === "pending_release" ? "(pending release)" : "(active)"}
+                      {i.status === "pending_review" ? "(pending review)" : "(active)"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      · Commander: {commanderName(i.commanderId)}
                     </span>
                   </span>
                 </Link>

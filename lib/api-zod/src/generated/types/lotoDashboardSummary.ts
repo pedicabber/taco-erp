@@ -9,7 +9,7 @@
 export interface LotoDashboardSummary {
   draft: number;
   active: number;
-  pendingRelease: number;
+  pendingReview: number;
   closedThisMonth: number;
   criticalActive: number;
 }

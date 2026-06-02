@@ -10,6 +10,8 @@ export type LotoRecordSeverity =
   (typeof LotoRecordSeverity)[keyof typeof LotoRecordSeverity];
 
 export const LotoRecordSeverity = {
-  standard: "standard",
+  low: "low",
+  medium: "medium",
+  high: "high",
   critical: "critical",
 } as const;

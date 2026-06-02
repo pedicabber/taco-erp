@@ -2378,7 +2378,7 @@ export const DeleteOfficeOpsTaskParams = zod.object({
 export const GetLotoDashboardSummaryResponse = zod.object({
   draft: zod.number(),
   active: zod.number(),
-  pendingRelease: zod.number(),
+  pendingReview: zod.number(),
   closedThisMonth: zod.number(),
   criticalActive: zod.number(),
 });
@@ -2387,9 +2387,9 @@ export const GetLotoDashboardSummaryResponse = zod.object({
  * @summary List LOTO records (company-wide visibility)
  */
 export const ListLotoQueryParams = zod.object({
-  status: zod.enum(["draft", "active", "pending_release", "closed"]).optional(),
+  status: zod.enum(["draft", "active", "pending_review", "closed"]).optional(),
   projectId: zod.coerce.number().nullish(),
-  severity: zod.enum(["standard", "critical"]).optional(),
+  severity: zod.enum(["low", "medium", "high", "critical"]).optional(),
   q: zod.coerce.string().nullish(),
 });
 
@@ -2400,9 +2400,11 @@ export const ListLotoResponseItem = zod.object({
   equipmentName: zod.string(),
   equipmentLocation: zod.string().nullable(),
   description: zod.string().nullable(),
-  severity: zod.enum(["standard", "critical"]),
-  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  severity: zod.enum(["low", "medium", "high", "critical"]),
+  status: zod.enum(["draft", "active", "pending_review", "closed"]),
   commanderId: zod.number().nullable(),
+  lockedOutById: zod.number().nullable(),
+  additionalPersonnel: zod.array(zod.number()),
   checklist: zod.array(
     zod.object({
       key: zod.string(),
@@ -2415,6 +2417,30 @@ export const ListLotoResponseItem = zod.object({
   activatedAt: zod.string().nullable(),
   releaseRequestedAt: zod.string().nullable(),
   releaseRequestedById: zod.number().nullable(),
+  releaseChecklist: zod.union([
+    zod.object({
+      workComplete: zod.boolean(),
+      toolsRemoved: zod.boolean(),
+      guardsInstalled: zod.boolean(),
+      areaCleaned: zod.boolean(),
+      personnelClear: zod.boolean(),
+      note: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+  reviewDecision: zod
+    .union([
+      zod.literal("approved"),
+      zod.literal("rejected"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  reviewComments: zod.string().nullable(),
+  reviewedById: zod.number().nullable(),
+  reviewedAt: zod.string().nullable(),
+  authorizedById: zod.number().nullable(),
+  authorizedAt: zod.string().nullable(),
+  authorizationComments: zod.string().nullable(),
   closedAt: zod.string().nullable(),
   closedById: zod.number().nullable(),
   createdAt: zod.string(),
@@ -2426,7 +2452,7 @@ export const ListLotoResponse = zod.array(ListLotoResponseItem);
  * @summary Create a draft LOTO record
  */
 
-export const createLotoBodySeverityDefault = `standard`;
+export const createLotoBodySeverityDefault = `medium`;
 
 export const CreateLotoBody = zod.object({
   projectId: zod.number(),
@@ -2434,9 +2460,11 @@ export const CreateLotoBody = zod.object({
   equipmentLocation: zod.string().nullish(),
   description: zod.string().nullish(),
   severity: zod
-    .enum(["standard", "critical"])
+    .enum(["low", "medium", "high", "critical"])
     .default(createLotoBodySeverityDefault),
   commanderId: zod.number().nullish(),
+  lockedOutById: zod.number().nullish(),
+  additionalPersonnel: zod.array(zod.number()).optional(),
 });
 
 /**
@@ -2453,9 +2481,11 @@ export const GetLotoResponse = zod.object({
   equipmentName: zod.string(),
   equipmentLocation: zod.string().nullable(),
   description: zod.string().nullable(),
-  severity: zod.enum(["standard", "critical"]),
-  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  severity: zod.enum(["low", "medium", "high", "critical"]),
+  status: zod.enum(["draft", "active", "pending_review", "closed"]),
   commanderId: zod.number().nullable(),
+  lockedOutById: zod.number().nullable(),
+  additionalPersonnel: zod.array(zod.number()),
   checklist: zod.array(
     zod.object({
       key: zod.string(),
@@ -2468,6 +2498,30 @@ export const GetLotoResponse = zod.object({
   activatedAt: zod.string().nullable(),
   releaseRequestedAt: zod.string().nullable(),
   releaseRequestedById: zod.number().nullable(),
+  releaseChecklist: zod.union([
+    zod.object({
+      workComplete: zod.boolean(),
+      toolsRemoved: zod.boolean(),
+      guardsInstalled: zod.boolean(),
+      areaCleaned: zod.boolean(),
+      personnelClear: zod.boolean(),
+      note: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+  reviewDecision: zod
+    .union([
+      zod.literal("approved"),
+      zod.literal("rejected"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  reviewComments: zod.string().nullable(),
+  reviewedById: zod.number().nullable(),
+  reviewedAt: zod.string().nullable(),
+  authorizedById: zod.number().nullable(),
+  authorizedAt: zod.string().nullable(),
+  authorizationComments: zod.string().nullable(),
   closedAt: zod.string().nullable(),
   closedById: zod.number().nullable(),
   createdAt: zod.string(),
@@ -2485,8 +2539,10 @@ export const UpdateLotoBody = zod.object({
   equipmentName: zod.string().min(1).optional(),
   equipmentLocation: zod.string().nullish(),
   description: zod.string().nullish(),
-  severity: zod.enum(["standard", "critical"]).optional(),
+  severity: zod.enum(["low", "medium", "high", "critical"]).optional(),
   commanderId: zod.number().nullish(),
+  lockedOutById: zod.number().nullish(),
+  additionalPersonnel: zod.array(zod.number()).optional(),
   checklist: zod
     .array(
       zod.object({
@@ -2505,9 +2561,11 @@ export const UpdateLotoResponse = zod.object({
   equipmentName: zod.string(),
   equipmentLocation: zod.string().nullable(),
   description: zod.string().nullable(),
-  severity: zod.enum(["standard", "critical"]),
-  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  severity: zod.enum(["low", "medium", "high", "critical"]),
+  status: zod.enum(["draft", "active", "pending_review", "closed"]),
   commanderId: zod.number().nullable(),
+  lockedOutById: zod.number().nullable(),
+  additionalPersonnel: zod.array(zod.number()),
   checklist: zod.array(
     zod.object({
       key: zod.string(),
@@ -2520,6 +2578,30 @@ export const UpdateLotoResponse = zod.object({
   activatedAt: zod.string().nullable(),
   releaseRequestedAt: zod.string().nullable(),
   releaseRequestedById: zod.number().nullable(),
+  releaseChecklist: zod.union([
+    zod.object({
+      workComplete: zod.boolean(),
+      toolsRemoved: zod.boolean(),
+      guardsInstalled: zod.boolean(),
+      areaCleaned: zod.boolean(),
+      personnelClear: zod.boolean(),
+      note: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+  reviewDecision: zod
+    .union([
+      zod.literal("approved"),
+      zod.literal("rejected"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  reviewComments: zod.string().nullable(),
+  reviewedById: zod.number().nullable(),
+  reviewedAt: zod.string().nullable(),
+  authorizedById: zod.number().nullable(),
+  authorizedAt: zod.string().nullable(),
+  authorizationComments: zod.string().nullable(),
   closedAt: zod.string().nullable(),
   closedById: zod.number().nullable(),
   createdAt: zod.string(),
@@ -2544,9 +2626,11 @@ export const ActivateLotoResponse = zod.object({
   equipmentName: zod.string(),
   equipmentLocation: zod.string().nullable(),
   description: zod.string().nullable(),
-  severity: zod.enum(["standard", "critical"]),
-  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  severity: zod.enum(["low", "medium", "high", "critical"]),
+  status: zod.enum(["draft", "active", "pending_review", "closed"]),
   commanderId: zod.number().nullable(),
+  lockedOutById: zod.number().nullable(),
+  additionalPersonnel: zod.array(zod.number()),
   checklist: zod.array(
     zod.object({
       key: zod.string(),
@@ -2559,6 +2643,30 @@ export const ActivateLotoResponse = zod.object({
   activatedAt: zod.string().nullable(),
   releaseRequestedAt: zod.string().nullable(),
   releaseRequestedById: zod.number().nullable(),
+  releaseChecklist: zod.union([
+    zod.object({
+      workComplete: zod.boolean(),
+      toolsRemoved: zod.boolean(),
+      guardsInstalled: zod.boolean(),
+      areaCleaned: zod.boolean(),
+      personnelClear: zod.boolean(),
+      note: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+  reviewDecision: zod
+    .union([
+      zod.literal("approved"),
+      zod.literal("rejected"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  reviewComments: zod.string().nullable(),
+  reviewedById: zod.number().nullable(),
+  reviewedAt: zod.string().nullable(),
+  authorizedById: zod.number().nullable(),
+  authorizedAt: zod.string().nullable(),
+  authorizationComments: zod.string().nullable(),
   closedAt: zod.string().nullable(),
   closedById: zod.number().nullable(),
   createdAt: zod.string(),
@@ -2566,13 +2674,30 @@ export const ActivateLotoResponse = zod.object({
 });
 
 /**
- * @summary Request release of an active LOTO. Notifies the assigned commander.
+ * @summary Add a Work-Phase note or issue to an active LOTO record.
+ */
+export const AddLotoWorkLogParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const AddLotoWorkLogBody = zod.object({
+  kind: zod.enum(["note", "issue"]),
+  message: zod.string().min(1),
+});
+
+/**
+ * @summary Request release of an active LOTO with the Request-Release checklist. Notifies the assigned commander.
  */
 export const RequestLotoReleaseParams = zod.object({
   lotoId: zod.coerce.number(),
 });
 
 export const RequestLotoReleaseBody = zod.object({
+  workComplete: zod.boolean(),
+  toolsRemoved: zod.boolean(),
+  guardsInstalled: zod.boolean(),
+  areaCleaned: zod.boolean(),
+  personnelClear: zod.boolean(),
   note: zod.string().nullish(),
 });
 
@@ -2583,9 +2708,11 @@ export const RequestLotoReleaseResponse = zod.object({
   equipmentName: zod.string(),
   equipmentLocation: zod.string().nullable(),
   description: zod.string().nullable(),
-  severity: zod.enum(["standard", "critical"]),
-  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  severity: zod.enum(["low", "medium", "high", "critical"]),
+  status: zod.enum(["draft", "active", "pending_review", "closed"]),
   commanderId: zod.number().nullable(),
+  lockedOutById: zod.number().nullable(),
+  additionalPersonnel: zod.array(zod.number()),
   checklist: zod.array(
     zod.object({
       key: zod.string(),
@@ -2598,6 +2725,30 @@ export const RequestLotoReleaseResponse = zod.object({
   activatedAt: zod.string().nullable(),
   releaseRequestedAt: zod.string().nullable(),
   releaseRequestedById: zod.number().nullable(),
+  releaseChecklist: zod.union([
+    zod.object({
+      workComplete: zod.boolean(),
+      toolsRemoved: zod.boolean(),
+      guardsInstalled: zod.boolean(),
+      areaCleaned: zod.boolean(),
+      personnelClear: zod.boolean(),
+      note: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+  reviewDecision: zod
+    .union([
+      zod.literal("approved"),
+      zod.literal("rejected"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  reviewComments: zod.string().nullable(),
+  reviewedById: zod.number().nullable(),
+  reviewedAt: zod.string().nullable(),
+  authorizedById: zod.number().nullable(),
+  authorizedAt: zod.string().nullable(),
+  authorizationComments: zod.string().nullable(),
   closedAt: zod.string().nullable(),
   closedById: zod.number().nullable(),
   createdAt: zod.string(),
@@ -2605,26 +2756,29 @@ export const RequestLotoReleaseResponse = zod.object({
 });
 
 /**
- * @summary Authorize release (close) a pending LOTO. Restricted to the assigned commander or an admin.
+ * @summary Commander review of a pending LOTO. Approve (records review comments) or reject (returns the record to active). Restricted to the assigned commander or an admin.
  */
-export const AuthorizeLotoReleaseParams = zod.object({
+export const ReviewLotoParams = zod.object({
   lotoId: zod.coerce.number(),
 });
 
-export const AuthorizeLotoReleaseBody = zod.object({
-  note: zod.string().nullish(),
+export const ReviewLotoBody = zod.object({
+  decision: zod.enum(["approved", "rejected"]),
+  comments: zod.string().nullish(),
 });
 
-export const AuthorizeLotoReleaseResponse = zod.object({
+export const ReviewLotoResponse = zod.object({
   id: zod.number(),
   lotoNumber: zod.string(),
   projectId: zod.number(),
   equipmentName: zod.string(),
   equipmentLocation: zod.string().nullable(),
   description: zod.string().nullable(),
-  severity: zod.enum(["standard", "critical"]),
-  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  severity: zod.enum(["low", "medium", "high", "critical"]),
+  status: zod.enum(["draft", "active", "pending_review", "closed"]),
   commanderId: zod.number().nullable(),
+  lockedOutById: zod.number().nullable(),
+  additionalPersonnel: zod.array(zod.number()),
   checklist: zod.array(
     zod.object({
       key: zod.string(),
@@ -2637,6 +2791,30 @@ export const AuthorizeLotoReleaseResponse = zod.object({
   activatedAt: zod.string().nullable(),
   releaseRequestedAt: zod.string().nullable(),
   releaseRequestedById: zod.number().nullable(),
+  releaseChecklist: zod.union([
+    zod.object({
+      workComplete: zod.boolean(),
+      toolsRemoved: zod.boolean(),
+      guardsInstalled: zod.boolean(),
+      areaCleaned: zod.boolean(),
+      personnelClear: zod.boolean(),
+      note: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+  reviewDecision: zod
+    .union([
+      zod.literal("approved"),
+      zod.literal("rejected"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  reviewComments: zod.string().nullable(),
+  reviewedById: zod.number().nullable(),
+  reviewedAt: zod.string().nullable(),
+  authorizedById: zod.number().nullable(),
+  authorizedAt: zod.string().nullable(),
+  authorizationComments: zod.string().nullable(),
   closedAt: zod.string().nullable(),
   closedById: zod.number().nullable(),
   createdAt: zod.string(),
@@ -2644,26 +2822,28 @@ export const AuthorizeLotoReleaseResponse = zod.object({
 });
 
 /**
- * @summary Reject a pending release, returning the LOTO to active. Restricted to the assigned commander or an admin.
+ * @summary Authorize re-energization of a reviewed/approved LOTO. Records who authorized, when, and any comments. Restricted to the assigned commander or an admin.
  */
-export const RejectLotoReleaseParams = zod.object({
+export const AuthorizeLotoEnergizationParams = zod.object({
   lotoId: zod.coerce.number(),
 });
 
-export const RejectLotoReleaseBody = zod.object({
-  note: zod.string().nullish(),
+export const AuthorizeLotoEnergizationBody = zod.object({
+  comments: zod.string().nullish(),
 });
 
-export const RejectLotoReleaseResponse = zod.object({
+export const AuthorizeLotoEnergizationResponse = zod.object({
   id: zod.number(),
   lotoNumber: zod.string(),
   projectId: zod.number(),
   equipmentName: zod.string(),
   equipmentLocation: zod.string().nullable(),
   description: zod.string().nullable(),
-  severity: zod.enum(["standard", "critical"]),
-  status: zod.enum(["draft", "active", "pending_release", "closed"]),
+  severity: zod.enum(["low", "medium", "high", "critical"]),
+  status: zod.enum(["draft", "active", "pending_review", "closed"]),
   commanderId: zod.number().nullable(),
+  lockedOutById: zod.number().nullable(),
+  additionalPersonnel: zod.array(zod.number()),
   checklist: zod.array(
     zod.object({
       key: zod.string(),
@@ -2676,6 +2856,95 @@ export const RejectLotoReleaseResponse = zod.object({
   activatedAt: zod.string().nullable(),
   releaseRequestedAt: zod.string().nullable(),
   releaseRequestedById: zod.number().nullable(),
+  releaseChecklist: zod.union([
+    zod.object({
+      workComplete: zod.boolean(),
+      toolsRemoved: zod.boolean(),
+      guardsInstalled: zod.boolean(),
+      areaCleaned: zod.boolean(),
+      personnelClear: zod.boolean(),
+      note: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+  reviewDecision: zod
+    .union([
+      zod.literal("approved"),
+      zod.literal("rejected"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  reviewComments: zod.string().nullable(),
+  reviewedById: zod.number().nullable(),
+  reviewedAt: zod.string().nullable(),
+  authorizedById: zod.number().nullable(),
+  authorizedAt: zod.string().nullable(),
+  authorizationComments: zod.string().nullable(),
+  closedAt: zod.string().nullable(),
+  closedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Close out an authorized LOTO. Sets status to closed and makes the record permanently immutable. Restricted to the assigned commander or an admin.
+ */
+export const CloseLotoParams = zod.object({
+  lotoId: zod.coerce.number(),
+});
+
+export const CloseLotoBody = zod.object({
+  note: zod.string().nullish(),
+});
+
+export const CloseLotoResponse = zod.object({
+  id: zod.number(),
+  lotoNumber: zod.string(),
+  projectId: zod.number(),
+  equipmentName: zod.string(),
+  equipmentLocation: zod.string().nullable(),
+  description: zod.string().nullable(),
+  severity: zod.enum(["low", "medium", "high", "critical"]),
+  status: zod.enum(["draft", "active", "pending_review", "closed"]),
+  commanderId: zod.number().nullable(),
+  lockedOutById: zod.number().nullable(),
+  additionalPersonnel: zod.array(zod.number()),
+  checklist: zod.array(
+    zod.object({
+      key: zod.string(),
+      title: zod.string(),
+      complete: zod.boolean(),
+      notes: zod.string().nullable(),
+    }),
+  ),
+  createdById: zod.number(),
+  activatedAt: zod.string().nullable(),
+  releaseRequestedAt: zod.string().nullable(),
+  releaseRequestedById: zod.number().nullable(),
+  releaseChecklist: zod.union([
+    zod.object({
+      workComplete: zod.boolean(),
+      toolsRemoved: zod.boolean(),
+      guardsInstalled: zod.boolean(),
+      areaCleaned: zod.boolean(),
+      personnelClear: zod.boolean(),
+      note: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+  reviewDecision: zod
+    .union([
+      zod.literal("approved"),
+      zod.literal("rejected"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  reviewComments: zod.string().nullable(),
+  reviewedById: zod.number().nullable(),
+  reviewedAt: zod.string().nullable(),
+  authorizedById: zod.number().nullable(),
+  authorizedAt: zod.string().nullable(),
+  authorizationComments: zod.string().nullable(),
   closedAt: zod.string().nullable(),
   closedById: zod.number().nullable(),
   createdAt: zod.string(),
@@ -2764,8 +3033,9 @@ export const GetProjectActiveLotoResponseItem = zod.object({
   id: zod.number(),
   lotoNumber: zod.string(),
   equipmentName: zod.string(),
-  severity: zod.enum(["standard", "critical"]),
-  status: zod.enum(["active", "pending_release"]),
+  severity: zod.enum(["low", "medium", "high", "critical"]),
+  status: zod.enum(["active", "pending_review"]),
+  commanderId: zod.number().nullable(),
 });
 export const GetProjectActiveLotoResponse = zod.array(
   GetProjectActiveLotoResponseItem,

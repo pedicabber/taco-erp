@@ -12,6 +12,6 @@ export type ListLotoStatus =
 export const ListLotoStatus = {
   draft: "draft",
   active: "active",
-  pending_release: "pending_release",
+  pending_review: "pending_review",
   closed: "closed",
 } as const;

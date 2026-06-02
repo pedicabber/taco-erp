@@ -23,7 +23,10 @@ import type {
   AddLotoAttachmentBody,
   AddProjectAttachmentBody,
   AddTaskRelationBody,
+  AuthorizeEnergizationBody,
   CalendarEvent,
+  CloseLotoBody,
+  CommanderReviewBody,
   CreateDepartmentBody,
   CreateGeneralNotificationBody,
   CreateKanbanColumnBody,
@@ -54,7 +57,7 @@ import type {
   LotoDashboardSummary,
   LotoEvent,
   LotoRecord,
-  LotoReleaseActionBody,
+  LotoWorkLogBody,
   MarkAllNotificationsRead200,
   Notification,
   OfficeOpsTask,
@@ -65,6 +68,7 @@ import type {
   ProjectAttachment,
   ProjectSummary,
   RecentTimerEntry,
+  RequestLotoReleaseBody,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
   RescheduleProjectBody,
@@ -5789,7 +5793,94 @@ export const useActivateLoto = <
 };
 
 /**
- * @summary Request release of an active LOTO. Notifies the assigned commander.
+ * @summary Add a Work-Phase note or issue to an active LOTO record.
+ */
+export const getAddLotoWorkLogUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/work-log`;
+};
+
+export const addLotoWorkLog = async (
+  lotoId: number,
+  lotoWorkLogBody: LotoWorkLogBody,
+  options?: RequestInit,
+): Promise<LotoEvent> => {
+  return customFetch<LotoEvent>(getAddLotoWorkLogUrl(lotoId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(lotoWorkLogBody),
+  });
+};
+
+export const getAddLotoWorkLogMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addLotoWorkLog>>,
+    TError,
+    { lotoId: number; data: BodyType<LotoWorkLogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addLotoWorkLog>>,
+  TError,
+  { lotoId: number; data: BodyType<LotoWorkLogBody> },
+  TContext
+> => {
+  const mutationKey = ["addLotoWorkLog"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addLotoWorkLog>>,
+    { lotoId: number; data: BodyType<LotoWorkLogBody> }
+  > = (props) => {
+    const { lotoId, data } = props ?? {};
+
+    return addLotoWorkLog(lotoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddLotoWorkLogMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addLotoWorkLog>>
+>;
+export type AddLotoWorkLogMutationBody = BodyType<LotoWorkLogBody>;
+export type AddLotoWorkLogMutationError = ErrorType<void>;
+
+/**
+ * @summary Add a Work-Phase note or issue to an active LOTO record.
+ */
+export const useAddLotoWorkLog = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addLotoWorkLog>>,
+    TError,
+    { lotoId: number; data: BodyType<LotoWorkLogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addLotoWorkLog>>,
+  TError,
+  { lotoId: number; data: BodyType<LotoWorkLogBody> },
+  TContext
+> => {
+  return useMutation(getAddLotoWorkLogMutationOptions(options));
+};
+
+/**
+ * @summary Request release of an active LOTO with the Request-Release checklist. Notifies the assigned commander.
  */
 export const getRequestLotoReleaseUrl = (lotoId: number) => {
   return `/api/loto/${lotoId}/request-release`;
@@ -5797,14 +5888,14 @@ export const getRequestLotoReleaseUrl = (lotoId: number) => {
 
 export const requestLotoRelease = async (
   lotoId: number,
-  lotoReleaseActionBody?: LotoReleaseActionBody,
+  requestLotoReleaseBody: RequestLotoReleaseBody,
   options?: RequestInit,
 ): Promise<LotoRecord> => {
   return customFetch<LotoRecord>(getRequestLotoReleaseUrl(lotoId), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(lotoReleaseActionBody),
+    body: JSON.stringify(requestLotoReleaseBody),
   });
 };
 
@@ -5815,14 +5906,14 @@ export const getRequestLotoReleaseMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof requestLotoRelease>>,
     TError,
-    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    { lotoId: number; data: BodyType<RequestLotoReleaseBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof requestLotoRelease>>,
   TError,
-  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  { lotoId: number; data: BodyType<RequestLotoReleaseBody> },
   TContext
 > => {
   const mutationKey = ["requestLotoRelease"];
@@ -5836,7 +5927,7 @@ export const getRequestLotoReleaseMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof requestLotoRelease>>,
-    { lotoId: number; data: BodyType<LotoReleaseActionBody> }
+    { lotoId: number; data: BodyType<RequestLotoReleaseBody> }
   > = (props) => {
     const { lotoId, data } = props ?? {};
 
@@ -5849,11 +5940,11 @@ export const getRequestLotoReleaseMutationOptions = <
 export type RequestLotoReleaseMutationResult = NonNullable<
   Awaited<ReturnType<typeof requestLotoRelease>>
 >;
-export type RequestLotoReleaseMutationBody = BodyType<LotoReleaseActionBody>;
+export type RequestLotoReleaseMutationBody = BodyType<RequestLotoReleaseBody>;
 export type RequestLotoReleaseMutationError = ErrorType<void>;
 
 /**
- * @summary Request release of an active LOTO. Notifies the assigned commander.
+ * @summary Request release of an active LOTO with the Request-Release checklist. Notifies the assigned commander.
  */
 export const useRequestLotoRelease = <
   TError = ErrorType<void>,
@@ -5862,57 +5953,57 @@ export const useRequestLotoRelease = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof requestLotoRelease>>,
     TError,
-    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    { lotoId: number; data: BodyType<RequestLotoReleaseBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof requestLotoRelease>>,
   TError,
-  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  { lotoId: number; data: BodyType<RequestLotoReleaseBody> },
   TContext
 > => {
   return useMutation(getRequestLotoReleaseMutationOptions(options));
 };
 
 /**
- * @summary Authorize release (close) a pending LOTO. Restricted to the assigned commander or an admin.
+ * @summary Commander review of a pending LOTO. Approve (records review comments) or reject (returns the record to active). Restricted to the assigned commander or an admin.
  */
-export const getAuthorizeLotoReleaseUrl = (lotoId: number) => {
-  return `/api/loto/${lotoId}/authorize-release`;
+export const getReviewLotoUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/commander-review`;
 };
 
-export const authorizeLotoRelease = async (
+export const reviewLoto = async (
   lotoId: number,
-  lotoReleaseActionBody?: LotoReleaseActionBody,
+  commanderReviewBody: CommanderReviewBody,
   options?: RequestInit,
 ): Promise<LotoRecord> => {
-  return customFetch<LotoRecord>(getAuthorizeLotoReleaseUrl(lotoId), {
+  return customFetch<LotoRecord>(getReviewLotoUrl(lotoId), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(lotoReleaseActionBody),
+    body: JSON.stringify(commanderReviewBody),
   });
 };
 
-export const getAuthorizeLotoReleaseMutationOptions = <
+export const getReviewLotoMutationOptions = <
   TError = ErrorType<void>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof authorizeLotoRelease>>,
+    Awaited<ReturnType<typeof reviewLoto>>,
     TError,
-    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    { lotoId: number; data: BodyType<CommanderReviewBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof authorizeLotoRelease>>,
+  Awaited<ReturnType<typeof reviewLoto>>,
   TError,
-  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  { lotoId: number; data: BodyType<CommanderReviewBody> },
   TContext
 > => {
-  const mutationKey = ["authorizeLotoRelease"];
+  const mutationKey = ["reviewLoto"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -5922,84 +6013,84 @@ export const getAuthorizeLotoReleaseMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof authorizeLotoRelease>>,
-    { lotoId: number; data: BodyType<LotoReleaseActionBody> }
+    Awaited<ReturnType<typeof reviewLoto>>,
+    { lotoId: number; data: BodyType<CommanderReviewBody> }
   > = (props) => {
     const { lotoId, data } = props ?? {};
 
-    return authorizeLotoRelease(lotoId, data, requestOptions);
+    return reviewLoto(lotoId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type AuthorizeLotoReleaseMutationResult = NonNullable<
-  Awaited<ReturnType<typeof authorizeLotoRelease>>
+export type ReviewLotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reviewLoto>>
 >;
-export type AuthorizeLotoReleaseMutationBody = BodyType<LotoReleaseActionBody>;
-export type AuthorizeLotoReleaseMutationError = ErrorType<void>;
+export type ReviewLotoMutationBody = BodyType<CommanderReviewBody>;
+export type ReviewLotoMutationError = ErrorType<void>;
 
 /**
- * @summary Authorize release (close) a pending LOTO. Restricted to the assigned commander or an admin.
+ * @summary Commander review of a pending LOTO. Approve (records review comments) or reject (returns the record to active). Restricted to the assigned commander or an admin.
  */
-export const useAuthorizeLotoRelease = <
+export const useReviewLoto = <
   TError = ErrorType<void>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof authorizeLotoRelease>>,
+    Awaited<ReturnType<typeof reviewLoto>>,
     TError,
-    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    { lotoId: number; data: BodyType<CommanderReviewBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof authorizeLotoRelease>>,
+  Awaited<ReturnType<typeof reviewLoto>>,
   TError,
-  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  { lotoId: number; data: BodyType<CommanderReviewBody> },
   TContext
 > => {
-  return useMutation(getAuthorizeLotoReleaseMutationOptions(options));
+  return useMutation(getReviewLotoMutationOptions(options));
 };
 
 /**
- * @summary Reject a pending release, returning the LOTO to active. Restricted to the assigned commander or an admin.
+ * @summary Authorize re-energization of a reviewed/approved LOTO. Records who authorized, when, and any comments. Restricted to the assigned commander or an admin.
  */
-export const getRejectLotoReleaseUrl = (lotoId: number) => {
-  return `/api/loto/${lotoId}/reject-release`;
+export const getAuthorizeLotoEnergizationUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/authorize-energization`;
 };
 
-export const rejectLotoRelease = async (
+export const authorizeLotoEnergization = async (
   lotoId: number,
-  lotoReleaseActionBody?: LotoReleaseActionBody,
+  authorizeEnergizationBody?: AuthorizeEnergizationBody,
   options?: RequestInit,
 ): Promise<LotoRecord> => {
-  return customFetch<LotoRecord>(getRejectLotoReleaseUrl(lotoId), {
+  return customFetch<LotoRecord>(getAuthorizeLotoEnergizationUrl(lotoId), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(lotoReleaseActionBody),
+    body: JSON.stringify(authorizeEnergizationBody),
   });
 };
 
-export const getRejectLotoReleaseMutationOptions = <
+export const getAuthorizeLotoEnergizationMutationOptions = <
   TError = ErrorType<void>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof rejectLotoRelease>>,
+    Awaited<ReturnType<typeof authorizeLotoEnergization>>,
     TError,
-    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    { lotoId: number; data: BodyType<AuthorizeEnergizationBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof rejectLotoRelease>>,
+  Awaited<ReturnType<typeof authorizeLotoEnergization>>,
   TError,
-  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  { lotoId: number; data: BodyType<AuthorizeEnergizationBody> },
   TContext
 > => {
-  const mutationKey = ["rejectLotoRelease"];
+  const mutationKey = ["authorizeLotoEnergization"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -6009,44 +6100,132 @@ export const getRejectLotoReleaseMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof rejectLotoRelease>>,
-    { lotoId: number; data: BodyType<LotoReleaseActionBody> }
+    Awaited<ReturnType<typeof authorizeLotoEnergization>>,
+    { lotoId: number; data: BodyType<AuthorizeEnergizationBody> }
   > = (props) => {
     const { lotoId, data } = props ?? {};
 
-    return rejectLotoRelease(lotoId, data, requestOptions);
+    return authorizeLotoEnergization(lotoId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type RejectLotoReleaseMutationResult = NonNullable<
-  Awaited<ReturnType<typeof rejectLotoRelease>>
+export type AuthorizeLotoEnergizationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof authorizeLotoEnergization>>
 >;
-export type RejectLotoReleaseMutationBody = BodyType<LotoReleaseActionBody>;
-export type RejectLotoReleaseMutationError = ErrorType<void>;
+export type AuthorizeLotoEnergizationMutationBody =
+  BodyType<AuthorizeEnergizationBody>;
+export type AuthorizeLotoEnergizationMutationError = ErrorType<void>;
 
 /**
- * @summary Reject a pending release, returning the LOTO to active. Restricted to the assigned commander or an admin.
+ * @summary Authorize re-energization of a reviewed/approved LOTO. Records who authorized, when, and any comments. Restricted to the assigned commander or an admin.
  */
-export const useRejectLotoRelease = <
+export const useAuthorizeLotoEnergization = <
   TError = ErrorType<void>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof rejectLotoRelease>>,
+    Awaited<ReturnType<typeof authorizeLotoEnergization>>,
     TError,
-    { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+    { lotoId: number; data: BodyType<AuthorizeEnergizationBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof rejectLotoRelease>>,
+  Awaited<ReturnType<typeof authorizeLotoEnergization>>,
   TError,
-  { lotoId: number; data: BodyType<LotoReleaseActionBody> },
+  { lotoId: number; data: BodyType<AuthorizeEnergizationBody> },
   TContext
 > => {
-  return useMutation(getRejectLotoReleaseMutationOptions(options));
+  return useMutation(getAuthorizeLotoEnergizationMutationOptions(options));
+};
+
+/**
+ * @summary Close out an authorized LOTO. Sets status to closed and makes the record permanently immutable. Restricted to the assigned commander or an admin.
+ */
+export const getCloseLotoUrl = (lotoId: number) => {
+  return `/api/loto/${lotoId}/close`;
+};
+
+export const closeLoto = async (
+  lotoId: number,
+  closeLotoBody?: CloseLotoBody,
+  options?: RequestInit,
+): Promise<LotoRecord> => {
+  return customFetch<LotoRecord>(getCloseLotoUrl(lotoId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(closeLotoBody),
+  });
+};
+
+export const getCloseLotoMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closeLoto>>,
+    TError,
+    { lotoId: number; data: BodyType<CloseLotoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof closeLoto>>,
+  TError,
+  { lotoId: number; data: BodyType<CloseLotoBody> },
+  TContext
+> => {
+  const mutationKey = ["closeLoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof closeLoto>>,
+    { lotoId: number; data: BodyType<CloseLotoBody> }
+  > = (props) => {
+    const { lotoId, data } = props ?? {};
+
+    return closeLoto(lotoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CloseLotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof closeLoto>>
+>;
+export type CloseLotoMutationBody = BodyType<CloseLotoBody>;
+export type CloseLotoMutationError = ErrorType<void>;
+
+/**
+ * @summary Close out an authorized LOTO. Sets status to closed and makes the record permanently immutable. Restricted to the assigned commander or an admin.
+ */
+export const useCloseLoto = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closeLoto>>,
+    TError,
+    { lotoId: number; data: BodyType<CloseLotoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof closeLoto>>,
+  TError,
+  { lotoId: number; data: BodyType<CloseLotoBody> },
+  TContext
+> => {
+  return useMutation(getCloseLotoMutationOptions(options));
 };
 
 /**

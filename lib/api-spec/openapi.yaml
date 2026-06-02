@@ -1270,7 +1270,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [draft, active, pending_release, closed]
+            enum: [draft, active, pending_review, closed]
         - name: projectId
           in: query
           required: false
@@ -1281,7 +1281,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [standard, critical]
+            enum: [low, medium, high, critical]
         - name: q
           in: query
           required: false
@@ -1393,11 +1393,11 @@ paths:
         "409":
           description: Not draft, checklist incomplete, or no commander assigned
 
-  /loto/{lotoId}/request-release:
+  /loto/{lotoId}/work-log:
     post:
-      operationId: requestLotoRelease
+      operationId: addLotoWorkLog
       tags: [safety]
-      summary: Request release of an active LOTO. Notifies the assigned commander.
+      summary: Add a Work-Phase note or issue to an active LOTO record.
       parameters:
         - name: lotoId
           in: path
@@ -1405,14 +1405,43 @@ paths:
           schema:
             type: integer
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LotoReleaseActionBody"
+              $ref: "#/components/schemas/LotoWorkLogBody"
+      responses:
+        "201":
+          description: Created work-log event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoEvent"
+        "403":
+          description: Caller lacks Safety access
+        "409":
+          description: Record is not active
+
+  /loto/{lotoId}/request-release:
+    post:
+      operationId: requestLotoRelease
+      tags: [safety]
+      summary: Request release of an active LOTO with the Request-Release checklist. Notifies the assigned commander.
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestLotoReleaseBody"
       responses:
         "200":
-          description: LOTO record now pending release
+          description: LOTO record now pending commander review
           content:
             application/json:
               schema:
@@ -1422,11 +1451,46 @@ paths:
         "409":
           description: Record is not active
 
-  /loto/{lotoId}/authorize-release:
+  /loto/{lotoId}/commander-review:
     post:
-      operationId: authorizeLotoRelease
+      operationId: reviewLoto
       tags: [safety]
-      summary: Authorize release (close) a pending LOTO. Restricted to the assigned commander or an admin.
+      summary: >-
+        Commander review of a pending LOTO. Approve (records review comments) or
+        reject (returns the record to active). Restricted to the assigned
+        commander or an admin.
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommanderReviewBody"
+      responses:
+        "200":
+          description: Reviewed LOTO record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoRecord"
+        "403":
+          description: Caller is not the assigned commander or an admin
+        "409":
+          description: Record is not pending commander review
+
+  /loto/{lotoId}/authorize-energization:
+    post:
+      operationId: authorizeLotoEnergization
+      tags: [safety]
+      summary: >-
+        Authorize re-energization of a reviewed/approved LOTO. Records who
+        authorized, when, and any comments. Restricted to the assigned commander
+        or an admin.
       parameters:
         - name: lotoId
           in: path
@@ -1438,7 +1502,38 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LotoReleaseActionBody"
+              $ref: "#/components/schemas/AuthorizeEnergizationBody"
+      responses:
+        "200":
+          description: Authorized LOTO record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotoRecord"
+        "403":
+          description: Caller is not the assigned commander or an admin
+        "409":
+          description: Record is not approved for authorization
+
+  /loto/{lotoId}/close:
+    post:
+      operationId: closeLoto
+      tags: [safety]
+      summary: >-
+        Close out an authorized LOTO. Sets status to closed and makes the record
+        permanently immutable. Restricted to the assigned commander or an admin.
+      parameters:
+        - name: lotoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseLotoBody"
       responses:
         "200":
           description: Closed LOTO record
@@ -1449,36 +1544,7 @@ paths:
         "403":
           description: Caller is not the assigned commander or an admin
         "409":
-          description: Record is not pending release
-
-  /loto/{lotoId}/reject-release:
-    post:
-      operationId: rejectLotoRelease
-      tags: [safety]
-      summary: Reject a pending release, returning the LOTO to active. Restricted to the assigned commander or an admin.
-      parameters:
-        - name: lotoId
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LotoReleaseActionBody"
-      responses:
-        "200":
-          description: LOTO record returned to active
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LotoRecord"
-        "403":
-          description: Caller is not the assigned commander or an admin
-        "409":
-          description: Record is not pending release
+          description: Record is not authorized for closeout
 
   /loto/{lotoId}/events:
     get:
@@ -2793,12 +2859,18 @@ components:
           type: ["string", "null"]
         severity:
           type: string
-          enum: [standard, critical]
+          enum: [low, medium, high, critical]
         status:
           type: string
-          enum: [draft, active, pending_release, closed]
+          enum: [draft, active, pending_review, closed]
         commanderId:
           type: ["integer", "null"]
+        lockedOutById:
+          type: ["integer", "null"]
+        additionalPersonnel:
+          type: array
+          items:
+            type: integer
         checklist:
           type: array
           items:
@@ -2811,6 +2883,25 @@ components:
           type: ["string", "null"]
         releaseRequestedById:
           type: ["integer", "null"]
+        releaseChecklist:
+          oneOf:
+            - $ref: "#/components/schemas/LotoReleaseChecklist"
+            - type: "null"
+        reviewDecision:
+          type: ["string", "null"]
+          enum: [approved, rejected, null]
+        reviewComments:
+          type: ["string", "null"]
+        reviewedById:
+          type: ["integer", "null"]
+        reviewedAt:
+          type: ["string", "null"]
+        authorizedById:
+          type: ["integer", "null"]
+        authorizedAt:
+          type: ["string", "null"]
+        authorizationComments:
+          type: ["string", "null"]
         closedAt:
           type: ["string", "null"]
         closedById:
@@ -2829,11 +2920,21 @@ components:
         - severity
         - status
         - commanderId
+        - lockedOutById
+        - additionalPersonnel
         - checklist
         - createdById
         - activatedAt
         - releaseRequestedAt
         - releaseRequestedById
+        - releaseChecklist
+        - reviewDecision
+        - reviewComments
+        - reviewedById
+        - reviewedAt
+        - authorizedById
+        - authorizedAt
+        - authorizationComments
         - closedAt
         - closedById
         - createdAt
@@ -2858,10 +2959,16 @@ components:
           type: ["string", "null"]
         severity:
           type: string
-          enum: [standard, critical]
-          default: standard
+          enum: [low, medium, high, critical]
+          default: medium
         commanderId:
           type: ["integer", "null"]
+        lockedOutById:
+          type: ["integer", "null"]
+        additionalPersonnel:
+          type: array
+          items:
+            type: integer
       required:
         - projectId
         - equipmentName
@@ -2878,9 +2985,15 @@ components:
           type: ["string", "null"]
         severity:
           type: string
-          enum: [standard, critical]
+          enum: [low, medium, high, critical]
         commanderId:
           type: ["integer", "null"]
+        lockedOutById:
+          type: ["integer", "null"]
+        additionalPersonnel:
+          type: array
+          items:
+            type: integer
         checklist:
           type: array
           items:
@@ -2892,11 +3005,86 @@ components:
         commanderId:
           type: ["integer", "null"]
 
-    LotoReleaseActionBody:
+    LotoReleaseChecklist:
+      type: object
+      properties:
+        workComplete:
+          type: boolean
+        toolsRemoved:
+          type: boolean
+        guardsInstalled:
+          type: boolean
+        areaCleaned:
+          type: boolean
+        personnelClear:
+          type: boolean
+        note:
+          type: ["string", "null"]
+      required:
+        - workComplete
+        - toolsRemoved
+        - guardsInstalled
+        - areaCleaned
+        - personnelClear
+        - note
+
+    RequestLotoReleaseBody:
+      type: object
+      properties:
+        workComplete:
+          type: boolean
+        toolsRemoved:
+          type: boolean
+        guardsInstalled:
+          type: boolean
+        areaCleaned:
+          type: boolean
+        personnelClear:
+          type: boolean
+        note:
+          type: ["string", "null"]
+      required:
+        - workComplete
+        - toolsRemoved
+        - guardsInstalled
+        - areaCleaned
+        - personnelClear
+
+    CommanderReviewBody:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [approved, rejected]
+        comments:
+          type: ["string", "null"]
+      required:
+        - decision
+
+    AuthorizeEnergizationBody:
+      type: object
+      properties:
+        comments:
+          type: ["string", "null"]
+
+    CloseLotoBody:
       type: object
       properties:
         note:
           type: ["string", "null"]
+
+    LotoWorkLogBody:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [note, issue]
+        message:
+          type: string
+          minLength: 1
+      required:
+        - kind
+        - message
 
     LotoEvent:
       type: object
@@ -2993,7 +3181,7 @@ components:
           type: integer
         active:
           type: integer
-        pendingRelease:
+        pendingReview:
           type: integer
         closedThisMonth:
           type: integer
@@ -3002,7 +3190,7 @@ components:
       required:
         - draft
         - active
-        - pendingRelease
+        - pendingReview
         - closedThisMonth
         - criticalActive
 
@@ -3017,16 +3205,19 @@ components:
           type: string
         severity:
           type: string
-          enum: [standard, critical]
+          enum: [low, medium, high, critical]
         status:
           type: string
-          enum: [active, pending_release]
+          enum: [active, pending_review]
+        commanderId:
+          type: ["integer", "null"]
       required:
         - id
         - lotoNumber
         - equipmentName
         - severity
         - status
+        - commanderId
 
     ListLotoBannerResponse:
       type: array

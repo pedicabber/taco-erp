@@ -11,5 +11,5 @@ export type LotoBannerItemStatus =
 
 export const LotoBannerItemStatus = {
   active: "active",
-  pending_release: "pending_release",
+  pending_review: "pending_review",
 } as const;

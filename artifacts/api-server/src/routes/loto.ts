@@ -18,11 +18,14 @@ import {
   UpdateLotoBody,
   ActivateLotoBody,
   RequestLotoReleaseBody,
-  AuthorizeLotoReleaseBody,
-  RejectLotoReleaseBody,
+  ReviewLotoBody,
+  AuthorizeLotoEnergizationBody,
+  CloseLotoBody,
+  AddLotoWorkLogBody,
   AddLotoAuditNoteBody,
   AddLotoAttachmentBody,
 } from "@workspace/api-zod";
+import type { LotoReleaseChecklist } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -107,11 +110,21 @@ function serialize(r: LotoRow) {
     severity: r.severity,
     status: r.status,
     commanderId: r.commanderId,
+    lockedOutById: r.lockedOutById,
+    additionalPersonnel: (r.additionalPersonnel ?? []) as number[],
     checklist: (r.checklist ?? []) as LotoChecklistSection[],
     createdById: r.createdById,
     activatedAt: r.activatedAt ? r.activatedAt.toISOString() : null,
     releaseRequestedAt: r.releaseRequestedAt ? r.releaseRequestedAt.toISOString() : null,
     releaseRequestedById: r.releaseRequestedById,
+    releaseChecklist: (r.releaseChecklist ?? null) as LotoReleaseChecklist | null,
+    reviewDecision: r.reviewDecision,
+    reviewComments: r.reviewComments,
+    reviewedById: r.reviewedById,
+    reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
+    authorizedById: r.authorizedById,
+    authorizedAt: r.authorizedAt ? r.authorizedAt.toISOString() : null,
+    authorizationComments: r.authorizationComments,
     closedAt: r.closedAt ? r.closedAt.toISOString() : null,
     closedById: r.closedById,
     createdAt: r.createdAt.toISOString(),
@@ -163,6 +176,19 @@ async function commanderExists(id: number): Promise<boolean> {
   return !!row;
 }
 
+/**
+ * Validate + de-duplicate a list of additional-personnel user ids. Returns the
+ * cleaned list, or null if any id does not reference an existing user.
+ */
+async function sanitizePersonnel(ids: number[] | undefined | null): Promise<number[] | null> {
+  if (!ids || ids.length === 0) return [];
+  const unique = Array.from(new Set(ids));
+  for (const id of unique) {
+    if (!(await commanderExists(id))) return null;
+  }
+  return unique;
+}
+
 // ── Dashboard summary (literal route — declared before /loto/:lotoId) ─────────
 router.get("/loto/dashboard-summary", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
   const rows = await db
@@ -178,22 +204,22 @@ router.get("/loto/dashboard-summary", requireAuth, async (req: AuthenticatedRequ
 
   let draft = 0,
     active = 0,
-    pendingRelease = 0,
+    pendingReview = 0,
     closedThisMonth = 0,
     criticalActive = 0;
 
   for (const r of rows) {
     if (r.status === "draft") draft += 1;
     else if (r.status === "active") active += 1;
-    else if (r.status === "pending_release") pendingRelease += 1;
+    else if (r.status === "pending_review") pendingReview += 1;
     else if (r.status === "closed" && r.closedAt && r.closedAt >= monthStart) closedThisMonth += 1;
 
-    if (r.severity === "critical" && (r.status === "active" || r.status === "pending_release")) {
+    if (r.severity === "critical" && (r.status === "active" || r.status === "pending_review")) {
       criticalActive += 1;
     }
   }
 
-  res.json({ draft, active, pendingRelease, closedThisMonth, criticalActive });
+  res.json({ draft, active, pendingReview, closedThisMonth, criticalActive });
 });
 
 // ── List (company-wide visibility) ───────────────────────────────────────────
@@ -201,10 +227,10 @@ router.get("/loto", requireAuth, async (req: AuthenticatedRequest, res): Promise
   const { status, projectId, severity, q } = req.query as Record<string, string | undefined>;
 
   const conditions = [];
-  if (status && ["draft", "active", "pending_release", "closed"].includes(status)) {
+  if (status && ["draft", "active", "pending_review", "closed"].includes(status)) {
     conditions.push(eq(lotoRecordsTable.status, status));
   }
-  if (severity && ["standard", "critical"].includes(severity)) {
+  if (severity && ["low", "medium", "high", "critical"].includes(severity)) {
     conditions.push(eq(lotoRecordsTable.severity, severity));
   }
   if (projectId) {
@@ -234,7 +260,7 @@ router.post("/loto", requireAuth, async (req: AuthenticatedRequest, res): Promis
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { projectId, equipmentName, equipmentLocation, description, severity, commanderId } = parsed.data;
+  const { projectId, equipmentName, equipmentLocation, description, severity, commanderId, lockedOutById, additionalPersonnel } = parsed.data;
 
   const [project] = await db.select({ id: projectsTable.id }).from(projectsTable).where(eq(projectsTable.id, projectId));
   if (!project) {
@@ -246,6 +272,15 @@ router.post("/loto", requireAuth, async (req: AuthenticatedRequest, res): Promis
     res.status(400).json({ error: "Assigned LOTO Commander not found" });
     return;
   }
+  if (lockedOutById != null && !(await commanderExists(lockedOutById))) {
+    res.status(400).json({ error: "Locked-out-by user not found" });
+    return;
+  }
+  const personnel = await sanitizePersonnel(additionalPersonnel);
+  if (personnel === null) {
+    res.status(400).json({ error: "One or more additional personnel not found" });
+    return;
+  }
 
   const [created] = await db
     .insert(lotoRecordsTable)
@@ -255,9 +290,11 @@ router.post("/loto", requireAuth, async (req: AuthenticatedRequest, res): Promis
       equipmentName,
       equipmentLocation: equipmentLocation ?? null,
       description: description ?? null,
-      severity: severity ?? "standard",
+      severity: severity ?? "medium",
       status: "draft",
       commanderId: commanderId ?? null,
+      lockedOutById: lockedOutById ?? null,
+      additionalPersonnel: personnel,
       checklist: initialChecklist(),
       createdById: user.id,
     })
@@ -313,22 +350,54 @@ router.patch("/loto/:lotoId", requireAuth, async (req: AuthenticatedRequest, res
     res.status(404).json({ error: "LOTO record not found" });
     return;
   }
-  if (existing.status !== "draft") {
-    res.status(409).json({ error: "Only draft LOTO records can be edited" });
+  if (existing.status === "closed") {
+    res.status(409).json({ error: "Closed LOTO records are immutable" });
     return;
   }
 
   const u = parsed.data;
+  const isDraft = existing.status === "draft";
+
+  // Personnel (commander, locked-out-by, additional personnel) may be edited
+  // while draft OR active (the Work Phase). Core fields (equipment, location,
+  // description, severity, checklist) are draft-only.
+  const coreEdit =
+    u.equipmentName !== undefined ||
+    u.equipmentLocation !== undefined ||
+    u.description !== undefined ||
+    u.severity !== undefined ||
+    u.checklist !== undefined;
+  if (coreEdit && !isDraft) {
+    res.status(409).json({ error: "Only draft LOTO records can edit equipment, severity, or the checklist" });
+    return;
+  }
+
   if (u.commanderId != null && !(await commanderExists(u.commanderId))) {
     res.status(400).json({ error: "Assigned LOTO Commander not found" });
     return;
   }
+  if (u.lockedOutById != null && !(await commanderExists(u.lockedOutById))) {
+    res.status(400).json({ error: "Locked-out-by user not found" });
+    return;
+  }
+  let personnel: number[] | undefined;
+  if (u.additionalPersonnel !== undefined) {
+    const cleaned = await sanitizePersonnel(u.additionalPersonnel);
+    if (cleaned === null) {
+      res.status(400).json({ error: "One or more additional personnel not found" });
+      return;
+    }
+    personnel = cleaned;
+  }
+
   const setClause: Partial<typeof lotoRecordsTable.$inferInsert> = {
     ...(u.equipmentName !== undefined ? { equipmentName: u.equipmentName } : {}),
     ...(u.equipmentLocation !== undefined ? { equipmentLocation: u.equipmentLocation } : {}),
     ...(u.description !== undefined ? { description: u.description } : {}),
     ...(u.severity !== undefined ? { severity: u.severity } : {}),
     ...(u.commanderId !== undefined ? { commanderId: u.commanderId } : {}),
+    ...(u.lockedOutById !== undefined ? { lockedOutById: u.lockedOutById } : {}),
+    ...(personnel !== undefined ? { additionalPersonnel: personnel } : {}),
     ...(u.checklist !== undefined
       ? { checklist: mergeChecklist((existing.checklist ?? []) as LotoChecklistSection[], u.checklist) }
       : {}),
@@ -396,7 +465,44 @@ router.post("/loto/:lotoId/activate", requireAuth, async (req: AuthenticatedRequ
   res.json(serialize(updated));
 });
 
-// ── Request release (active → pending_release) ───────────────────────────────
+// ── Work-phase log (active only) — notes & issues during the work window ──────
+router.post("/loto/:lotoId/work-log", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const user = await requireSafetyAccess(req, res);
+  if (!user) return;
+
+  const id = parseId(req.params.lotoId);
+  if (id === null) {
+    res.status(400).json({ error: "Invalid LOTO ID" });
+    return;
+  }
+
+  const parsed = AddLotoWorkLogBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [existing] = await db.select({ status: lotoRecordsTable.status }).from(lotoRecordsTable).where(eq(lotoRecordsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "LOTO record not found" });
+    return;
+  }
+  if (existing.status !== "active") {
+    res.status(409).json({ error: "Work-phase notes can only be logged while the LOTO is active" });
+    return;
+  }
+
+  const { kind, message } = parsed.data;
+  const type = kind === "issue" ? "work_issue" : "work_note";
+  const [event] = await db
+    .insert(lotoEventsTable)
+    .values({ lotoId: id, type, message, actorId: user.id })
+    .returning();
+
+  res.status(201).json(serializeEvent(event));
+});
+
+// ── Request release (active → pending_review) — stores the release checklist ──
 router.post("/loto/:lotoId/request-release", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
   const user = await requireSafetyAccess(req, res);
   if (!user) return;
@@ -423,14 +529,47 @@ router.post("/loto/:lotoId/request-release", requireAuth, async (req: Authentica
     return;
   }
 
+  const { workComplete, toolsRemoved, guardsInstalled, areaCleaned, personnelClear, note } = parsed.data;
+  if (!workComplete || !toolsRemoved || !guardsInstalled || !areaCleaned || !personnelClear) {
+    res.status(409).json({ error: "All release-readiness checks must be confirmed before requesting release" });
+    return;
+  }
+
+  const releaseChecklist: LotoReleaseChecklist = {
+    workComplete,
+    toolsRemoved,
+    guardsInstalled,
+    areaCleaned,
+    personnelClear,
+    note: note?.trim() || null,
+  };
+
   const [updated] = await db
     .update(lotoRecordsTable)
-    .set({ status: "pending_release", releaseRequestedAt: new Date(), releaseRequestedById: user.id })
+    .set({
+      status: "pending_review",
+      releaseRequestedAt: new Date(),
+      releaseRequestedById: user.id,
+      releaseChecklist,
+      // Clear any prior review outcome when re-submitting after a rejection so
+      // the new review cycle starts clean (no stale review/authorization).
+      reviewDecision: null,
+      reviewComments: null,
+      reviewedById: null,
+      reviewedAt: null,
+      authorizedById: null,
+      authorizedAt: null,
+      authorizationComments: null,
+    })
     .where(eq(lotoRecordsTable.id, id))
     .returning();
 
-  const note = parsed.data.note?.trim();
-  await logEvent(id, "release_requested", note ? `Release requested: ${note}` : "Release requested", user.id);
+  await logEvent(
+    id,
+    "release_requested",
+    note?.trim() ? `Release requested: ${note.trim()}` : "Release requested — sent for commander review",
+    user.id,
+  );
 
   // Notify the assigned commander with LOTO#, project, equipment, requester.
   if (updated.commanderId) {
@@ -449,11 +588,11 @@ router.post("/loto/:lotoId/request-release", requireAuth, async (req: Authentica
   res.json(serialize(updated));
 });
 
-// ── Authorize release (pending_release → closed) ─────────────────────────────
-router.post("/loto/:lotoId/authorize-release", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
-  // Authorization here is the per-record commander gate (or admin), NOT Safety
-  // department membership — an assigned commander may live outside the Safety
-  // department and must still be able to approve their own records.
+// ── Commander review (pending_review → approved-in-place | active) ────────────
+router.post("/loto/:lotoId/commander-review", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  // Per-record commander gate (or admin), NOT Safety department membership — an
+  // assigned commander may live outside the Safety department and must still be
+  // able to review their own records.
   const user = await syncUserFromClerk(req);
   if (!user) {
     res.status(401).json({ error: "Unauthorized" });
@@ -466,7 +605,7 @@ router.post("/loto/:lotoId/authorize-release", requireAuth, async (req: Authenti
     return;
   }
 
-  const parsed = AuthorizeLotoReleaseBody.safeParse(req.body ?? {});
+  const parsed = ReviewLotoBody.safeParse(req.body ?? {});
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -477,13 +616,165 @@ router.post("/loto/:lotoId/authorize-release", requireAuth, async (req: Authenti
     res.status(404).json({ error: "LOTO record not found" });
     return;
   }
-  if (existing.status !== "pending_release") {
-    res.status(409).json({ error: "Only pending-release LOTO records can be authorized" });
+  if (existing.status !== "pending_review") {
+    res.status(409).json({ error: "Only LOTO records pending commander review can be reviewed" });
     return;
   }
-  // Approval gate: the assigned commander or an admin.
+  // Each release cycle gets exactly one commander decision. Once a decision is
+  // recorded (or energization already authorized), the cycle is locked; a new
+  // decision requires a fresh request-release submission.
+  if (existing.reviewDecision !== null || existing.authorizedAt !== null) {
+    res.status(409).json({ error: "This release has already been reviewed; a new release request is required to review again" });
+    return;
+  }
   if (user.role !== "admin" && existing.commanderId !== user.id) {
-    res.status(403).json({ error: "Only the assigned LOTO Commander or an admin may authorize release" });
+    res.status(403).json({ error: "Only the assigned LOTO Commander or an admin may review this record" });
+    return;
+  }
+
+  const { decision, comments } = parsed.data;
+  const reviewComments = comments?.trim() || null;
+
+  if (decision === "rejected") {
+    // Return to the work phase; clear the prior release submission.
+    const [updated] = await db
+      .update(lotoRecordsTable)
+      .set({
+        status: "active",
+        reviewDecision: "rejected",
+        reviewComments,
+        reviewedById: user.id,
+        reviewedAt: new Date(),
+        releaseRequestedAt: null,
+        releaseRequestedById: null,
+        releaseChecklist: null,
+        // Defensive: a rejected cycle must never carry authorization forward.
+        authorizedById: null,
+        authorizedAt: null,
+        authorizationComments: null,
+      })
+      .where(eq(lotoRecordsTable.id, id))
+      .returning();
+
+    await logEvent(
+      id,
+      "review_rejected",
+      reviewComments ? `Review rejected: ${reviewComments}` : "Review rejected — returned to active",
+      user.id,
+    );
+    res.json(serialize(updated));
+    return;
+  }
+
+  // Approved: record the review but keep the record pending until energization
+  // is explicitly authorized.
+  const [updated] = await db
+    .update(lotoRecordsTable)
+    .set({
+      reviewDecision: "approved",
+      reviewComments,
+      reviewedById: user.id,
+      reviewedAt: new Date(),
+    })
+    .where(eq(lotoRecordsTable.id, id))
+    .returning();
+
+  await logEvent(
+    id,
+    "review_approved",
+    reviewComments ? `Review approved: ${reviewComments}` : "Review approved — awaiting energization authorization",
+    user.id,
+  );
+
+  res.json(serialize(updated));
+});
+
+// ── Authorize energization (approved review, still pending_review) ────────────
+router.post("/loto/:lotoId/authorize-energization", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const user = await syncUserFromClerk(req);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const id = parseId(req.params.lotoId);
+  if (id === null) {
+    res.status(400).json({ error: "Invalid LOTO ID" });
+    return;
+  }
+
+  const parsed = AuthorizeLotoEnergizationBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [existing] = await db.select().from(lotoRecordsTable).where(eq(lotoRecordsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "LOTO record not found" });
+    return;
+  }
+  if (existing.status !== "pending_review" || existing.reviewDecision !== "approved") {
+    res.status(409).json({ error: "Energization can only be authorized after the commander review is approved" });
+    return;
+  }
+  if (user.role !== "admin" && existing.commanderId !== user.id) {
+    res.status(403).json({ error: "Only the assigned LOTO Commander or an admin may authorize energization" });
+    return;
+  }
+
+  const comments = parsed.data.comments?.trim() || null;
+  const [updated] = await db
+    .update(lotoRecordsTable)
+    .set({ authorizedById: user.id, authorizedAt: new Date(), authorizationComments: comments })
+    .where(eq(lotoRecordsTable.id, id))
+    .returning();
+
+  await logEvent(
+    id,
+    "energization_authorized",
+    comments ? `Energization authorized: ${comments}` : "Energization authorized — ready for close-out",
+    user.id,
+  );
+
+  res.json(serialize(updated));
+});
+
+// ── Close (authorized → closed) — record becomes permanently immutable ───────
+router.post("/loto/:lotoId/close", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const user = await syncUserFromClerk(req);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const id = parseId(req.params.lotoId);
+  if (id === null) {
+    res.status(400).json({ error: "Invalid LOTO ID" });
+    return;
+  }
+
+  const parsed = CloseLotoBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [existing] = await db.select().from(lotoRecordsTable).where(eq(lotoRecordsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "LOTO record not found" });
+    return;
+  }
+  if (
+    existing.status !== "pending_review" ||
+    existing.reviewDecision !== "approved" ||
+    existing.authorizedAt == null
+  ) {
+    res.status(409).json({ error: "Only a LOTO with an approved review and authorized energization can be closed" });
+    return;
+  }
+  if (user.role !== "admin" && existing.commanderId !== user.id) {
+    res.status(403).json({ error: "Only the assigned LOTO Commander or an admin may close this record" });
     return;
   }
 
@@ -494,55 +785,7 @@ router.post("/loto/:lotoId/authorize-release", requireAuth, async (req: Authenti
     .returning();
 
   const note = parsed.data.note?.trim();
-  await logEvent(id, "release_authorized", note ? `Release authorized: ${note}` : "Release authorized — LOTO closed", user.id);
-
-  res.json(serialize(updated));
-});
-
-// ── Reject release (pending_release → active) ────────────────────────────────
-router.post("/loto/:lotoId/reject-release", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
-  // Per-record commander gate (or admin), NOT Safety department membership —
-  // see authorize-release for rationale.
-  const user = await syncUserFromClerk(req);
-  if (!user) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  const id = parseId(req.params.lotoId);
-  if (id === null) {
-    res.status(400).json({ error: "Invalid LOTO ID" });
-    return;
-  }
-
-  const parsed = RejectLotoReleaseBody.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const [existing] = await db.select().from(lotoRecordsTable).where(eq(lotoRecordsTable.id, id));
-  if (!existing) {
-    res.status(404).json({ error: "LOTO record not found" });
-    return;
-  }
-  if (existing.status !== "pending_release") {
-    res.status(409).json({ error: "Only pending-release LOTO records can be rejected" });
-    return;
-  }
-  if (user.role !== "admin" && existing.commanderId !== user.id) {
-    res.status(403).json({ error: "Only the assigned LOTO Commander or an admin may reject release" });
-    return;
-  }
-
-  const [updated] = await db
-    .update(lotoRecordsTable)
-    .set({ status: "active", releaseRequestedAt: null, releaseRequestedById: null })
-    .where(eq(lotoRecordsTable.id, id))
-    .returning();
-
-  const note = parsed.data.note?.trim();
-  await logEvent(id, "release_rejected", note ? `Release rejected: ${note}` : "Release rejected — returned to active", user.id);
+  await logEvent(id, "closed", note ? `LOTO closed: ${note}` : "LOTO closed — record sealed", user.id);
 
   res.json(serialize(updated));
 });
@@ -739,12 +982,13 @@ router.get("/projects/:projectId/active-loto", requireAuth, async (req: Authenti
       equipmentName: lotoRecordsTable.equipmentName,
       severity: lotoRecordsTable.severity,
       status: lotoRecordsTable.status,
+      commanderId: lotoRecordsTable.commanderId,
     })
     .from(lotoRecordsTable)
     .where(
       and(
         eq(lotoRecordsTable.projectId, projectId),
-        or(eq(lotoRecordsTable.status, "active"), eq(lotoRecordsTable.status, "pending_release")),
+        or(eq(lotoRecordsTable.status, "active"), eq(lotoRecordsTable.status, "pending_review")),
       ),
     )
     .orderBy(desc(lotoRecordsTable.activatedAt));

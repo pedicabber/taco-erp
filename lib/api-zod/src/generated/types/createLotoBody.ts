@@ -18,4 +18,7 @@ export interface CreateLotoBody {
   severity?: CreateLotoBodySeverity;
   /** @nullable */
   commanderId?: number | null;
+  /** @nullable */
+  lockedOutById?: number | null;
+  additionalPersonnel?: number[];
 }

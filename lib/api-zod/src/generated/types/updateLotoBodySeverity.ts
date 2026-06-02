@@ -10,6 +10,8 @@ export type UpdateLotoBodySeverity =
   (typeof UpdateLotoBodySeverity)[keyof typeof UpdateLotoBodySeverity];
 
 export const UpdateLotoBodySeverity = {
-  standard: "standard",
+  low: "low",
+  medium: "medium",
+  high: "high",
   critical: "critical",
 } as const;

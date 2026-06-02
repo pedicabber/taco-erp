@@ -10,6 +10,8 @@ export type ListLotoSeverity =
   (typeof ListLotoSeverity)[keyof typeof ListLotoSeverity];
 
 export const ListLotoSeverity = {
-  standard: "standard",
+  low: "low",
+  medium: "medium",
+  high: "high",
   critical: "critical",
 } as const;

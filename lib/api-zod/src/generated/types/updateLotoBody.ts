@@ -18,5 +18,8 @@ export interface UpdateLotoBody {
   severity?: UpdateLotoBodySeverity;
   /** @nullable */
   commanderId?: number | null;
+  /** @nullable */
+  lockedOutById?: number | null;
+  additionalPersonnel?: number[];
   checklist?: LotoChecklistSectionInput[];
 }
