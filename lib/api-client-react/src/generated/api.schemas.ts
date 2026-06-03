@@ -30,7 +30,7 @@ export interface UserProfile {
   departmentIds: number[];
   /** True when the caller is an admin or a member of the OFFICE/ADMIN department (primary or via user_departments). */
   officeOpsAccess: boolean;
-  /** True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create/manage actions. */
+  /** True for every authenticated user (Admin or Member). The Safety/LOTO module is company-wide, so this flag gates only nav visibility and create/manage actions; commander-only actions remain restricted separately. */
   safetyAccess: boolean;
   /** @nullable */
   avatarUrl: string | null;

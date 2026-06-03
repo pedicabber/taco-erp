@@ -1,53 +1,27 @@
 import type { Response } from "express";
-import { db, usersTable, userDepartmentsTable, departmentsTable } from "@workspace/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { usersTable } from "@workspace/db";
 import { syncUserFromClerk } from "./userSync";
 import type { AuthenticatedRequest } from "../middlewares/requireAuth";
 
 /**
- * The department whose members (alongside admins) may create and manage LOTO
- * records. Viewing LOTO records is company-wide; only mutations are gated.
- */
-export const SAFETY_DEPT_NAME = "SAFETY";
-
-/** Resolve the SAFETY department id (a top-level dept with no project). */
-export async function getSafetyDepartmentId(): Promise<number | null> {
-  const [d] = await db
-    .select()
-    .from(departmentsTable)
-    .where(and(eq(departmentsTable.name, SAFETY_DEPT_NAME), isNull(departmentsTable.projectId)));
-  return d?.id ?? null;
-}
-
-/**
  * Pure check: may this DB user create/manage Safety (LOTO) records?
  *
- * True when the user is an admin OR is a member of the SAFETY department (by
- * either the legacy single `users.departmentId` column or a row in
- * `user_departments`). If no SAFETY department exists yet, only admins qualify.
+ * Policy: every authenticated user (Admin or Member) has Safety access. The ERP
+ * currently has only Admin and Member roles and no Safety department, and LOTO
+ * must be usable by all field, shop, controls, and install personnel — so the
+ * module is not gated behind any role or department.
+ *
+ * This governs only the ability to open Safety and create/view/edit records in
+ * the normal LOTO workflow. Commander-only actions (Commander Review, Authorize
+ * Energization, Final Closeout, commander audit notes) are gated separately in
+ * routes/loto.ts to the assigned commander or an admin, and closed records stay
+ * immutable. Unauthenticated requests never reach this check (callers resolve a
+ * DB user first and reject when there is none).
  */
 export async function userHasSafetyAccess(
-  user: typeof usersTable.$inferSelect,
+  _user: typeof usersTable.$inferSelect,
 ): Promise<boolean> {
-  if (user.role === "admin") return true;
-
-  const safetyDeptId = await getSafetyDepartmentId();
-  if (safetyDeptId === null) return false;
-
-  if (user.departmentId === safetyDeptId) return true;
-
-  const [membership] = await db
-    .select({ d: userDepartmentsTable.departmentId })
-    .from(userDepartmentsTable)
-    .where(
-      and(
-        eq(userDepartmentsTable.userId, user.id),
-        eq(userDepartmentsTable.departmentId, safetyDeptId),
-      ),
-    )
-    .limit(1);
-
-  return !!membership;
+  return true;
 }
 
 /**

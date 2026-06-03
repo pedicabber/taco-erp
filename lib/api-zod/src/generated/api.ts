@@ -34,7 +34,7 @@ export const GetMeResponse = zod.object({
   safetyAccess: zod
     .boolean()
     .describe(
-      "True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create\/manage actions.",
+      "True for every authenticated user (Admin or Member). The Safety\/LOTO module is company-wide, so this flag gates only nav visibility and create\/manage actions; commander-only actions remain restricted separately.",
     ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
@@ -66,7 +66,7 @@ export const UpdateMeResponse = zod.object({
   safetyAccess: zod
     .boolean()
     .describe(
-      "True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create\/manage actions.",
+      "True for every authenticated user (Admin or Member). The Safety\/LOTO module is company-wide, so this flag gates only nav visibility and create\/manage actions; commander-only actions remain restricted separately.",
     ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
@@ -92,7 +92,7 @@ export const ListUsersResponseItem = zod.object({
   safetyAccess: zod
     .boolean()
     .describe(
-      "True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create\/manage actions.",
+      "True for every authenticated user (Admin or Member). The Safety\/LOTO module is company-wide, so this flag gates only nav visibility and create\/manage actions; commander-only actions remain restricted separately.",
     ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),
@@ -123,7 +123,7 @@ export const GetUserResponse = zod.object({
   safetyAccess: zod
     .boolean()
     .describe(
-      "True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create\/manage actions.",
+      "True for every authenticated user (Admin or Member). The Safety\/LOTO module is company-wide, so this flag gates only nav visibility and create\/manage actions; commander-only actions remain restricted separately.",
     ),
   avatarUrl: zod.string().nullable(),
   createdAt: zod.string(),

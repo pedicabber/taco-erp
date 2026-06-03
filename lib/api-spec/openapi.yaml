@@ -1718,7 +1718,7 @@ components:
           description: True when the caller is an admin or a member of the OFFICE/ADMIN department (primary or via user_departments).
         safetyAccess:
           type: boolean
-          description: True when the caller is an admin or a member of the SAFETY department (primary or via user_departments). Gates LOTO create/manage actions.
+          description: True for every authenticated user (Admin or Member). The Safety/LOTO module is company-wide, so this flag gates only nav visibility and create/manage actions; commander-only actions remain restricted separately.
         avatarUrl:
           type: ["string", "null"]
         createdAt:

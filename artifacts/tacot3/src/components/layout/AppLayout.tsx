@@ -52,8 +52,8 @@ const isAdminUser = (u: NavUser) => u?.role === "admin";
 // Server is the source of truth for OA membership (handles admin + primary
 // dept + secondary dept via user_departments). See `/users/me` payload.
 const isOfficeOpsUser = (u: NavUser) => !!u?.officeOpsAccess;
-// Likewise, Safety-department membership is server-resolved (admin + primary +
-// secondary dept). Only Safety-access users may see the Safety/LOTO module.
+// Safety/LOTO is company-wide: the server grants safetyAccess to every
+// authenticated user (Admin or Member), so all signed-in users see the module.
 const isSafetyUser = (u: NavUser) => !!u?.safetyAccess;
 
 const NAV_ITEMS: NavItem[] = [
@@ -65,7 +65,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Package, label: "Inventory", href: "/inventory" },
   { icon: ClipboardList, label: "Office Ops", href: "/office-ops", visibleIf: isOfficeOpsUser },
   { icon: TrendingUp, label: "Sales Pipeline", href: "/sales", visibleIf: isAdminUser },
-  // Safety/LOTO is restricted to Safety-access users (admin + Safety dept).
+  // Safety/LOTO is visible to all authenticated users (Admin or Member).
   { icon: ShieldAlert, label: "Safety", href: "/safety", visibleIf: isSafetyUser, dividerBefore: true },
 ];
 

@@ -7,7 +7,7 @@ import { syncUserFromClerk, getOrCreateUser } from "../lib/userSync";
 import { UpdateMeBody, UpdateMeResponse, ListUsersResponse, GetUserResponse } from "@workspace/api-zod";
 import { getOADepartmentId, seedOATasksForUser } from "../lib/officeAdmin";
 import { userHasOfficeOpsAccess } from "../lib/officeOpsAccess";
-import { userHasSafetyAccess, getSafetyDepartmentId } from "../lib/safetyAccess";
+import { userHasSafetyAccess } from "../lib/safetyAccess";
 
 const router: IRouter = Router();
 
@@ -150,13 +150,9 @@ router.get("/users", requireAuth, async (_req, res): Promise<void> => {
     return (userDeptsMap.get(u.id) ?? []).includes(oaDeptId);
   };
 
-  const safetyDeptId = await getSafetyDepartmentId();
-  const isSafety = (u: typeof usersTable.$inferSelect): boolean => {
-    if (u.role === "admin") return true;
-    if (safetyDeptId === null) return false;
-    if (u.departmentId === safetyDeptId) return true;
-    return (userDeptsMap.get(u.id) ?? []).includes(safetyDeptId);
-  };
+  // Safety access is company-wide: every authenticated user (Admin or Member)
+  // may open and use the LOTO module. See lib/safetyAccess.ts.
+  const isSafety = (_u: typeof usersTable.$inferSelect): boolean => true;
 
   res.json(
     users.map(u =>
