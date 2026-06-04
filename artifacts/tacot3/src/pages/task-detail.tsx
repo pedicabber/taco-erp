@@ -38,6 +38,9 @@ import {
   Pin,
   Image,
   StickyNote,
+  History,
+  PencilLine,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -207,6 +210,52 @@ interface TimerSession {
   startedAt: string;
   stoppedAt: string | null;
   durationSeconds: number | null;
+  originalStartedAt: string | null;
+  originalStoppedAt: string | null;
+  edited: boolean;
+  autoClockedOut: boolean;
+}
+
+interface TimeEntryEdit {
+  id: number;
+  sessionId: number;
+  taskId: number;
+  editType: "edit" | "auto_clock_out";
+  editedById: number | null;
+  editedByName: string | null;
+  originalStartedAt: string | null;
+  updatedStartedAt: string | null;
+  originalStoppedAt: string | null;
+  updatedStoppedAt: string | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+/**
+ * Preset reasons for a manual time-entry edit. "Other" reveals a free-text
+ * field so the editor can explain a one-off correction. A reason is required so
+ * every edit lands in the audit trail with context.
+ */
+const EDIT_REASON_OPTIONS = [
+  "Forgot to clock in/out",
+  "Mobile issue",
+  "Incorrect timestamp",
+  "Other",
+] as const;
+
+/**
+ * Auto clock-out happens at 9:00 PM Pacific Time (America/Los_Angeles). Use this
+ * exact phrasing everywhere it is surfaced so the policy reads consistently.
+ */
+const AUTO_CLOCK_OUT_POLICY = "9:00 PM Pacific Time (America/Los_Angeles)";
+
+/** Convert an ISO timestamp to a value usable by `<input type="datetime-local">` (local wall-clock, no seconds). */
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export default function TaskDetailPage() {
@@ -230,9 +279,12 @@ export default function TaskDetailPage() {
   };
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
-  const [editingTimer, setEditingTimer] = useState(false);
-  const [timerHours, setTimerHours] = useState("");
-  const [timerMins, setTimerMins] = useState("");
+  const [editSession, setEditSession] = useState<TimerSession | null>(null);
+  const [editClockIn, setEditClockIn] = useState("");
+  const [editClockOut, setEditClockOut] = useState("");
+  const [editReason, setEditReason] = useState("");
+  const [editReasonOther, setEditReasonOther] = useState("");
+  const [auditOpen, setAuditOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<{
     fileName: string;
@@ -310,6 +362,13 @@ export default function TaskDetailPage() {
     enabled: Number.isFinite(taskId),
   });
 
+  const { data: timerAudit = [] } = useQuery<TimeEntryEdit[]>({
+    queryKey: ["task-timer-audit", taskId],
+    queryFn: () =>
+      apiClient.get(`/tasks/${taskId}/timer/audit`).then((r) => r.data),
+    enabled: Number.isFinite(taskId) && auditOpen,
+  });
+
   useEffect(() => {
     setNotesDraft(task?.notes ?? "");
   }, [task?.notes]);
@@ -371,15 +430,33 @@ export default function TaskDetailPage() {
       toast({ title: "Failed to update task", variant: "destructive" }),
   });
 
-  const timerEditMutation = useMutation({
-    mutationFn: (elapsedSeconds: number) =>
+  const sessionEditMutation = useMutation({
+    mutationFn: (payload: {
+      sessionId: number;
+      startedAt: string;
+      stoppedAt: string | null;
+      reason: string;
+    }) =>
       apiClient
-        .patch(`/tasks/${taskId}/timer/edit`, { elapsedSeconds })
+        .patch(`/tasks/${taskId}/timer/sessions/${payload.sessionId}`, {
+          startedAt: payload.startedAt,
+          stoppedAt: payload.stoppedAt,
+          reason: payload.reason,
+        })
         .then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["task", taskId] });
-      setEditingTimer(false);
-      toast({ title: "Timer updated" });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["task-timer-sessions", taskId] });
+      qc.invalidateQueries({ queryKey: ["task-timer-audit", taskId] });
+      setEditSession(null);
+      toast({ title: "Time entry updated" });
+    },
+    onError: (err: unknown) => {
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error ?? "Failed to update time entry";
+      toast({ title: message, variant: "destructive" });
     },
   });
 
@@ -509,10 +586,60 @@ export default function TaskDetailPage() {
     });
   }
 
-  function saveTimerEdit() {
-    const totalSeconds =
-      (Number(timerHours) || 0) * 3600 + (Number(timerMins) || 0) * 60;
-    timerEditMutation.mutate(totalSeconds);
+  function openSessionEdit(session: TimerSession) {
+    setEditSession(session);
+    setEditClockIn(toDatetimeLocal(session.startedAt));
+    setEditClockOut(toDatetimeLocal(session.stoppedAt));
+    setEditReason("");
+    setEditReasonOther("");
+  }
+
+  const isAdmin = currentUser?.role === "admin";
+  const canEditSession = (session: TimerSession) =>
+    isAdmin || session.startedById === currentUser?.id;
+
+  function saveSessionEdit() {
+    if (!editSession) return;
+    if (!editClockIn) {
+      toast({ title: "Clock In is required", variant: "destructive" });
+      return;
+    }
+    const reason = editReason === "Other" ? editReasonOther.trim() : editReason;
+    if (!reason) {
+      toast({
+        title:
+          editReason === "Other"
+            ? "Please describe the reason for this edit"
+            : "A reason is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    const startedAt = new Date(editClockIn);
+    const stoppedAt = editClockOut ? new Date(editClockOut) : null;
+    if (stoppedAt && stoppedAt.getTime() <= startedAt.getTime()) {
+      toast({
+        title: "Clock Out must be later than Clock In.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (
+      stoppedAt &&
+      stoppedAt.getTime() - startedAt.getTime() > 24 * 60 * 60 * 1000
+    ) {
+      toast({
+        title: "Duration cannot exceed 24 hours.",
+        variant: "destructive",
+      });
+      return;
+    }
+    sessionEditMutation.mutate({
+      sessionId: editSession.id,
+      startedAt: startedAt.toISOString(),
+      stoppedAt: stoppedAt ? stoppedAt.toISOString() : null,
+      reason,
+    });
   }
 
   if (isLoading) {
@@ -952,59 +1079,13 @@ export default function TaskDetailPage() {
                       Start
                     </Button>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setTimerHours(String(Math.floor(elapsed / 3600)));
-                      setTimerMins(String(Math.floor((elapsed % 3600) / 60)));
-                      setEditingTimer(true);
-                    }}
-                    title="Edit time"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
                 </div>
               </div>
 
-              {editingTimer && (
-                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg mb-3">
-                  <Input
-                    type="number"
-                    value={timerHours}
-                    onChange={(e) => setTimerHours(e.target.value)}
-                    placeholder="h"
-                    className="w-16"
-                    min="0"
-                  />
-                  <span className="text-sm text-muted-foreground">h</span>
-                  <Input
-                    type="number"
-                    value={timerMins}
-                    onChange={(e) => setTimerMins(e.target.value)}
-                    placeholder="m"
-                    className="w-16"
-                    min="0"
-                    max="59"
-                  />
-                  <span className="text-sm text-muted-foreground">m</span>
-                  <Button
-                    size="sm"
-                    onClick={saveTimerEdit}
-                    disabled={timerEditMutation.isPending}
-                  >
-                    <Save className="w-3 h-3 mr-1" />
-                    Save
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setEditingTimer(false)}
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
-                </div>
-              )}
+              <p className="text-[11px] text-muted-foreground mb-3">
+                Open time entries are automatically clocked out at{" "}
+                {AUTO_CLOCK_OUT_POLICY}.
+              </p>
 
               <TimerBar elapsed={elapsed} expectedHours={task.expectedHours} />
 
@@ -1047,22 +1128,63 @@ export default function TaskDetailPage() {
                           <div className="flex items-center gap-2 min-w-0">
                             <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                             <div className="min-w-0">
-                              <p className="truncate">
+                              <p className="truncate flex items-center gap-1.5">
                                 {session.startedBy.name}
+                                {session.autoClockedOut && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] py-0 px-1 gap-0.5 border-amber-300 text-amber-600 dark:text-amber-400"
+                                  >
+                                    <Zap className="w-2.5 h-2.5" />
+                                    AUTO CLOCKED OUT
+                                  </Badge>
+                                )}
+                                {session.edited && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] py-0 px-1 gap-0.5 border-blue-300 text-blue-600 dark:text-blue-400"
+                                  >
+                                    <PencilLine className="w-2.5 h-2.5" />
+                                    EDITED
+                                  </Badge>
+                                )}
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 {format(new Date(session.startedAt), "MMM d, h:mm a")}
+                                {session.stoppedAt &&
+                                  ` – ${format(new Date(session.stoppedAt), "h:mm a")}`}
                               </p>
                             </div>
                           </div>
-                          <Badge variant="outline" className="flex-shrink-0">
-                            {session.stoppedAt ? formatSeconds(duration) : "Running"}
-                          </Badge>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Badge variant="outline">
+                              {session.stoppedAt ? formatSeconds(duration) : "Running"}
+                            </Badge>
+                            {canEditSession(session) && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => openSessionEdit(session)}
+                                title="Edit time entry"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
                     </div>
                   )}
+                  <button
+                    type="button"
+                    className="mt-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    onClick={() => setAuditOpen(true)}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    View edit history
+                  </button>
                 </div>
               )}
             </CardContent>
@@ -1568,6 +1690,197 @@ export default function TaskDetailPage() {
               className="w-full border-0"
               style={{ height: "80vh" }}
             />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit time entry dialog */}
+      <Dialog
+        open={editSession !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditSession(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Time Entry</DialogTitle>
+          </DialogHeader>
+          {editSession && (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                {editSession.startedBy.name}
+              </p>
+
+              {(editSession.edited || editSession.autoClockedOut) &&
+                editSession.originalStartedAt && (
+                  <div className="rounded-md bg-muted p-2.5 text-xs space-y-0.5">
+                    <p className="font-medium text-muted-foreground">Original</p>
+                    <p>
+                      In:{" "}
+                      {format(
+                        new Date(editSession.originalStartedAt),
+                        "MMM d, h:mm a",
+                      )}
+                    </p>
+                    <p>
+                      Out:{" "}
+                      {editSession.originalStoppedAt
+                        ? format(
+                            new Date(editSession.originalStoppedAt),
+                            "MMM d, h:mm a",
+                          )
+                        : "—"}
+                    </p>
+                  </div>
+                )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-clock-in">Clock In</Label>
+                <Input
+                  id="edit-clock-in"
+                  type="datetime-local"
+                  value={editClockIn}
+                  onChange={(e) => setEditClockIn(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-clock-out">Clock Out</Label>
+                <Input
+                  id="edit-clock-out"
+                  type="datetime-local"
+                  value={editClockOut}
+                  onChange={(e) => setEditClockOut(e.target.value)}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Leave empty to keep this entry open (running).
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Reason</Label>
+                <Select value={editReason} onValueChange={setEditReason}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a reason" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EDIT_REASON_OPTIONS.map((opt) => (
+                      <SelectItem key={opt} value={opt}>
+                        {opt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {editReason === "Other" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-reason-other">Describe the reason</Label>
+                  <Textarea
+                    id="edit-reason-other"
+                    value={editReasonOther}
+                    onChange={(e) => setEditReasonOther(e.target.value)}
+                    placeholder="Explain why this entry is being corrected…"
+                    rows={2}
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="ghost" onClick={() => setEditSession(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={saveSessionEdit}
+                  disabled={sessionEditMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-1.5" />
+                  Save
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Time entry audit history dialog */}
+      <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-4 h-4" />
+              Time Entry Edit History
+            </DialogTitle>
+          </DialogHeader>
+          {timerAudit.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No edits or automatic clock-outs recorded yet.
+            </p>
+          ) : (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {timerAudit.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="rounded-md border p-3 text-sm space-y-1.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    {entry.editType === "auto_clock_out" ? (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-amber-300 text-amber-600 dark:text-amber-400"
+                      >
+                        <Zap className="w-3 h-3" />
+                        Auto clocked out
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-blue-300 text-blue-600 dark:text-blue-400"
+                      >
+                        <PencilLine className="w-3 h-3" />
+                        Edited
+                      </Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(entry.createdAt), "MMM d, h:mm a")}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {entry.editType === "auto_clock_out"
+                      ? `System • ${AUTO_CLOCK_OUT_POLICY}`
+                      : `By ${entry.editedByName ?? "Unknown user"}`}
+                  </p>
+                  <div className="text-xs grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
+                    <span className="text-muted-foreground">Clock In:</span>
+                    <span>
+                      {entry.originalStartedAt
+                        ? format(new Date(entry.originalStartedAt), "MMM d, h:mm a")
+                        : "—"}
+                      {" → "}
+                      {entry.updatedStartedAt
+                        ? format(new Date(entry.updatedStartedAt), "MMM d, h:mm a")
+                        : "—"}
+                    </span>
+                    <span className="text-muted-foreground">Clock Out:</span>
+                    <span>
+                      {entry.originalStoppedAt
+                        ? format(new Date(entry.originalStoppedAt), "MMM d, h:mm a")
+                        : "—"}
+                      {" → "}
+                      {entry.updatedStoppedAt
+                        ? format(new Date(entry.updatedStoppedAt), "MMM d, h:mm a")
+                        : "—"}
+                    </span>
+                  </div>
+                  {entry.reason && (
+                    <p className="text-xs">
+                      <span className="text-muted-foreground">Reason: </span>
+                      {entry.reason}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </DialogContent>
       </Dialog>

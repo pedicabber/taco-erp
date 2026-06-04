@@ -681,6 +681,57 @@ paths:
               schema:
                 $ref: "#/components/schemas/Task"
 
+  /tasks/{taskId}/timer/sessions/{sessionId}:
+    patch:
+      operationId: editTaskTimerSession
+      tags: [tasks]
+      summary: Edit the clock-in/out times of a single time entry
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditTimerSessionBody"
+      responses:
+        "200":
+          description: The updated time entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimerSession"
+
+  /tasks/{taskId}/timer/audit:
+    get:
+      operationId: getTaskTimerAudit
+      tags: [tasks]
+      summary: Audit history of all time-entry edits and auto clock-outs for a task
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit records, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeEntryEdit"
+
   /tasks/{taskId}/followers:
     post:
       operationId: followTask
@@ -2310,6 +2361,130 @@ components:
           type: integer
       required:
         - elapsedSeconds
+
+    EditTimerSessionBody:
+      type: object
+      properties:
+        startedAt:
+          type: string
+          format: date-time
+        stoppedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reason:
+          type: string
+          minLength: 1
+      required:
+        - startedAt
+        - reason
+
+    TimerSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        taskId:
+          type: integer
+        startedById:
+          type: integer
+        startedBy:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            avatarUrl:
+              type: string
+              nullable: true
+          required:
+            - id
+            - name
+            - avatarUrl
+        startedAt:
+          type: string
+          format: date-time
+        stoppedAt:
+          type: string
+          format: date-time
+          nullable: true
+        durationSeconds:
+          type: integer
+          nullable: true
+        originalStartedAt:
+          type: string
+          format: date-time
+          nullable: true
+        originalStoppedAt:
+          type: string
+          format: date-time
+          nullable: true
+        edited:
+          type: boolean
+        autoClockedOut:
+          type: boolean
+      required:
+        - id
+        - taskId
+        - startedById
+        - startedBy
+        - startedAt
+        - stoppedAt
+        - durationSeconds
+        - originalStartedAt
+        - originalStoppedAt
+        - edited
+        - autoClockedOut
+
+    TimeEntryEdit:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        taskId:
+          type: integer
+        editType:
+          type: string
+          enum: [edit, auto_clock_out]
+        editedById:
+          type: integer
+          nullable: true
+        editedByName:
+          type: string
+          nullable: true
+        originalStartedAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedStartedAt:
+          type: string
+          format: date-time
+          nullable: true
+        originalStoppedAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedStoppedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - sessionId
+        - taskId
+        - editType
+        - editedById
+        - editedByName
+        - createdAt
 
     AddTaskRelationBody:
       type: object

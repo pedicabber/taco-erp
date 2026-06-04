@@ -569,6 +569,56 @@ export interface EditTimerBody {
   elapsedSeconds: number;
 }
 
+export interface EditTimerSessionBody {
+  startedAt: string;
+  stoppedAt?: string | null;
+  /** @minLength 1 */
+  reason: string;
+}
+
+export type TimerSessionStartedBy = {
+  id: number;
+  name: string;
+  avatarUrl: string | null;
+};
+
+export interface TimerSession {
+  id: number;
+  taskId: number;
+  startedById: number;
+  startedBy: TimerSessionStartedBy;
+  startedAt: string;
+  stoppedAt: string | null;
+  durationSeconds: number | null;
+  originalStartedAt: string | null;
+  originalStoppedAt: string | null;
+  edited: boolean;
+  autoClockedOut: boolean;
+}
+
+export type TimeEntryEditEditType =
+  (typeof TimeEntryEditEditType)[keyof typeof TimeEntryEditEditType];
+
+export const TimeEntryEditEditType = {
+  edit: "edit",
+  auto_clock_out: "auto_clock_out",
+} as const;
+
+export interface TimeEntryEdit {
+  id: number;
+  sessionId: number;
+  taskId: number;
+  editType: TimeEntryEditEditType;
+  editedById: number | null;
+  editedByName: string | null;
+  originalStartedAt?: string | null;
+  updatedStartedAt?: string | null;
+  originalStoppedAt?: string | null;
+  updatedStoppedAt?: string | null;
+  reason?: string | null;
+  createdAt: string;
+}
+
 export interface AddTaskRelationBody {
   relatedTaskId: number;
 }

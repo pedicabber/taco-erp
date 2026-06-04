@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, tasksTable, taskAssigneesTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, notificationsTable, activityLogTable, projectsTable, kanbanColumnsTable } from "@workspace/db";
+import { db, tasksTable, taskAssigneesTable, usersTable, departmentsTable, taskRelationsTable, taskAttachmentsTable, taskTimerSessionsTable, timeEntryEditsTable, notificationsTable, activityLogTable, projectsTable, kanbanColumnsTable } from "@workspace/db";
 import { excludeOAContainerProject, excludeForeignOAContainerTasks, isHiddenOATaskFromUser, isOAContainerProjectName, OA_DISPLAY_LABEL, getOAContainerProjectId } from "../lib/officeAdmin";
 import { eq, and, inArray, or, isNull, ne, desc, gte, lte, count, asc, exists } from "drizzle-orm";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAuth";
@@ -16,6 +16,7 @@ import {
   StopTaskTimerResponse,
   EditTaskTimerBody,
   EditTaskTimerResponse,
+  EditTaskTimerSessionBody,
   FollowTaskResponse,
   UnfollowTaskResponse,
   GetTaskRelationsResponse,
@@ -933,6 +934,10 @@ router.get("/tasks/:taskId/timer/sessions", requireAuth, async (req: Authenticat
       startedAt: taskTimerSessionsTable.startedAt,
       stoppedAt: taskTimerSessionsTable.stoppedAt,
       durationSeconds: taskTimerSessionsTable.durationSeconds,
+      originalStartedAt: taskTimerSessionsTable.originalStartedAt,
+      originalStoppedAt: taskTimerSessionsTable.originalStoppedAt,
+      edited: taskTimerSessionsTable.edited,
+      autoClockedOut: taskTimerSessionsTable.autoClockedOut,
       startedByName: usersTable.name,
       startedByAvatarUrl: usersTable.avatarUrl,
     })
@@ -953,6 +958,243 @@ router.get("/tasks/:taskId/timer/sessions", requireAuth, async (req: Authenticat
     startedAt: row.startedAt.toISOString(),
     stoppedAt: row.stoppedAt?.toISOString() ?? null,
     durationSeconds: row.durationSeconds,
+    originalStartedAt: row.originalStartedAt?.toISOString() ?? null,
+    originalStoppedAt: row.originalStoppedAt?.toISOString() ?? null,
+    edited: row.edited,
+    autoClockedOut: row.autoClockedOut,
+  })));
+});
+
+/**
+ * Recompute a task's aggregate elapsed time from its timer sessions. Sessions
+ * are the source of truth: each closed session carries `durationSeconds`, open
+ * sessions carry null (counted as 0). Call after any session edit/auto-close so
+ * labor totals reflect the corrected timestamps.
+ */
+async function recomputeTaskElapsedSeconds(taskId: number): Promise<number> {
+  const rows = await db
+    .select({ durationSeconds: taskTimerSessionsTable.durationSeconds })
+    .from(taskTimerSessionsTable)
+    .where(eq(taskTimerSessionsTable.taskId, taskId));
+  return rows.reduce((acc, r) => acc + (r.durationSeconds ?? 0), 0);
+}
+
+const MAX_TIME_ENTRY_DURATION_SECONDS = 24 * 60 * 60;
+
+/**
+ * PATCH /tasks/:taskId/timer/sessions/:sessionId
+ * Edit a single time entry's clock-in/out. Owner-only unless the caller is an
+ * admin. The original timestamps are captured once (on the first edit) and the
+ * change is recorded in the immutable time_entry_edits audit trail. The task's
+ * aggregate elapsed time is recomputed from sessions afterward.
+ */
+router.patch("/tasks/:taskId/timer/sessions/:sessionId", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const user = await syncUserFromClerk(req);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const taskId = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
+  const sessionId = parseInt(Array.isArray(req.params.sessionId) ? req.params.sessionId[0] : req.params.sessionId, 10);
+  if (isNaN(taskId) || isNaN(sessionId)) {
+    res.status(400).json({ error: "Invalid task or session ID" });
+    return;
+  }
+
+  const guard = await loadVisibleTask(taskId, user.id, res);
+  if (!guard) return;
+
+  const parsed = EditTaskTimerSessionBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request body", details: parsed.error.issues });
+    return;
+  }
+  const { startedAt: newStartedAt, stoppedAt, reason } = parsed.data;
+  const newStoppedAt = stoppedAt ?? null;
+
+  const [session] = await db
+    .select()
+    .from(taskTimerSessionsTable)
+    .where(and(eq(taskTimerSessionsTable.id, sessionId), eq(taskTimerSessionsTable.taskId, taskId)));
+  if (!session) {
+    res.status(404).json({ error: "Time entry not found" });
+    return;
+  }
+
+  // Owner-only, admins may edit any entry.
+  if (session.startedById !== user.id && user.role !== "admin") {
+    res.status(403).json({ error: "You can only edit your own time entries" });
+    return;
+  }
+
+  // Server-side validation (clock-out later than clock-in; non-negative
+  // duration; duration not exceeding 24 hours).
+  if (newStoppedAt !== null) {
+    if (newStoppedAt.getTime() <= newStartedAt.getTime()) {
+      res.status(400).json({ error: "Clock Out must be later than Clock In." });
+      return;
+    }
+    const durationSeconds = Math.floor((newStoppedAt.getTime() - newStartedAt.getTime()) / 1000);
+    if (durationSeconds < 0) {
+      res.status(400).json({ error: "Duration cannot be negative." });
+      return;
+    }
+    if (durationSeconds > MAX_TIME_ENTRY_DURATION_SECONDS) {
+      res.status(400).json({ error: "Duration cannot exceed 24 hours." });
+      return;
+    }
+  }
+
+  const durationSeconds = newStoppedAt !== null
+    ? Math.floor((newStoppedAt.getTime() - newStartedAt.getTime()) / 1000)
+    : null;
+
+  // Capture the untouched original timestamps exactly once. startedAt is a
+  // NOT NULL column, so a null originalStartedAt reliably means "never
+  // captured" — that lets us preserve a genuinely-null original clock-out
+  // (a "forgot to clock out" entry) without losing it on a later edit.
+  const neverCaptured = session.originalStartedAt === null;
+  const originalStartedAt = neverCaptured ? session.startedAt : session.originalStartedAt;
+  const originalStoppedAt = neverCaptured ? session.stoppedAt : session.originalStoppedAt;
+
+  const wasOpen = session.stoppedAt === null;
+
+  await db
+    .update(taskTimerSessionsTable)
+    .set({
+      startedAt: newStartedAt,
+      stoppedAt: newStoppedAt,
+      durationSeconds,
+      originalStartedAt,
+      originalStoppedAt,
+      edited: true,
+    })
+    .where(eq(taskTimerSessionsTable.id, sessionId));
+
+  // Keep the task-level running anchor consistent with the edited session.
+  // elapsedSeconds is the sum of CLOSED sessions; the open/running session's
+  // live time is derived from tasks.timerStartedAt at display/stop. So when we
+  // edit the running session we must move that anchor too, otherwise stop math
+  // diverges from the corrected timestamps.
+  const taskUpdate: Partial<typeof tasksTable.$inferInsert> = {
+    elapsedSeconds: await recomputeTaskElapsedSeconds(taskId),
+  };
+  if (wasOpen && guard.timerRunning) {
+    if (newStoppedAt !== null) {
+      // The running session was closed by this edit — release the run lock so
+      // the aggregate and UI agree.
+      taskUpdate.timerRunning = false;
+      taskUpdate.timerStartedAt = null;
+    } else {
+      // The running session stays open — re-anchor to the new clock-in so the
+      // subsequent /timer/stop derives the correct extra duration.
+      taskUpdate.timerStartedAt = newStartedAt;
+    }
+  }
+  await db.update(tasksTable).set(taskUpdate).where(eq(tasksTable.id, taskId));
+
+  await db.insert(timeEntryEditsTable).values({
+    sessionId,
+    taskId,
+    editedById: user.id,
+    editType: "edit",
+    originalStartedAt,
+    updatedStartedAt: newStartedAt,
+    originalStoppedAt,
+    updatedStoppedAt: newStoppedAt,
+    reason,
+  });
+
+  await logActivity(taskId, user.id, "edited a time entry");
+
+  const [updatedRow] = await db
+    .select({
+      id: taskTimerSessionsTable.id,
+      taskId: taskTimerSessionsTable.taskId,
+      startedById: taskTimerSessionsTable.startedById,
+      startedAt: taskTimerSessionsTable.startedAt,
+      stoppedAt: taskTimerSessionsTable.stoppedAt,
+      durationSeconds: taskTimerSessionsTable.durationSeconds,
+      originalStartedAt: taskTimerSessionsTable.originalStartedAt,
+      originalStoppedAt: taskTimerSessionsTable.originalStoppedAt,
+      edited: taskTimerSessionsTable.edited,
+      autoClockedOut: taskTimerSessionsTable.autoClockedOut,
+      startedByName: usersTable.name,
+      startedByAvatarUrl: usersTable.avatarUrl,
+    })
+    .from(taskTimerSessionsTable)
+    .leftJoin(usersTable, eq(usersTable.id, taskTimerSessionsTable.startedById))
+    .where(eq(taskTimerSessionsTable.id, sessionId));
+
+  res.json({
+    id: updatedRow.id,
+    taskId: updatedRow.taskId,
+    startedById: updatedRow.startedById,
+    startedBy: {
+      id: updatedRow.startedById,
+      name: updatedRow.startedByName ?? "Unknown user",
+      avatarUrl: updatedRow.startedByAvatarUrl ?? null,
+    },
+    startedAt: updatedRow.startedAt.toISOString(),
+    stoppedAt: updatedRow.stoppedAt?.toISOString() ?? null,
+    durationSeconds: updatedRow.durationSeconds,
+    originalStartedAt: updatedRow.originalStartedAt?.toISOString() ?? null,
+    originalStoppedAt: updatedRow.originalStoppedAt?.toISOString() ?? null,
+    edited: updatedRow.edited,
+    autoClockedOut: updatedRow.autoClockedOut,
+  });
+});
+
+/**
+ * GET /tasks/:taskId/timer/audit
+ * Immutable audit history of every manual edit and automatic clock-out for the
+ * task's time entries, newest first. editedById/editedByName are null for
+ * system-generated auto clock-outs.
+ */
+router.get("/tasks/:taskId/timer/audit", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
+  const me = await syncUserFromClerk(req);
+  const id = parseInt(Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid task ID" });
+    return;
+  }
+
+  const guard = await loadVisibleTask(id, me?.id, res);
+  if (!guard) return;
+
+  const rows = await db
+    .select({
+      id: timeEntryEditsTable.id,
+      sessionId: timeEntryEditsTable.sessionId,
+      taskId: timeEntryEditsTable.taskId,
+      editType: timeEntryEditsTable.editType,
+      editedById: timeEntryEditsTable.editedById,
+      editedByName: usersTable.name,
+      originalStartedAt: timeEntryEditsTable.originalStartedAt,
+      updatedStartedAt: timeEntryEditsTable.updatedStartedAt,
+      originalStoppedAt: timeEntryEditsTable.originalStoppedAt,
+      updatedStoppedAt: timeEntryEditsTable.updatedStoppedAt,
+      reason: timeEntryEditsTable.reason,
+      createdAt: timeEntryEditsTable.createdAt,
+    })
+    .from(timeEntryEditsTable)
+    .leftJoin(usersTable, eq(usersTable.id, timeEntryEditsTable.editedById))
+    .where(eq(timeEntryEditsTable.taskId, id))
+    .orderBy(desc(timeEntryEditsTable.createdAt));
+
+  res.json(rows.map(row => ({
+    id: row.id,
+    sessionId: row.sessionId,
+    taskId: row.taskId,
+    editType: row.editType as "edit" | "auto_clock_out",
+    editedById: row.editedById,
+    editedByName: row.editedByName ?? null,
+    originalStartedAt: row.originalStartedAt?.toISOString() ?? null,
+    updatedStartedAt: row.updatedStartedAt?.toISOString() ?? null,
+    originalStoppedAt: row.originalStoppedAt?.toISOString() ?? null,
+    updatedStoppedAt: row.updatedStoppedAt?.toISOString() ?? null,
+    reason: row.reason ?? null,
+    createdAt: row.createdAt.toISOString(),
   })));
 });
 

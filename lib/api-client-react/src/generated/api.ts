@@ -38,6 +38,7 @@ import type {
   DashboardSummary,
   Department,
   EditTimerBody,
+  EditTimerSessionBody,
   GetActivityFeedParams,
   GetCalendarEventsParams,
   GetKanbanColumnsParams,
@@ -76,6 +77,8 @@ import type {
   SwitchTimerResponse,
   Task,
   TaskAttachment,
+  TimeEntryEdit,
+  TimerSession,
   UpdateDepartmentBody,
   UpdateKanbanColumnBody,
   UpdateLotoBody,
@@ -2873,6 +2876,188 @@ export const useEditTaskTimer = <
 > => {
   return useMutation(getEditTaskTimerMutationOptions(options));
 };
+
+/**
+ * @summary Edit the clock-in/out times of a single time entry
+ */
+export const getEditTaskTimerSessionUrl = (
+  taskId: number,
+  sessionId: number,
+) => {
+  return `/api/tasks/${taskId}/timer/sessions/${sessionId}`;
+};
+
+export const editTaskTimerSession = async (
+  taskId: number,
+  sessionId: number,
+  editTimerSessionBody: EditTimerSessionBody,
+  options?: RequestInit,
+): Promise<TimerSession> => {
+  return customFetch<TimerSession>(
+    getEditTaskTimerSessionUrl(taskId, sessionId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(editTimerSessionBody),
+    },
+  );
+};
+
+export const getEditTaskTimerSessionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editTaskTimerSession>>,
+    TError,
+    { taskId: number; sessionId: number; data: BodyType<EditTimerSessionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof editTaskTimerSession>>,
+  TError,
+  { taskId: number; sessionId: number; data: BodyType<EditTimerSessionBody> },
+  TContext
+> => {
+  const mutationKey = ["editTaskTimerSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof editTaskTimerSession>>,
+    { taskId: number; sessionId: number; data: BodyType<EditTimerSessionBody> }
+  > = (props) => {
+    const { taskId, sessionId, data } = props ?? {};
+
+    return editTaskTimerSession(taskId, sessionId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EditTaskTimerSessionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof editTaskTimerSession>>
+>;
+export type EditTaskTimerSessionMutationBody = BodyType<EditTimerSessionBody>;
+export type EditTaskTimerSessionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Edit the clock-in/out times of a single time entry
+ */
+export const useEditTaskTimerSession = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editTaskTimerSession>>,
+    TError,
+    { taskId: number; sessionId: number; data: BodyType<EditTimerSessionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof editTaskTimerSession>>,
+  TError,
+  { taskId: number; sessionId: number; data: BodyType<EditTimerSessionBody> },
+  TContext
+> => {
+  return useMutation(getEditTaskTimerSessionMutationOptions(options));
+};
+
+/**
+ * @summary Audit history of all time-entry edits and auto clock-outs for a task
+ */
+export const getGetTaskTimerAuditUrl = (taskId: number) => {
+  return `/api/tasks/${taskId}/timer/audit`;
+};
+
+export const getTaskTimerAudit = async (
+  taskId: number,
+  options?: RequestInit,
+): Promise<TimeEntryEdit[]> => {
+  return customFetch<TimeEntryEdit[]>(getGetTaskTimerAuditUrl(taskId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTaskTimerAuditQueryKey = (taskId: number) => {
+  return [`/api/tasks/${taskId}/timer/audit`] as const;
+};
+
+export const getGetTaskTimerAuditQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTaskTimerAudit>>,
+  TError = ErrorType<unknown>,
+>(
+  taskId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaskTimerAudit>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetTaskTimerAuditQueryKey(taskId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTaskTimerAudit>>
+  > = ({ signal }) => getTaskTimerAudit(taskId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!taskId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTaskTimerAudit>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTaskTimerAuditQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTaskTimerAudit>>
+>;
+export type GetTaskTimerAuditQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Audit history of all time-entry edits and auto clock-outs for a task
+ */
+
+export function useGetTaskTimerAudit<
+  TData = Awaited<ReturnType<typeof getTaskTimerAudit>>,
+  TError = ErrorType<unknown>,
+>(
+  taskId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTaskTimerAudit>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTaskTimerAuditQueryOptions(taskId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Follow a task (receive notifications)

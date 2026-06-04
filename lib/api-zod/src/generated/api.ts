@@ -1599,6 +1599,63 @@ export const EditTaskTimerResponse = zod.object({
 });
 
 /**
+ * @summary Edit the clock-in/out times of a single time entry
+ */
+export const EditTaskTimerSessionParams = zod.object({
+  taskId: zod.coerce.number(),
+  sessionId: zod.coerce.number(),
+});
+
+export const EditTaskTimerSessionBody = zod.object({
+  startedAt: zod.coerce.date(),
+  stoppedAt: zod.coerce.date().nullish(),
+  reason: zod.string().min(1),
+});
+
+export const EditTaskTimerSessionResponse = zod.object({
+  id: zod.number(),
+  taskId: zod.number(),
+  startedById: zod.number(),
+  startedBy: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    avatarUrl: zod.string().nullable(),
+  }),
+  startedAt: zod.coerce.date(),
+  stoppedAt: zod.coerce.date().nullable(),
+  durationSeconds: zod.number().nullable(),
+  originalStartedAt: zod.coerce.date().nullable(),
+  originalStoppedAt: zod.coerce.date().nullable(),
+  edited: zod.boolean(),
+  autoClockedOut: zod.boolean(),
+});
+
+/**
+ * @summary Audit history of all time-entry edits and auto clock-outs for a task
+ */
+export const GetTaskTimerAuditParams = zod.object({
+  taskId: zod.coerce.number(),
+});
+
+export const GetTaskTimerAuditResponseItem = zod.object({
+  id: zod.number(),
+  sessionId: zod.number(),
+  taskId: zod.number(),
+  editType: zod.enum(["edit", "auto_clock_out"]),
+  editedById: zod.number().nullable(),
+  editedByName: zod.string().nullable(),
+  originalStartedAt: zod.coerce.date().nullish(),
+  updatedStartedAt: zod.coerce.date().nullish(),
+  originalStoppedAt: zod.coerce.date().nullish(),
+  updatedStoppedAt: zod.coerce.date().nullish(),
+  reason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const GetTaskTimerAuditResponse = zod.array(
+  GetTaskTimerAuditResponseItem,
+);
+
+/**
  * @summary Follow a task (receive notifications)
  */
 export const FollowTaskParams = zod.object({

@@ -7,6 +7,7 @@ export * from "./task_relations";
 export * from "./task_attachments";
 export * from "./project_attachments";
 export * from "./task_timer_sessions";
+export * from "./time_entry_edits";
 export * from "./notifications";
 export * from "./activity_log";
 export * from "./kanban_columns";
