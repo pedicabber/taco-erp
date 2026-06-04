@@ -75,6 +75,7 @@ export const DELAY_REASONS = [
   { value: "internal_capacity", label: "Internal capacity" },
   { value: "quality_issue", label: "Quality issue" },
   { value: "scope_change", label: "Scope change" },
+  { value: "engineering_change_order", label: "Engineering Change Order" },
   { value: "other", label: "Other" },
 ] as const;
 

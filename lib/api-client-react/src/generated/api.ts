@@ -20,6 +20,7 @@ import type {
   ActivateLotoBody,
   ActivityItem,
   AddAttachmentBody,
+  AddEcoAttachmentBody,
   AddLotoAttachmentBody,
   AddProjectAttachmentBody,
   AddTaskRelationBody,
@@ -28,6 +29,7 @@ import type {
   CloseLotoBody,
   CommanderReviewBody,
   CreateDepartmentBody,
+  CreateEcoBody,
   CreateGeneralNotificationBody,
   CreateKanbanColumnBody,
   CreateLotoAuditNoteBody,
@@ -37,6 +39,9 @@ import type {
   CreateTaskBody,
   DashboardSummary,
   Department,
+  Eco,
+  EcoAttachment,
+  EcoSummary,
   EditTimerBody,
   EditTimerSessionBody,
   GetActivityFeedParams,
@@ -46,6 +51,7 @@ import type {
   HealthStatus,
   KanbanColumn,
   KanbanColumnConfig,
+  ListEcosParams,
   ListLotoAttachmentsResponse,
   ListLotoBannerResponse,
   ListLotoEventsResponse,
@@ -80,6 +86,7 @@ import type {
   TimeEntryEdit,
   TimerSession,
   UpdateDepartmentBody,
+  UpdateEcoBody,
   UpdateKanbanColumnBody,
   UpdateLotoBody,
   UpdateMeBody,
@@ -1429,6 +1436,636 @@ export function useGetProjectAllAttachments<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get the ECO summary card data for a project
+ */
+export const getGetEcoSummaryUrl = (projectId: number) => {
+  return `/api/projects/${projectId}/eco-summary`;
+};
+
+export const getEcoSummary = async (
+  projectId: number,
+  options?: RequestInit,
+): Promise<EcoSummary> => {
+  return customFetch<EcoSummary>(getGetEcoSummaryUrl(projectId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetEcoSummaryQueryKey = (projectId: number) => {
+  return [`/api/projects/${projectId}/eco-summary`] as const;
+};
+
+export const getGetEcoSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEcoSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getEcoSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetEcoSummaryQueryKey(projectId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getEcoSummary>>> = ({
+    signal,
+  }) => getEcoSummary(projectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEcoSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetEcoSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEcoSummary>>
+>;
+export type GetEcoSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the ECO summary card data for a project
+ */
+
+export function useGetEcoSummary<
+  TData = Awaited<ReturnType<typeof getEcoSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getEcoSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEcoSummaryQueryOptions(projectId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List ECOs for a project
+ */
+export const getListEcosUrl = (projectId: number, params?: ListEcosParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/projects/${projectId}/ecos?${stringifiedParams}`
+    : `/api/projects/${projectId}/ecos`;
+};
+
+export const listEcos = async (
+  projectId: number,
+  params?: ListEcosParams,
+  options?: RequestInit,
+): Promise<Eco[]> => {
+  return customFetch<Eco[]>(getListEcosUrl(projectId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListEcosQueryKey = (
+  projectId: number,
+  params?: ListEcosParams,
+) => {
+  return [
+    `/api/projects/${projectId}/ecos`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListEcosQueryOptions = <
+  TData = Awaited<ReturnType<typeof listEcos>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  params?: ListEcosParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listEcos>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListEcosQueryKey(projectId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listEcos>>> = ({
+    signal,
+  }) => listEcos(projectId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!projectId,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof listEcos>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type ListEcosQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listEcos>>
+>;
+export type ListEcosQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List ECOs for a project
+ */
+
+export function useListEcos<
+  TData = Awaited<ReturnType<typeof listEcos>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  params?: ListEcosParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listEcos>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListEcosQueryOptions(projectId, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create an ECO for a project
+ */
+export const getCreateEcoUrl = (projectId: number) => {
+  return `/api/projects/${projectId}/ecos`;
+};
+
+export const createEco = async (
+  projectId: number,
+  createEcoBody: CreateEcoBody,
+  options?: RequestInit,
+): Promise<Eco> => {
+  return customFetch<Eco>(getCreateEcoUrl(projectId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createEcoBody),
+  });
+};
+
+export const getCreateEcoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEco>>,
+    TError,
+    { projectId: number; data: BodyType<CreateEcoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createEco>>,
+  TError,
+  { projectId: number; data: BodyType<CreateEcoBody> },
+  TContext
+> => {
+  const mutationKey = ["createEco"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createEco>>,
+    { projectId: number; data: BodyType<CreateEcoBody> }
+  > = (props) => {
+    const { projectId, data } = props ?? {};
+
+    return createEco(projectId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateEcoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createEco>>
+>;
+export type CreateEcoMutationBody = BodyType<CreateEcoBody>;
+export type CreateEcoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create an ECO for a project
+ */
+export const useCreateEco = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEco>>,
+    TError,
+    { projectId: number; data: BodyType<CreateEcoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createEco>>,
+  TError,
+  { projectId: number; data: BodyType<CreateEcoBody> },
+  TContext
+> => {
+  return useMutation(getCreateEcoMutationOptions(options));
+};
+
+/**
+ * @summary Get an ECO
+ */
+export const getGetEcoUrl = (projectId: number, ecoId: number) => {
+  return `/api/projects/${projectId}/ecos/${ecoId}`;
+};
+
+export const getEco = async (
+  projectId: number,
+  ecoId: number,
+  options?: RequestInit,
+): Promise<Eco> => {
+  return customFetch<Eco>(getGetEcoUrl(projectId, ecoId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetEcoQueryKey = (projectId: number, ecoId: number) => {
+  return [`/api/projects/${projectId}/ecos/${ecoId}`] as const;
+};
+
+export const getGetEcoQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEco>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  ecoId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getEco>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetEcoQueryKey(projectId, ecoId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getEco>>> = ({
+    signal,
+  }) => getEco(projectId, ecoId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(projectId && ecoId),
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getEco>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetEcoQueryResult = NonNullable<Awaited<ReturnType<typeof getEco>>>;
+export type GetEcoQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get an ECO
+ */
+
+export function useGetEco<
+  TData = Awaited<ReturnType<typeof getEco>>,
+  TError = ErrorType<unknown>,
+>(
+  projectId: number,
+  ecoId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getEco>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEcoQueryOptions(projectId, ecoId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update an ECO
+ */
+export const getUpdateEcoUrl = (projectId: number, ecoId: number) => {
+  return `/api/projects/${projectId}/ecos/${ecoId}`;
+};
+
+export const updateEco = async (
+  projectId: number,
+  ecoId: number,
+  updateEcoBody: UpdateEcoBody,
+  options?: RequestInit,
+): Promise<Eco> => {
+  return customFetch<Eco>(getUpdateEcoUrl(projectId, ecoId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateEcoBody),
+  });
+};
+
+export const getUpdateEcoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEco>>,
+    TError,
+    { projectId: number; ecoId: number; data: BodyType<UpdateEcoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateEco>>,
+  TError,
+  { projectId: number; ecoId: number; data: BodyType<UpdateEcoBody> },
+  TContext
+> => {
+  const mutationKey = ["updateEco"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateEco>>,
+    { projectId: number; ecoId: number; data: BodyType<UpdateEcoBody> }
+  > = (props) => {
+    const { projectId, ecoId, data } = props ?? {};
+
+    return updateEco(projectId, ecoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateEcoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateEco>>
+>;
+export type UpdateEcoMutationBody = BodyType<UpdateEcoBody>;
+export type UpdateEcoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update an ECO
+ */
+export const useUpdateEco = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEco>>,
+    TError,
+    { projectId: number; ecoId: number; data: BodyType<UpdateEcoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateEco>>,
+  TError,
+  { projectId: number; ecoId: number; data: BodyType<UpdateEcoBody> },
+  TContext
+> => {
+  return useMutation(getUpdateEcoMutationOptions(options));
+};
+
+/**
+ * @summary Add a supporting document to an ECO
+ */
+export const getAddEcoAttachmentUrl = (projectId: number, ecoId: number) => {
+  return `/api/projects/${projectId}/ecos/${ecoId}/attachments`;
+};
+
+export const addEcoAttachment = async (
+  projectId: number,
+  ecoId: number,
+  addEcoAttachmentBody: AddEcoAttachmentBody,
+  options?: RequestInit,
+): Promise<EcoAttachment> => {
+  return customFetch<EcoAttachment>(getAddEcoAttachmentUrl(projectId, ecoId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addEcoAttachmentBody),
+  });
+};
+
+export const getAddEcoAttachmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addEcoAttachment>>,
+    TError,
+    { projectId: number; ecoId: number; data: BodyType<AddEcoAttachmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addEcoAttachment>>,
+  TError,
+  { projectId: number; ecoId: number; data: BodyType<AddEcoAttachmentBody> },
+  TContext
+> => {
+  const mutationKey = ["addEcoAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addEcoAttachment>>,
+    { projectId: number; ecoId: number; data: BodyType<AddEcoAttachmentBody> }
+  > = (props) => {
+    const { projectId, ecoId, data } = props ?? {};
+
+    return addEcoAttachment(projectId, ecoId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddEcoAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addEcoAttachment>>
+>;
+export type AddEcoAttachmentMutationBody = BodyType<AddEcoAttachmentBody>;
+export type AddEcoAttachmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a supporting document to an ECO
+ */
+export const useAddEcoAttachment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addEcoAttachment>>,
+    TError,
+    { projectId: number; ecoId: number; data: BodyType<AddEcoAttachmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addEcoAttachment>>,
+  TError,
+  { projectId: number; ecoId: number; data: BodyType<AddEcoAttachmentBody> },
+  TContext
+> => {
+  return useMutation(getAddEcoAttachmentMutationOptions(options));
+};
+
+/**
+ * @summary Delete an ECO supporting document
+ */
+export const getDeleteEcoAttachmentUrl = (
+  projectId: number,
+  ecoId: number,
+  attachmentId: number,
+) => {
+  return `/api/projects/${projectId}/ecos/${ecoId}/attachments/${attachmentId}`;
+};
+
+export const deleteEcoAttachment = async (
+  projectId: number,
+  ecoId: number,
+  attachmentId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(
+    getDeleteEcoAttachmentUrl(projectId, ecoId, attachmentId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteEcoAttachmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteEcoAttachment>>,
+    TError,
+    { projectId: number; ecoId: number; attachmentId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteEcoAttachment>>,
+  TError,
+  { projectId: number; ecoId: number; attachmentId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteEcoAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteEcoAttachment>>,
+    { projectId: number; ecoId: number; attachmentId: number }
+  > = (props) => {
+    const { projectId, ecoId, attachmentId } = props ?? {};
+
+    return deleteEcoAttachment(projectId, ecoId, attachmentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteEcoAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteEcoAttachment>>
+>;
+
+export type DeleteEcoAttachmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete an ECO supporting document
+ */
+export const useDeleteEcoAttachment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteEcoAttachment>>,
+    TError,
+    { projectId: number; ecoId: number; attachmentId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteEcoAttachment>>,
+  TError,
+  { projectId: number; ecoId: number; attachmentId: number },
+  TContext
+> => {
+  return useMutation(getDeleteEcoAttachmentMutationOptions(options));
+};
 
 /**
  * @summary Parse a quote PDF to extract project details

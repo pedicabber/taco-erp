@@ -21,6 +21,8 @@ import {
   getOADepartmentId,
   rejectIfHiddenProject,
 } from "../lib/officeAdmin";
+import { engineeringChangeOrdersTable } from "@workspace/db";
+import { centsToDollars, parseMoneyToCents } from "../lib/money";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -125,7 +127,11 @@ function buildSchedule(p: typeof projectsTable.$inferSelect) {
   };
 }
 
-function buildProject(p: typeof projectsTable.$inferSelect) {
+function buildProject(p: typeof projectsTable.$inferSelect, realizedEcoCents = 0) {
+  // Original Contract Value comes from the frozen column; for legacy projects
+  // created before that column existed, fall back to parsing totalPrice text.
+  const originalCents = p.originalContractValueCents ?? parseMoneyToCents(p.totalPrice);
+  const currentCents = originalCents === null ? null : originalCents + realizedEcoCents;
   return {
     id: p.id,
     name: p.name,
@@ -140,6 +146,8 @@ function buildProject(p: typeof projectsTable.$inferSelect) {
     contactPhone: p.contactPhone,
     contactEmail: p.contactEmail,
     totalPrice: p.totalPrice,
+    originalContractValue: centsToDollars(originalCents),
+    currentContractValue: centsToDollars(currentCents),
     deliveryDate: p.deliveryDate,
     scopeOfWork: p.scopeOfWork,
     notes: p.notes,
@@ -149,6 +157,45 @@ function buildProject(p: typeof projectsTable.$inferSelect) {
     updatedAt: p.updatedAt.toISOString(),
     schedule: buildSchedule(p),
   };
+}
+
+// Sum of realized (approved/implemented) ECO cost impacts for a single project,
+// in integer cents. Used to compute Current Contract Value consistently.
+async function getRealizedEcoCents(projectId: number): Promise<number> {
+  const rows = await db
+    .select({ costImpactCents: engineeringChangeOrdersTable.costImpactCents })
+    .from(engineeringChangeOrdersTable)
+    .where(
+      and(
+        eq(engineeringChangeOrdersTable.projectId, projectId),
+        inArray(engineeringChangeOrdersTable.status, ["approved", "implemented"]),
+      ),
+    );
+  return rows.reduce((sum, e) => sum + e.costImpactCents, 0);
+}
+
+// Same as above but batched across many projects (avoids N+1 on the list view).
+async function getRealizedEcoCentsByProject(
+  projectIds: number[],
+): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (projectIds.length === 0) return out;
+  const rows = await db
+    .select({
+      projectId: engineeringChangeOrdersTable.projectId,
+      costImpactCents: engineeringChangeOrdersTable.costImpactCents,
+    })
+    .from(engineeringChangeOrdersTable)
+    .where(
+      and(
+        inArray(engineeringChangeOrdersTable.projectId, projectIds),
+        inArray(engineeringChangeOrdersTable.status, ["approved", "implemented"]),
+      ),
+    );
+  for (const r of rows) {
+    out.set(r.projectId, (out.get(r.projectId) ?? 0) + r.costImpactCents);
+  }
+  return out;
 }
 
 function getDepartmentTaskTiming(project: typeof projectsTable.$inferSelect, departmentName: string) {
@@ -186,7 +233,12 @@ router.get("/projects", requireAuth, async (_req, res): Promise<void> => {
     .from(projectsTable)
     .where(excludeOAContainerProject)
     .orderBy(projectsTable.createdAt);
-  res.json(ListProjectsResponse.parse(projects.map(buildProject)));
+  const realizedByProject = await getRealizedEcoCentsByProject(projects.map(p => p.id));
+  res.json(
+    ListProjectsResponse.parse(
+      projects.map(p => buildProject(p, realizedByProject.get(p.id) ?? 0)),
+    ),
+  );
 });
 
 router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
@@ -218,6 +270,9 @@ router.post("/projects", requireAuth, async (req: AuthenticatedRequest, res): Pr
     activeStartDate: initialStart,
     activeDeliveryDate: initialDelivery,
     scheduleDriftDays: 0,
+    // Freeze the Original Contract Value at creation by parsing the entered
+    // total price. ECO cost impacts later adjust the Current Contract Value.
+    originalContractValueCents: parseMoneyToCents(projectData.totalPrice),
   }).returning();
 
   // Read auto_populate_tasks setting
@@ -846,7 +901,9 @@ router.get("/projects/:projectId", requireAuth, async (req, res): Promise<void> 
     return;
   }
 
-  res.json(GetProjectResponse.parse(buildProject(project)));
+  // Sum realized (approved/implemented) ECO cost impacts so the single-project
+  // view reports an accurate Current Contract Value.
+  res.json(GetProjectResponse.parse(buildProject(project, await getRealizedEcoCents(id))));
 });
 
 router.patch("/projects/:projectId", requireAuth, async (req, res): Promise<void> => {
@@ -896,7 +953,7 @@ router.patch("/projects/:projectId", requireAuth, async (req, res): Promise<void
     return;
   }
 
-  res.json(UpdateProjectResponse.parse(buildProject(updated)));
+  res.json(UpdateProjectResponse.parse(buildProject(updated, await getRealizedEcoCents(id))));
 });
 
 router.post("/projects/:projectId/reschedule", requireAuth, async (req: AuthenticatedRequest, res): Promise<void> => {
@@ -1017,7 +1074,7 @@ router.post("/projects/:projectId/reschedule", requireAuth, async (req: Authenti
     req.log.error({ err, projectId: id }, "reschedule: best-effort task shift failed");
   }
 
-  res.json(GetProjectResponse.parse(buildProject(updated)));
+  res.json(GetProjectResponse.parse(buildProject(updated, await getRealizedEcoCents(id))));
 });
 
 router.delete("/projects/:projectId", requireAdmin, async (req, res): Promise<void> => {

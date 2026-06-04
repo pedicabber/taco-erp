@@ -54,6 +54,7 @@ export const DelayReason = {
   internal_capacity: "internal_capacity",
   quality_issue: "quality_issue",
   scope_change: "scope_change",
+  engineering_change_order: "engineering_change_order",
   other: "other",
 } as const;
 
@@ -133,6 +134,10 @@ export interface Project {
   contactEmail?: string | null;
   /** @nullable */
   totalPrice?: string | null;
+  /** @nullable */
+  originalContractValue?: number | null;
+  /** @nullable */
+  currentContractValue?: number | null;
   /** @nullable */
   scopeOfWork?: string | null;
   /** @nullable */
@@ -685,6 +690,119 @@ export interface ProjectAllAttachments {
   taskGroups: ProjectAllAttachmentsTaskGroup[];
 }
 
+export type EcoType = (typeof EcoType)[keyof typeof EcoType];
+
+export const EcoType = {
+  customer_request: "customer_request",
+  internal_improvement: "internal_improvement",
+  correction: "correction",
+  scope_addition: "scope_addition",
+  scope_reduction: "scope_reduction",
+} as const;
+
+export type EcoStatus = (typeof EcoStatus)[keyof typeof EcoStatus];
+
+export const EcoStatus = {
+  draft: "draft",
+  approved: "approved",
+  implemented: "implemented",
+  cancelled: "cancelled",
+  rejected: "rejected",
+} as const;
+
+export type EcoCustomerApproved =
+  (typeof EcoCustomerApproved)[keyof typeof EcoCustomerApproved];
+
+export const EcoCustomerApproved = {
+  yes: "yes",
+  no: "no",
+  pending: "pending",
+} as const;
+
+export interface EcoAttachment {
+  id: number;
+  ecoId: number;
+  projectId: number;
+  fileName: string;
+  objectPath: string;
+  /** @nullable */
+  fileSize: number | null;
+  /** @nullable */
+  mimeType: string | null;
+  uploadedById: number;
+  createdAt: string;
+}
+
+export interface Eco {
+  id: number;
+  projectId: number;
+  seq: number;
+  ecoNumber: string;
+  title: string;
+  /** @nullable */
+  description: string | null;
+  ecoType: EcoType;
+  costImpact: number;
+  leadTimeImpactDays: number;
+  customerApproved: EcoCustomerApproved;
+  status: EcoStatus;
+  /** @nullable */
+  approvalDate: string | null;
+  createdById: number;
+  /** @nullable */
+  lastModifiedById: number | null;
+  createdAt: string;
+  updatedAt: string;
+  attachments: EcoAttachment[];
+}
+
+export interface CreateEcoBody {
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  ecoType?: EcoType;
+  costImpact?: number;
+  leadTimeImpactDays?: number;
+  customerApproved?: EcoCustomerApproved;
+  status?: EcoStatus;
+}
+
+export interface UpdateEcoBody {
+  title?: string;
+  /** @nullable */
+  description?: string | null;
+  ecoType?: EcoType;
+  costImpact?: number;
+  leadTimeImpactDays?: number;
+  customerApproved?: EcoCustomerApproved;
+  status?: EcoStatus;
+}
+
+export interface AddEcoAttachmentBody {
+  fileName: string;
+  objectPath: string;
+  /** @nullable */
+  fileSize?: number | null;
+  /** @nullable */
+  mimeType?: string | null;
+}
+
+export interface EcoSummary {
+  approvedCount: number;
+  pendingCount: number;
+  totalCount: number;
+  /** @nullable */
+  originalContractValue: number | null;
+  /** @nullable */
+  currentContractValue: number | null;
+  /** @nullable */
+  originalDelivery: string | null;
+  /** @nullable */
+  currentDelivery: string | null;
+  totalCostImpact: number;
+  totalScheduleImpactDays: number;
+}
+
 export interface KanbanColumnConfig {
   id: number;
   statusKey: string;
@@ -1211,6 +1329,13 @@ export interface LotoBannerItem {
 }
 
 export type ListLotoBannerResponse = LotoBannerItem[];
+
+export type ListEcosParams = {
+  status?: EcoStatus;
+  customerApproved?: EcoCustomerApproved;
+  fromDate?: string;
+  toDate?: string;
+};
 
 export type ParsePdfBody = {
   file: Blob;

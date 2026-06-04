@@ -16,6 +16,10 @@ export const projectsTable = pgTable("projects", {
   contactPhone: text("contact_phone"),
   contactEmail: text("contact_email"),
   totalPrice: text("total_price"),
+  // Original Contract Value (in integer cents), captured at creation and never
+  // changed by edits. Current Contract Value = this + sum of approved ECO cost
+  // impacts (computed at read-time, not stored).
+  originalContractValueCents: integer("original_contract_value_cents"),
   deliveryDate: text("delivery_date"),
   scopeOfWork: text("scope_of_work"),
   notes: text("notes"),

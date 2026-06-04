@@ -33,6 +33,10 @@ export interface Project {
   /** @nullable */
   totalPrice?: string | null;
   /** @nullable */
+  originalContractValue?: number | null;
+  /** @nullable */
+  currentContractValue?: number | null;
+  /** @nullable */
   scopeOfWork?: string | null;
   /** @nullable */
   notes?: string | null;

@@ -7,7 +7,7 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { requireAuth } from "../middlewares/requireAuth";
-import { db, projectAttachmentsTable, taskAttachmentsTable, tasksTable, usersTable, lotoAttachmentsTable } from "@workspace/db";
+import { db, projectAttachmentsTable, taskAttachmentsTable, tasksTable, usersTable, lotoAttachmentsTable, ecoAttachmentsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -156,18 +156,28 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
       .from(projectAttachmentsTable)
       .where(eq(projectAttachmentsTable.objectPath, objectPath));
 
+    // ECO supporting documents share the project module's read model: any
+    // authenticated user may read an object recorded in eco_attachments.
+    const [ecoAttachment] = projectAttachment
+      ? [undefined]
+      : await db
+          .select({ id: ecoAttachmentsTable.id })
+          .from(ecoAttachmentsTable)
+          .where(eq(ecoAttachmentsTable.objectPath, objectPath));
+
     // LOTO attachments have company-wide visibility (mirrors the Safety module's
     // read model), so any object recorded in loto_attachments is served.
-    const [lotoAttachment] = projectAttachment
+    const [lotoAttachment] = projectAttachment || ecoAttachment
       ? [undefined]
       : await db
           .select({ id: lotoAttachmentsTable.id })
           .from(lotoAttachmentsTable)
           .where(eq(lotoAttachmentsTable.objectPath, objectPath));
 
-    // LOTO attachments are visible company-wide, i.e. to any authenticated
-    // internal user — but not anonymously. Enforce auth before serving them.
-    if (lotoAttachment) {
+    // LOTO and ECO attachments are visible company-wide, i.e. to any
+    // authenticated internal user — but not anonymously. Enforce auth before
+    // serving them.
+    if (lotoAttachment || ecoAttachment) {
       const auth = getAuth(req);
       if (!auth?.userId) {
         res.status(401).json({ error: "Unauthorized" });
@@ -175,7 +185,7 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
       }
     }
 
-    if (!projectAttachment && !lotoAttachment) {
+    if (!projectAttachment && !lotoAttachment && !ecoAttachment) {
       const [attachment] = await db
         .select({ uploadedById: taskAttachmentsTable.uploadedById, taskId: taskAttachmentsTable.taskId })
         .from(taskAttachmentsTable)

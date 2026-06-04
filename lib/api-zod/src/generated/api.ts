@@ -146,6 +146,8 @@ export const ListProjectsResponseItem = zod.object({
   contactPhone: zod.string().nullish(),
   contactEmail: zod.string().nullish(),
   totalPrice: zod.string().nullish(),
+  originalContractValue: zod.number().nullish(),
+  currentContractValue: zod.number().nullish(),
   scopeOfWork: zod.string().nullish(),
   notes: zod.string().nullish(),
   priority: zod.enum(["low", "medium", "high"]),
@@ -168,6 +170,7 @@ export const ListProjectsResponseItem = zod.object({
         "internal_capacity",
         "quality_issue",
         "scope_change",
+        "engineering_change_order",
         "other",
       ]),
       zod.null(),
@@ -230,6 +233,8 @@ export const GetProjectResponse = zod.object({
   contactPhone: zod.string().nullish(),
   contactEmail: zod.string().nullish(),
   totalPrice: zod.string().nullish(),
+  originalContractValue: zod.number().nullish(),
+  currentContractValue: zod.number().nullish(),
   scopeOfWork: zod.string().nullish(),
   notes: zod.string().nullish(),
   priority: zod.enum(["low", "medium", "high"]),
@@ -252,6 +257,7 @@ export const GetProjectResponse = zod.object({
         "internal_capacity",
         "quality_issue",
         "scope_change",
+        "engineering_change_order",
         "other",
       ]),
       zod.null(),
@@ -310,6 +316,8 @@ export const UpdateProjectResponse = zod.object({
   contactPhone: zod.string().nullish(),
   contactEmail: zod.string().nullish(),
   totalPrice: zod.string().nullish(),
+  originalContractValue: zod.number().nullish(),
+  currentContractValue: zod.number().nullish(),
   scopeOfWork: zod.string().nullish(),
   notes: zod.string().nullish(),
   priority: zod.enum(["low", "medium", "high"]),
@@ -332,6 +340,7 @@ export const UpdateProjectResponse = zod.object({
         "internal_capacity",
         "quality_issue",
         "scope_change",
+        "engineering_change_order",
         "other",
       ]),
       zod.null(),
@@ -400,6 +409,7 @@ export const RescheduleProjectBody = zod.object({
     "internal_capacity",
     "quality_issue",
     "scope_change",
+    "engineering_change_order",
     "other",
   ]),
   delayNotes: zod.string().nullish(),
@@ -419,6 +429,8 @@ export const RescheduleProjectResponse = zod.object({
   contactPhone: zod.string().nullish(),
   contactEmail: zod.string().nullish(),
   totalPrice: zod.string().nullish(),
+  originalContractValue: zod.number().nullish(),
+  currentContractValue: zod.number().nullish(),
   scopeOfWork: zod.string().nullish(),
   notes: zod.string().nullish(),
   priority: zod.enum(["low", "medium", "high"]),
@@ -441,6 +453,7 @@ export const RescheduleProjectResponse = zod.object({
         "internal_capacity",
         "quality_issue",
         "scope_change",
+        "engineering_change_order",
         "other",
       ]),
       zod.null(),
@@ -546,6 +559,261 @@ export const GetProjectAllAttachmentsResponse = zod.object({
       ),
     }),
   ),
+});
+
+/**
+ * @summary Get the ECO summary card data for a project
+ */
+export const GetEcoSummaryParams = zod.object({
+  projectId: zod.coerce.number(),
+});
+
+export const GetEcoSummaryResponse = zod.object({
+  approvedCount: zod.number(),
+  pendingCount: zod.number(),
+  totalCount: zod.number(),
+  originalContractValue: zod.number().nullable(),
+  currentContractValue: zod.number().nullable(),
+  originalDelivery: zod.string().nullable(),
+  currentDelivery: zod.string().nullable(),
+  totalCostImpact: zod.number(),
+  totalScheduleImpactDays: zod.number(),
+});
+
+/**
+ * @summary List ECOs for a project
+ */
+export const ListEcosParams = zod.object({
+  projectId: zod.coerce.number(),
+});
+
+export const ListEcosQueryParams = zod.object({
+  status: zod
+    .enum(["draft", "approved", "implemented", "cancelled", "rejected"])
+    .optional(),
+  customerApproved: zod.enum(["yes", "no", "pending"]).optional(),
+  fromDate: zod.coerce.string().optional(),
+  toDate: zod.coerce.string().optional(),
+});
+
+export const ListEcosResponseItem = zod.object({
+  id: zod.number(),
+  projectId: zod.number(),
+  seq: zod.number(),
+  ecoNumber: zod.string(),
+  title: zod.string(),
+  description: zod.string().nullable(),
+  ecoType: zod.enum([
+    "customer_request",
+    "internal_improvement",
+    "correction",
+    "scope_addition",
+    "scope_reduction",
+  ]),
+  costImpact: zod.number(),
+  leadTimeImpactDays: zod.number(),
+  customerApproved: zod.enum(["yes", "no", "pending"]),
+  status: zod.enum([
+    "draft",
+    "approved",
+    "implemented",
+    "cancelled",
+    "rejected",
+  ]),
+  approvalDate: zod.string().nullable(),
+  createdById: zod.number(),
+  lastModifiedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  attachments: zod.array(
+    zod.object({
+      id: zod.number(),
+      ecoId: zod.number(),
+      projectId: zod.number(),
+      fileName: zod.string(),
+      objectPath: zod.string(),
+      fileSize: zod.number().nullable(),
+      mimeType: zod.string().nullable(),
+      uploadedById: zod.number(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+export const ListEcosResponse = zod.array(ListEcosResponseItem);
+
+/**
+ * @summary Create an ECO for a project
+ */
+export const CreateEcoParams = zod.object({
+  projectId: zod.coerce.number(),
+});
+
+export const CreateEcoBody = zod.object({
+  title: zod.string(),
+  description: zod.string().nullish(),
+  ecoType: zod
+    .enum([
+      "customer_request",
+      "internal_improvement",
+      "correction",
+      "scope_addition",
+      "scope_reduction",
+    ])
+    .optional(),
+  costImpact: zod.number().optional(),
+  leadTimeImpactDays: zod.number().optional(),
+  customerApproved: zod.enum(["yes", "no", "pending"]).optional(),
+  status: zod
+    .enum(["draft", "approved", "implemented", "cancelled", "rejected"])
+    .optional(),
+});
+
+/**
+ * @summary Get an ECO
+ */
+export const GetEcoParams = zod.object({
+  projectId: zod.coerce.number(),
+  ecoId: zod.coerce.number(),
+});
+
+export const GetEcoResponse = zod.object({
+  id: zod.number(),
+  projectId: zod.number(),
+  seq: zod.number(),
+  ecoNumber: zod.string(),
+  title: zod.string(),
+  description: zod.string().nullable(),
+  ecoType: zod.enum([
+    "customer_request",
+    "internal_improvement",
+    "correction",
+    "scope_addition",
+    "scope_reduction",
+  ]),
+  costImpact: zod.number(),
+  leadTimeImpactDays: zod.number(),
+  customerApproved: zod.enum(["yes", "no", "pending"]),
+  status: zod.enum([
+    "draft",
+    "approved",
+    "implemented",
+    "cancelled",
+    "rejected",
+  ]),
+  approvalDate: zod.string().nullable(),
+  createdById: zod.number(),
+  lastModifiedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  attachments: zod.array(
+    zod.object({
+      id: zod.number(),
+      ecoId: zod.number(),
+      projectId: zod.number(),
+      fileName: zod.string(),
+      objectPath: zod.string(),
+      fileSize: zod.number().nullable(),
+      mimeType: zod.string().nullable(),
+      uploadedById: zod.number(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Update an ECO
+ */
+export const UpdateEcoParams = zod.object({
+  projectId: zod.coerce.number(),
+  ecoId: zod.coerce.number(),
+});
+
+export const UpdateEcoBody = zod.object({
+  title: zod.string().optional(),
+  description: zod.string().nullish(),
+  ecoType: zod
+    .enum([
+      "customer_request",
+      "internal_improvement",
+      "correction",
+      "scope_addition",
+      "scope_reduction",
+    ])
+    .optional(),
+  costImpact: zod.number().optional(),
+  leadTimeImpactDays: zod.number().optional(),
+  customerApproved: zod.enum(["yes", "no", "pending"]).optional(),
+  status: zod
+    .enum(["draft", "approved", "implemented", "cancelled", "rejected"])
+    .optional(),
+});
+
+export const UpdateEcoResponse = zod.object({
+  id: zod.number(),
+  projectId: zod.number(),
+  seq: zod.number(),
+  ecoNumber: zod.string(),
+  title: zod.string(),
+  description: zod.string().nullable(),
+  ecoType: zod.enum([
+    "customer_request",
+    "internal_improvement",
+    "correction",
+    "scope_addition",
+    "scope_reduction",
+  ]),
+  costImpact: zod.number(),
+  leadTimeImpactDays: zod.number(),
+  customerApproved: zod.enum(["yes", "no", "pending"]),
+  status: zod.enum([
+    "draft",
+    "approved",
+    "implemented",
+    "cancelled",
+    "rejected",
+  ]),
+  approvalDate: zod.string().nullable(),
+  createdById: zod.number(),
+  lastModifiedById: zod.number().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  attachments: zod.array(
+    zod.object({
+      id: zod.number(),
+      ecoId: zod.number(),
+      projectId: zod.number(),
+      fileName: zod.string(),
+      objectPath: zod.string(),
+      fileSize: zod.number().nullable(),
+      mimeType: zod.string().nullable(),
+      uploadedById: zod.number(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Add a supporting document to an ECO
+ */
+export const AddEcoAttachmentParams = zod.object({
+  projectId: zod.coerce.number(),
+  ecoId: zod.coerce.number(),
+});
+
+export const AddEcoAttachmentBody = zod.object({
+  fileName: zod.string(),
+  objectPath: zod.string(),
+  fileSize: zod.number().nullish(),
+  mimeType: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete an ECO supporting document
+ */
+export const DeleteEcoAttachmentParams = zod.object({
+  projectId: zod.coerce.number(),
+  ecoId: zod.coerce.number(),
+  attachmentId: zod.coerce.number(),
 });
 
 /**

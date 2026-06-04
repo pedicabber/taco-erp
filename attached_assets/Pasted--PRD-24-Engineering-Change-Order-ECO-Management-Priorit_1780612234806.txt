@@ -1,0 +1,534 @@
+# PRD #24 – Engineering Change Order (ECO) Management
+
+## Priority
+
+High Priority
+
+---
+
+# What & Why
+
+Projects frequently experience customer-requested scope changes after the original quote, purchase order, or project kickoff. These changes often impact:
+
+* Contract Value
+* Project Scope
+* Delivery Schedule
+* Resource Planning
+
+Currently there is no structured way to capture these changes inside the ERP.
+
+Project teams rely on revised quotes, emails, and conversations, making it difficult to understand:
+
+* What changed
+* When it changed
+* Why it changed
+* How it impacted cost
+* How it impacted schedule
+
+This feature introduces a lightweight ECO (Engineering Change Order) management system that allows project changes to be documented, financially tracked, and connected to project schedule impacts without introducing a full enterprise change-management workflow.
+
+---
+
+# Design Philosophy
+
+This is NOT a document control system.
+
+This is NOT a revision control system.
+
+Engineering will continue managing CAD revisions, PLC revisions, robot code revisions, and released files through existing folder structures and SOPs.
+
+The ERP ECO system exists only to track:
+
+* Customer-approved changes
+* Cost impact
+* Schedule impact
+* Supporting documents
+* Project history
+
+---
+
+# Done Looks Like
+
+Projects contain an ECO Summary section directly on the Project Overview page.
+
+Users can create ECO records.
+
+Users can attach supporting documents (revised quotes, customer approvals, emails, PDFs).
+
+ECOs can track:
+
+* Cost Impact
+* Schedule Impact
+* Description
+* Status
+
+Project financial totals automatically reflect approved ECO values.
+
+Projects maintain both:
+
+* Original Contract Value
+* Current Contract Value
+
+Schedule changes remain controlled by the existing Reschedule workflow.
+
+ECOs with schedule impact can launch the Reschedule Project dialog with pre-filled information.
+
+Users can review historical ECOs at any time.
+
+---
+
+# Out of Scope
+
+* Engineering revision control
+* CAD file management
+* PLC revision tracking
+* Robot code revision tracking
+* Automated task generation
+* Department notifications
+* Approval routing workflows
+* Purchasing workflows
+* Manufacturing workflows
+* ERP-driven document release control
+* ECO approval chains
+
+---
+
+# Project Overview Integration
+
+Add a new section directly below Schedule and above Involved Departments.
+
+```text
+Schedule
+
+ECO Summary
+
+Departments
+
+Inventory
+
+Attachments
+```
+
+---
+
+# ECO Summary Card
+
+Display:
+
+```text
+Approved ECOs
+Pending ECOs
+Total ECOs
+
+Original Contract Value
+Current Contract Value
+
+Original Delivery
+Current Delivery
+
+Total ECO Cost Impact
+Total ECO Schedule Impact
+```
+
+Actions:
+
+```text
+View ECOs
+New ECO
+```
+
+---
+
+# ECO Record
+
+Each ECO shall be a structured ERP record.
+
+Fields:
+
+### Identification
+
+```text
+ECO Number
+```
+
+Auto-generated:
+
+```text
+ECO-001
+ECO-002
+ECO-003
+```
+
+Per project.
+
+---
+
+### General Information
+
+```text
+Title
+Description
+```
+
+Examples:
+
+```text
+Additional Vision Inspection Camera
+
+Add Secondary EOAT
+
+Add Additional Conveyor
+```
+
+---
+
+### Financial Impact
+
+```text
+Cost Impact
+```
+
+Supports:
+
+```text
+Positive values
+Negative values
+Zero values
+```
+
+Examples:
+
+```text
++$25,000
+-$5,000
+$0
+```
+
+---
+
+### Schedule Impact
+
+```text
+Lead Time Impact
+```
+
+Supports:
+
+```text
+0 Days
++1 Week
++2 Weeks
++4 Weeks
+Custom Days
+```
+
+---
+
+### Supporting Documents
+
+File Upload Section
+
+Supports:
+
+* PDF
+* DOCX
+* XLSX
+* Images
+
+Examples:
+
+* Revised quote
+* Customer PO
+* Signed approval
+* Email export
+
+---
+
+### Customer Approval
+
+```text
+Customer Approved
+```
+
+Values:
+
+```text
+Yes
+No
+Pending
+```
+
+---
+
+### Status
+
+```text
+Draft
+Approved
+Implemented
+Cancelled
+```
+
+---
+
+# Financial Calculations
+
+Projects shall maintain:
+
+```text
+Original Contract Value
+```
+
+Captured from project creation.
+
+Never changes.
+
+---
+
+```text
+Current Contract Value
+```
+
+Calculated:
+
+Original Contract Value
+
+*
+
+All Approved ECO Cost Impacts
+
+---
+
+Example:
+
+```text
+Original:
+$277,810
+
+ECO-001:
++$25,000
+
+Current:
+$302,810
+```
+
+---
+
+# Schedule Integration
+
+The existing Project Reschedule workflow remains the single source of truth for schedule management.
+
+ECOs do NOT directly modify project dates.
+
+---
+
+# Schedule Impact Workflow
+
+If an ECO contains:
+
+```text
+Lead Time Impact > 0
+```
+
+then after saving:
+
+Display:
+
+```text
+Schedule Impact Detected
+
+This ECO includes a schedule impact.
+
+Would you like to update the project schedule?
+```
+
+Buttons:
+
+```text
+Open Reschedule
+Skip
+```
+
+---
+
+# Reschedule Integration
+
+Selecting:
+
+```text
+Open Reschedule
+```
+
+opens the existing Reschedule Project dialog.
+
+Pre-fill:
+
+```text
+Delay Reason:
+Engineering Change Order
+```
+
+and
+
+```text
+Notes:
+ECO Number
+ECO Title
+Schedule Impact
+```
+
+Example:
+
+```text
+ECO-004
+
+Additional TM-X5120 Comparator
+
+Lead Time Impact:
++2 Weeks
+```
+
+---
+
+# ECO List Modal
+
+Selecting:
+
+```text
+View ECOs
+```
+
+opens a modal displaying all project ECOs.
+
+Columns:
+
+```text
+ECO Number
+Title
+Status
+Customer Approved
+Cost Impact
+Lead Time Impact
+Approval Date
+```
+
+Selecting an ECO opens full details.
+
+---
+
+# Audit History
+
+Each ECO shall maintain:
+
+```text
+Created By
+Created Date
+Last Modified By
+Last Modified Date
+```
+
+Supporting document uploads shall also be recorded.
+
+---
+
+# Search & Filtering
+
+Users can filter ECOs by:
+
+```text
+Status
+Customer Approval
+Date
+```
+
+---
+
+# Security
+
+Any authenticated project user may:
+
+```text
+Create ECO
+View ECO
+Edit ECO
+Upload Documents
+```
+
+No approval workflow is required at this stage.
+
+---
+
+# Acceptance Criteria
+
+### ECO Creation
+
+User creates ECO.
+
+User enters:
+
+* Title
+* Description
+* Cost Impact
+* Schedule Impact
+
+User uploads supporting PDF.
+
+ECO saves successfully.
+
+---
+
+### Financial Tracking
+
+Approved ECO updates:
+
+```text
+Current Contract Value
+```
+
+while preserving:
+
+```text
+Original Contract Value
+```
+
+---
+
+### Schedule Integration
+
+ECO with schedule impact prompts:
+
+```text
+Open Reschedule
+```
+
+and pre-fills the existing reschedule dialog.
+
+---
+
+### ECO Review
+
+Users can view all ECOs from the Project Overview.
+
+Supporting documents remain accessible.
+
+---
+
+### Historical Record
+
+Project maintains complete ECO history for future review.
+
+---
+
+# Relevant Files
+
+Potential implementation areas:
+
+```text
+artifacts/tacot3/src/pages/project-detail.tsx
+artifacts/tacot3/src/components/projects/*
+artifacts/api-server/src/routes/projects.ts
+lib/db/src/schema/projects.ts
+lib/api-spec/openapi.yaml
+```
+
+Additional files may be created as necessary for ECO entities, attachments, and project calculations.

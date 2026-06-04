@@ -10,6 +10,7 @@ import taskTemplatesRouter from "./taskTemplates";
 import inventoryRouter from "./inventory";
 import officeOpsRouter from "./officeOps";
 import lotoRouter from "./loto";
+import ecosRouter from "./ecos";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(taskTemplatesRouter);
 router.use(inventoryRouter);
 router.use(officeOpsRouter);
 router.use(lotoRouter);
+router.use(ecosRouter);
 
 export default router;

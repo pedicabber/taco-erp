@@ -19,3 +19,5 @@ export * from "./office_ops_tasks";
 export * from "./loto_records";
 export * from "./loto_attachments";
 export * from "./loto_events";
+export * from "./engineering_change_orders";
+export * from "./eco_attachments";

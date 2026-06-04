@@ -337,6 +337,196 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProjectAllAttachments"
 
+  /projects/{projectId}/eco-summary:
+    get:
+      operationId: getEcoSummary
+      tags: [ecos]
+      summary: Get the ECO summary card data for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: ECO summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EcoSummary"
+
+  /projects/{projectId}/ecos:
+    get:
+      operationId: listEcos
+      tags: [ecos]
+      summary: List ECOs for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/EcoStatus"
+        - name: customerApproved
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/EcoCustomerApproved"
+        - name: fromDate
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: toDate
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of ECOs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Eco"
+    post:
+      operationId: createEco
+      tags: [ecos]
+      summary: Create an ECO for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEcoBody"
+      responses:
+        "201":
+          description: Created ECO
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Eco"
+
+  /projects/{projectId}/ecos/{ecoId}:
+    get:
+      operationId: getEco
+      tags: [ecos]
+      summary: Get an ECO
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: ecoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: ECO
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Eco"
+    patch:
+      operationId: updateEco
+      tags: [ecos]
+      summary: Update an ECO
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: ecoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEcoBody"
+      responses:
+        "200":
+          description: Updated ECO
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Eco"
+
+  /projects/{projectId}/ecos/{ecoId}/attachments:
+    post:
+      operationId: addEcoAttachment
+      tags: [ecos]
+      summary: Add a supporting document to an ECO
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: ecoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddEcoAttachmentBody"
+      responses:
+        "201":
+          description: ECO attachment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EcoAttachment"
+
+  /projects/{projectId}/ecos/{ecoId}/attachments/{attachmentId}:
+    delete:
+      operationId: deleteEcoAttachment
+      tags: [ecos]
+      summary: Delete an ECO supporting document
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: ecoId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   /projects/parse-pdf:
     post:
       operationId: parsePdf
@@ -1807,6 +1997,7 @@ components:
         - internal_capacity
         - quality_issue
         - scope_change
+        - engineering_change_order
         - other
 
     DriftSeverity:
@@ -1890,6 +2081,10 @@ components:
           type: ["string", "null"]
         totalPrice:
           type: ["string", "null"]
+        originalContractValue:
+          type: ["number", "null"]
+        currentContractValue:
+          type: ["number", "null"]
         scopeOfWork:
           type: ["string", "null"]
         notes:
@@ -2626,6 +2821,206 @@ components:
       required:
         - projectAttachments
         - taskGroups
+
+    EcoType:
+      type: string
+      enum:
+        - customer_request
+        - internal_improvement
+        - correction
+        - scope_addition
+        - scope_reduction
+
+    EcoStatus:
+      type: string
+      enum:
+        - draft
+        - approved
+        - implemented
+        - cancelled
+        - rejected
+
+    EcoCustomerApproved:
+      type: string
+      enum:
+        - "yes"
+        - "no"
+        - pending
+
+    EcoAttachment:
+      type: object
+      properties:
+        id:
+          type: integer
+        ecoId:
+          type: integer
+        projectId:
+          type: integer
+        fileName:
+          type: string
+        objectPath:
+          type: string
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+        uploadedById:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - ecoId
+        - projectId
+        - fileName
+        - objectPath
+        - fileSize
+        - mimeType
+        - uploadedById
+        - createdAt
+
+    Eco:
+      type: object
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        seq:
+          type: integer
+        ecoNumber:
+          type: string
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        ecoType:
+          $ref: "#/components/schemas/EcoType"
+        costImpact:
+          type: number
+        leadTimeImpactDays:
+          type: integer
+        customerApproved:
+          $ref: "#/components/schemas/EcoCustomerApproved"
+        status:
+          $ref: "#/components/schemas/EcoStatus"
+        approvalDate:
+          type: ["string", "null"]
+        createdById:
+          type: integer
+        lastModifiedById:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/EcoAttachment"
+      required:
+        - id
+        - projectId
+        - seq
+        - ecoNumber
+        - title
+        - description
+        - ecoType
+        - costImpact
+        - leadTimeImpactDays
+        - customerApproved
+        - status
+        - approvalDate
+        - createdById
+        - lastModifiedById
+        - createdAt
+        - updatedAt
+        - attachments
+
+    CreateEcoBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        ecoType:
+          $ref: "#/components/schemas/EcoType"
+        costImpact:
+          type: number
+        leadTimeImpactDays:
+          type: integer
+        customerApproved:
+          $ref: "#/components/schemas/EcoCustomerApproved"
+        status:
+          $ref: "#/components/schemas/EcoStatus"
+      required:
+        - title
+
+    UpdateEcoBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        ecoType:
+          $ref: "#/components/schemas/EcoType"
+        costImpact:
+          type: number
+        leadTimeImpactDays:
+          type: integer
+        customerApproved:
+          $ref: "#/components/schemas/EcoCustomerApproved"
+        status:
+          $ref: "#/components/schemas/EcoStatus"
+
+    AddEcoAttachmentBody:
+      type: object
+      properties:
+        fileName:
+          type: string
+        objectPath:
+          type: string
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+      required:
+        - fileName
+        - objectPath
+
+    EcoSummary:
+      type: object
+      properties:
+        approvedCount:
+          type: integer
+        pendingCount:
+          type: integer
+        totalCount:
+          type: integer
+        originalContractValue:
+          type: ["number", "null"]
+        currentContractValue:
+          type: ["number", "null"]
+        originalDelivery:
+          type: ["string", "null"]
+        currentDelivery:
+          type: ["string", "null"]
+        totalCostImpact:
+          type: number
+        totalScheduleImpactDays:
+          type: integer
+      required:
+        - approvedCount
+        - pendingCount
+        - totalCount
+        - originalContractValue
+        - currentContractValue
+        - originalDelivery
+        - currentDelivery
+        - totalCostImpact
+        - totalScheduleImpactDays
 
     KanbanColumnConfig:
       type: object

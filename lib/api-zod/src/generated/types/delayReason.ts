@@ -15,5 +15,6 @@ export const DelayReason = {
   internal_capacity: "internal_capacity",
   quality_issue: "quality_issue",
   scope_change: "scope_change",
+  engineering_change_order: "engineering_change_order",
   other: "other",
 } as const;

@@ -15,4 +15,12 @@ export type {
   KanbanColumn,
   ProjectSummary,
   ParsedTaskItem,
+  Eco,
+  EcoAttachment,
+  EcoType,
+  EcoStatus,
+  EcoCustomerApproved,
+  EcoSummary,
+  CreateEcoBody,
+  UpdateEcoBody,
 } from "@workspace/api-client-react";

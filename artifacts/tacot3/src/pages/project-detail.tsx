@@ -33,6 +33,7 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import ProjectAttachmentsPanel from "@/components/projects/ProjectAttachmentsPanel";
+import EcoSection, { type ReschedulePrefill } from "@/components/projects/EcoSection";
 import LotoActiveBanner from "@/components/safety/LotoActiveBanner";
 import {
   computePhaseWindows,
@@ -58,6 +59,7 @@ export default function ProjectDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(true);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [reschedulePrefill, setReschedulePrefill] = useState<ReschedulePrefill | null>(null);
   const qc = useQueryClient();
   const { data: currentUser } = useCurrentUser();
 
@@ -282,13 +284,28 @@ export default function ProjectDetailPage() {
 
       <RescheduleDialog
         open={rescheduleOpen}
-        onOpenChange={setRescheduleOpen}
+        onOpenChange={(o) => {
+          setRescheduleOpen(o);
+          if (!o) setReschedulePrefill(null);
+        }}
         project={project}
+        prefill={reschedulePrefill}
         onSuccess={() => {
           qc.invalidateQueries({ queryKey: ["project", projectId] });
           qc.invalidateQueries({ queryKey: ["projects"] });
           qc.invalidateQueries({ queryKey: ["tasks", { projectId }] });
           qc.invalidateQueries({ queryKey: ["project-summary", projectId] });
+          qc.invalidateQueries({ queryKey: ["eco-summary", projectId] });
+        }}
+      />
+
+      {/* Engineering Change Orders */}
+      <EcoSection
+        projectId={projectId}
+        currentUser={currentUser ? { id: currentUser.id, role: currentUser.role } : null}
+        onRequestReschedule={(prefill) => {
+          setReschedulePrefill(prefill);
+          setRescheduleOpen(true);
         }}
       />
 
@@ -582,6 +599,7 @@ function RescheduleDialog({
   open,
   onOpenChange,
   project,
+  prefill,
   onSuccess,
 }: {
   open: boolean;
@@ -594,6 +612,7 @@ function RescheduleDialog({
       activeDeliveryDate: string | null;
     };
   };
+  prefill?: { delayReason: string; delayNotes: string; bumpDeliveryDays: number } | null;
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
@@ -606,11 +625,19 @@ function RescheduleDialog({
   const [delayNotes, setDelayNotes] = useState("");
 
   // Reset form whenever the dialog opens against a (possibly new) project.
+  // When opened with a prefill (e.g. from an ECO schedule impact), pre-populate
+  // the delay reason / notes and bump the delivery date by the impact days.
   const resetForm = () => {
     setActiveStartDate(initialStart ?? "");
-    setActiveDeliveryDate(initialDelivery ?? "");
-    setDelayReason("");
-    setDelayNotes("");
+    if (prefill && prefill.bumpDeliveryDays && initialDelivery) {
+      const [y, m, d] = initialDelivery.split("-").map(Number);
+      const bumped = new Date(Date.UTC(y, m - 1, d + prefill.bumpDeliveryDays));
+      setActiveDeliveryDate(bumped.toISOString().slice(0, 10));
+    } else {
+      setActiveDeliveryDate(initialDelivery ?? "");
+    }
+    setDelayReason((prefill?.delayReason as DelayReasonValue | undefined) ?? "");
+    setDelayNotes(prefill?.delayNotes ?? "");
   };
 
   const mutation = useMutation({
