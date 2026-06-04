@@ -12,11 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -105,7 +104,7 @@ export default function ProjectInfoDialog({
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           {/* pr-10 leaves room for the shadcn close button (absolute top-4 right-4) */}
           <div className="flex items-center justify-between pr-10">
@@ -121,7 +120,7 @@ export default function ProjectInfoDialog({
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 -mx-1 px-1">
+        <DialogBody className="-mx-1 px-1">
           <div className="space-y-5 pb-2">
             {/* ─── Core identity ─── */}
             <section>
@@ -360,10 +359,10 @@ export default function ProjectInfoDialog({
               )}
             </section>
           </div>
-        </ScrollArea>
+        </DialogBody>
 
         {editing && (
-          <div className="flex items-center justify-end gap-2 pt-3 border-t">
+          <DialogFooter className="flex flex-row items-center justify-end gap-2 pt-3 border-t sm:space-x-0">
             <Button variant="outline" onClick={discardEdits}>
               <X className="w-4 h-4 mr-1.5" />
               Discard
@@ -374,7 +373,7 @@ export default function ProjectInfoDialog({
                 : <Save className="w-4 h-4 mr-1.5" />}
               Save Changes
             </Button>
-          </div>
+          </DialogFooter>
         )}
       </DialogContent>
     </Dialog>

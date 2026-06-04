@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -615,11 +616,11 @@ function CreateLotoDialog({
         onOpenChange(o);
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto" data-testid="dialog-create-loto">
+      <DialogContent data-testid="dialog-create-loto">
         <DialogHeader>
           <DialogTitle>New LOTO record</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <DialogBody className="space-y-4">
           <div className="space-y-1.5">
             <Label>Project</Label>
             <Select value={projectId} onValueChange={setProjectId}>
@@ -717,7 +718,7 @@ function CreateLotoDialog({
             </Select>
           </div>
           <PersonnelPicker users={users} selected={personnel} onChange={setPersonnel} />
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
@@ -900,9 +901,11 @@ function LotoDetailDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-loto-detail">
+      <DialogContent className="max-w-3xl" data-testid="dialog-loto-detail">
         {isLoading || !record ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
+          <DialogBody>
+            <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
+          </DialogBody>
         ) : (
           <>
             <DialogHeader>
@@ -914,6 +917,7 @@ function LotoDetailDialog({
               </DialogTitle>
             </DialogHeader>
 
+            <DialogBody className="space-y-4">
             {isClosed && (
               <div className="rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
                 <Lock className="w-3.5 h-3.5" />
@@ -1226,6 +1230,7 @@ function LotoDetailDialog({
                 <AuditNoteForm busy={auditNoteMut.isPending} onSubmit={(m) => auditNoteMut.mutate(m)} />
               )}
             </section>
+            </DialogBody>
           </>
         )}
       </DialogContent>

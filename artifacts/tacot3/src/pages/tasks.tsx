@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -110,14 +110,14 @@ function NewTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckSquare className="w-5 h-5" />
             New Task
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 pt-2">
+        <DialogBody className="space-y-4 pt-2">
           <div>
             <Label>Title *</Label>
             <Input
@@ -223,17 +223,17 @@ function NewTaskDialog({
               />
             </div>
           </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={!form.title || !form.projectId || mutation.isPending}
-            >
-              {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Create Task
-            </Button>
-          </div>
-        </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={!form.title || !form.projectId || mutation.isPending}
+          >
+            {mutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+            Create Task
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

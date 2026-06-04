@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -656,7 +656,7 @@ function RescheduleDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <DialogBody className="space-y-3">
           <div className="text-xs text-muted-foreground">
             Updates the ACTIVE schedule only. The baseline (original commitment)
             is preserved so drift remains visible.
@@ -730,7 +730,7 @@ function RescheduleDialog({
               Change at least one active date to record a reschedule.
             </div>
           )}
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

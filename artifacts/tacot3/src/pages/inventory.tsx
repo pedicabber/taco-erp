@@ -5,7 +5,7 @@ import { AlertTriangle, Plus, Search, Pencil, X, Check, ChevronUp, ChevronDown, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Project } from "@/lib/types";
@@ -101,6 +101,7 @@ function AllocateDialog({
         <DialogHeader>
           <DialogTitle>Allocate to Project</DialogTitle>
         </DialogHeader>
+        <DialogBody className="space-y-4">
         <p className="text-sm text-muted-foreground -mt-2">
           Search for a project, then set the quantity of{" "}
           <span className="font-semibold text-foreground">{item.name}</span> to allocate.
@@ -180,10 +181,11 @@ function AllocateDialog({
             </Button>
           </div>
         )}
+        </DialogBody>
 
-        <div className="flex justify-end pt-1">
+        <DialogFooter>
           <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -267,7 +269,7 @@ function ItemDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <DialogTitle className="flex-1 text-lg">{item.name}</DialogTitle>
@@ -284,6 +286,7 @@ function ItemDetailDialog({
           <p className="text-xs text-muted-foreground font-mono">{item.sku}</p>
         </DialogHeader>
 
+        <DialogBody className="space-y-4">
         {/* Stock summary */}
         <div className="grid grid-cols-3 gap-3 text-center py-2">
           <div className="rounded-lg bg-muted/50 p-3">
@@ -329,9 +332,10 @@ function ItemDetailDialog({
             </div>
           ))}
         </div>
+        </DialogBody>
 
         {/* Actions */}
-        <div className="flex items-center justify-between pt-2 border-t mt-2">
+        <DialogFooter className="flex items-center justify-between border-t pt-2">
           <Button
             size="sm"
             className="bg-amber-500 hover:bg-amber-600 text-white"
@@ -352,7 +356,7 @@ function ItemDetailDialog({
               <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
             )}
           </div>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -398,11 +402,11 @@ function NewItemDialog({ open, onClose }: { open: boolean; onClose: () => void }
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New Inventory Item</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+        <DialogBody className="space-y-3">
           {FIELD_DEFS.map(f => (
             <div key={f.key}>
               <Label className="text-xs text-muted-foreground">
@@ -425,8 +429,8 @@ function NewItemDialog({ open, onClose }: { open: boolean; onClose: () => void }
               )}
             </div>
           ))}
-        </div>
-        <div className="flex justify-end gap-2 pt-2 border-t mt-2">
+        </DialogBody>
+        <DialogFooter className="border-t pt-2">
           <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
           <Button
             size="sm"
@@ -436,7 +440,7 @@ function NewItemDialog({ open, onClose }: { open: boolean; onClose: () => void }
             {createMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
             Create Item
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

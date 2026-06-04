@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -402,7 +403,7 @@ function CreateNotificationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <DialogBody className="space-y-4">
           <div>
             <label className="text-sm font-medium mb-1.5 block">Title <span className="text-muted-foreground font-normal">(optional)</span></label>
             <Input
@@ -500,7 +501,7 @@ function CreateNotificationDialog({
               )}
             </div>
           </div>
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sendMutation.isPending}>

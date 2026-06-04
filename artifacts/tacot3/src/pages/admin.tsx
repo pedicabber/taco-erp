@@ -29,7 +29,7 @@ import { Redirect } from "wouter";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -259,7 +259,7 @@ function EditUserDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-3 min-w-0">
@@ -285,7 +285,7 @@ function EditUserDialog({
             </div>
           </DialogHeader>
 
-          <div className="space-y-4 pt-1">
+          <DialogBody className="space-y-4 pt-1">
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">Name</Label>
               <Input value={name} onChange={e => setName(e.target.value)} />
@@ -357,9 +357,9 @@ function EditUserDialog({
                 </ScrollArea>
               )}
             </div>
-          </div>
+          </DialogBody>
 
-          <div className="flex justify-end gap-2 pt-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
@@ -367,7 +367,7 @@ function EditUserDialog({
               {patchMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               Save
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

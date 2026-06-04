@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Project, Department, KanbanColumn } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -373,7 +373,8 @@ export default function BoardPage() {
             <DialogTitle>Manage Board Columns</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+          <DialogBody className="space-y-3 pr-1">
+          <div className="space-y-2">
             {sortedConfigs.map((col, idx) => (
               <div
                 key={col.id}
@@ -531,6 +532,7 @@ export default function BoardPage() {
               Add Column
             </Button>
           )}
+          </DialogBody>
         </DialogContent>
       </Dialog>
     </div>

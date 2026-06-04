@@ -13,12 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -231,7 +230,7 @@ function NewProjectDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderKanban className="w-5 h-5" />
@@ -241,7 +240,7 @@ function NewProjectDialog({
 
         {step === 1 ? (
           <>
-            <ScrollArea className="flex-1 -mx-1 px-1">
+            <DialogBody className="-mx-1 px-1">
               <div className="space-y-4 pt-2 pb-2">
                 {/* PDF import */}
                 <div className="flex items-center gap-2 p-3 rounded-lg border-2 border-dashed border-border bg-muted/30">
@@ -346,9 +345,9 @@ function NewProjectDialog({
                   </div>
                 </div>
               </div>
-            </ScrollArea>
+            </DialogBody>
 
-            <div className="flex items-center justify-between pt-3 border-t">
+            <DialogFooter className="flex flex-row items-center justify-between pt-3 border-t sm:justify-between sm:space-x-0">
               <Button variant="ghost" size="sm" onClick={clearForm} className="text-muted-foreground">
                 <Eraser className="w-4 h-4 mr-1.5" />
                 Clear
@@ -373,14 +372,14 @@ function NewProjectDialog({
                   </Button>
                 )}
               </div>
-            </div>
+            </DialogFooter>
           </>
         ) : (
           <>
-            <div className="text-xs text-muted-foreground pb-1">
-              Choose which tasks to create for this project. All tasks are pre-selected.
-            </div>
-            <ScrollArea className="flex-1 -mx-1 px-1">
+            <DialogBody className="-mx-1 px-1">
+              <div className="text-xs text-muted-foreground pb-1">
+                Choose which tasks to create for this project. All tasks are pre-selected.
+              </div>
               <div className="space-y-2 pt-1 pb-2">
                 {departments.map(dept => {
                   const deptTasks = templatesByDept.get(dept.id) ?? [];
@@ -436,9 +435,9 @@ function NewProjectDialog({
                   );
                 })}
               </div>
-            </ScrollArea>
+            </DialogBody>
 
-            <div className="flex items-center justify-between pt-3 border-t">
+            <DialogFooter className="flex flex-row items-center justify-between pt-3 border-t sm:justify-between sm:space-x-0">
               <Button variant="ghost" size="sm" onClick={() => setStep(1)} className="text-muted-foreground">
                 Back
               </Button>
@@ -457,7 +456,7 @@ function NewProjectDialog({
                   )}
                 </Button>
               </div>
-            </div>
+            </DialogFooter>
           </>
         )}
       </DialogContent>

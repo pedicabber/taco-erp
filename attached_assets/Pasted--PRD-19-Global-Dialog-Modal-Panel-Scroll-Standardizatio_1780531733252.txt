@@ -1,0 +1,348 @@
+# PRD #19 – Global Dialog, Modal & Panel Scroll Standardization
+
+## Priority
+
+High Priority UI/UX & Platform Stability Improvement
+
+---
+
+# Problem Statement
+
+Multiple dialogs, popups, modals, edit windows, detail windows, slide-over panels, and forms throughout the ERP exceed the available viewport height and become partially inaccessible.
+
+Users are currently forced to:
+
+* Zoom their browser to 50–60%
+* Resize their browser window
+* Guess where hidden buttons exist
+* Scroll the browser instead of the dialog
+
+Examples currently affected:
+
+* Project Edit Dialog
+* Project Overview Dialog
+* User Edit Dialogs
+* Office Ops Forms
+* Safety / LOTO Forms
+* Future ERP Forms
+
+As additional ERP modules are implemented, this issue will continue to multiply unless a global standard is established.
+
+---
+
+# Objective
+
+Create a global dialog and modal standard that automatically handles content exceeding the visible screen area.
+
+The solution shall be implemented at the shared component level so that all current and future dialogs inherit the behavior automatically.
+
+Users should never need to zoom their browser to access information or action buttons.
+
+---
+
+# Current Problems
+
+Users encounter:
+
+* Hidden fields
+* Hidden buttons
+* Cut-off descriptions
+* Inaccessible form sections
+* Inconsistent scrolling behavior
+
+Example:
+
+Opening Edit Project with a long Scope of Work causes lower fields and action buttons to become inaccessible unless the browser is zoomed out significantly.
+
+This behavior is unacceptable for desktop, tablet, and mobile workflows.
+
+---
+
+# Core Requirement
+
+Any:
+
+* Modal
+* Dialog
+* Popup
+* Edit Window
+* Detail Window
+* Slide-Over Panel
+* Drawer
+* Full-Screen Form
+* Wizard
+
+that exceeds the visible viewport height shall automatically become scrollable.
+
+No content may become inaccessible due to viewport limitations.
+
+---
+
+# Standard Dialog Layout
+
+All dialogs shall follow:
+
+```text
+Dialog
+├── Header
+├── Body
+└── Footer
+```
+
+---
+
+# Header
+
+Fixed
+
+Always visible
+
+Contains:
+
+* Title
+* Description
+* Close Button
+
+Users should never lose access to dialog context.
+
+---
+
+# Body
+
+Scrollable
+
+Contains:
+
+* Form fields
+* Checklists
+* Tables
+* Notes
+* Attachments
+* Dynamic content
+
+The body shall expand and scroll as necessary.
+
+---
+
+# Footer
+
+Fixed
+
+Always visible
+
+Contains:
+
+* Save
+* Cancel
+* Delete
+* Approve
+* Submit
+* Close
+* Action buttons
+
+Users should never scroll to locate primary actions.
+
+---
+
+# Global UI Standard
+
+Recommended implementation:
+
+```css
+max-height: 85vh;
+overflow-y: auto;
+```
+
+Dialog structure:
+
+```text
+Dialog
+ ├── Header (fixed)
+ ├── Body (scrollable)
+ └── Footer (fixed)
+```
+
+---
+
+# Scope
+
+Apply to ALL current and future ERP dialogs.
+
+Current Modules:
+
+* Projects
+* Tasks
+* Office Ops
+* Users
+* Safety
+* Settings
+* Notifications
+
+Future Modules:
+
+* SQDC
+* Change Orders
+* Quality
+* Maintenance
+* Training Records
+* Incident Reports
+* Safety Audits
+* Any future ERP feature
+
+---
+
+# Nested Scroll Prevention
+
+Avoid situations where:
+
+* Browser scrolls
+* Dialog scrolls
+* Internal section scrolls
+
+simultaneously.
+
+Whenever possible:
+
+* One primary scroll region shall exist.
+* The dialog body shall be the scrollable area.
+
+---
+
+# Mobile Requirements
+
+Dialogs shall:
+
+* Resize correctly
+* Remain fully scrollable
+* Keep action buttons visible
+* Support touch scrolling
+
+on:
+
+* Phones
+* Tablets
+* Mobile browsers
+
+---
+
+# Slide-Over Panels & Drawers
+
+The same standard applies to:
+
+* Side panels
+* Drawers
+* Slide-over forms
+* Detail panes
+
+Any content extending beyond the viewport shall become scrollable.
+
+---
+
+# Full-Screen Forms
+
+Full-screen forms shall:
+
+* Maintain internal scrolling
+* Keep primary actions accessible
+* Prevent hidden content
+
+---
+
+# Responsive Testing Requirements
+
+Verify functionality on:
+
+### Desktop
+
+* 1920×1080
+* 1440×900
+
+### Laptop
+
+* 1366×768
+
+### Tablet
+
+* iPad equivalent
+
+### Mobile
+
+* iPhone equivalent
+* Android equivalent
+
+---
+
+# Acceptance Criteria
+
+## Projects
+
+Open:
+
+* Edit Project
+* Project Overview
+
+Verify:
+
+* All fields accessible
+* Save button visible
+* No browser zoom required
+
+---
+
+## Users
+
+Open:
+
+* User Edit Dialog
+
+Verify:
+
+* All fields accessible
+* Save button visible
+
+---
+
+## Safety
+
+Open:
+
+* Long LOTO record
+* Long notes section
+* Attachment areas
+
+Verify:
+
+* Entire form accessible
+* Action buttons visible
+
+---
+
+## Office Ops
+
+Open:
+
+* Long task forms
+* Long descriptions
+
+Verify:
+
+* Entire form accessible
+
+---
+
+## Future Modules
+
+Any newly created dialog shall automatically inherit the standard without requiring custom scroll logic.
+
+---
+
+# Expected Result
+
+Users never need to:
+
+* Zoom their browser
+* Resize their browser
+* Hunt for hidden buttons
+* Work around clipped content
+
+Any popup window, dialog, modal, drawer, panel, edit screen, detail screen, or form that exceeds the visible screen area automatically becomes scrollable while maintaining visible action buttons and a consistent user experience across the entire ERP.

@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -536,7 +537,7 @@ function TaskDialog({
       <DialogHeader>
         <DialogTitle>{mode === "create" ? "New Office Ops task" : "Edit task"}</DialogTitle>
       </DialogHeader>
-      <div className="space-y-4">
+      <DialogBody className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="oo-title">Title</Label>
           <Input
@@ -604,7 +605,7 @@ function TaskDialog({
             </SelectContent>
           </Select>
         </div>
-      </div>
+      </DialogBody>
       <DialogFooter>
         <Button onClick={handleSubmit} disabled={busy || !title.trim()} data-testid="button-submit-task">
           {mode === "create" ? "Create task" : "Save changes"}
