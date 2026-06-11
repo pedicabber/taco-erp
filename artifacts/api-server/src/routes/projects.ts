@@ -934,13 +934,23 @@ router.patch("/projects/:projectId", requireAuth, async (req, res): Promise<void
   const patch: Partial<typeof projectsTable.$inferInsert> = { ...parsed.data };
   if (parsed.data.startDate !== undefined) {
     patch.activeStartDate = parsed.data.startDate;
-    if (!existing.baselineStartDate) patch.baselineStartDate = parsed.data.startDate;
+    // Baseline is the FROZEN original commitment. Only seed it when still null,
+    // and seed from the project's PRE-EDIT committed date — never from the new
+    // value the user just entered (that would erase the original reference).
+    if (!existing.baselineStartDate) {
+      patch.baselineStartDate = existing.activeStartDate ?? existing.startDate ?? null;
+    }
   }
   if (parsed.data.deliveryDate !== undefined) {
     patch.activeDeliveryDate = parsed.data.deliveryDate;
-    if (!existing.baselineDeliveryDate) patch.baselineDeliveryDate = parsed.data.deliveryDate;
-    // Recompute drift whenever the active delivery moves.
-    const baselineDel = parseDateOnly(existing.baselineDeliveryDate ?? parsed.data.deliveryDate);
+    if (!existing.baselineDeliveryDate) {
+      patch.baselineDeliveryDate = existing.activeDeliveryDate ?? existing.deliveryDate ?? null;
+    }
+    // Recompute drift against the frozen baseline (existing, or the just-seeded
+    // pre-edit value), not the newly entered delivery date.
+    const effectiveBaseline =
+      existing.baselineDeliveryDate ?? existing.activeDeliveryDate ?? existing.deliveryDate;
+    const baselineDel = parseDateOnly(effectiveBaseline);
     const activeDel = parseDateOnly(parsed.data.deliveryDate);
     if (baselineDel && activeDel) {
       patch.scheduleDriftDays = diffDays(activeDel, baselineDel);
@@ -1000,10 +1010,17 @@ router.post("/projects/:projectId/reschedule", requireAuth, async (req: Authenti
   const newActiveStart = activeStartDate !== undefined ? activeStartDate : oldActiveStart;
   const newActiveDelivery = activeDeliveryDate !== undefined ? activeDeliveryDate : oldActiveDelivery;
 
+  // Baseline is the FROZEN original commitment and is NEVER moved by a
+  // reschedule. For legacy rows whose baseline is still null, seed it from the
+  // PRE-reschedule active dates (the last committed schedule before this move)
+  // so we have a correct frozen reference and drift can be computed.
+  const frozenBaselineStart = existing.baselineStartDate ?? oldActiveStart ?? existing.startDate ?? null;
+  const frozenBaselineDelivery = existing.baselineDeliveryDate ?? oldActiveDelivery ?? existing.deliveryDate ?? null;
+
   // Drift is driven exclusively by delivery delta. Per product decision: if
   // only the start date changes, drift stays 0.
   let scheduleDriftDays = existing.scheduleDriftDays ?? 0;
-  const baselineDelivery = parseDateOnly(existing.baselineDeliveryDate);
+  const baselineDelivery = parseDateOnly(frozenBaselineDelivery);
   const newActiveDeliveryDate = parseDateOnly(newActiveDelivery);
   if (baselineDelivery && newActiveDeliveryDate) {
     scheduleDriftDays = diffDays(newActiveDeliveryDate, baselineDelivery);
@@ -1014,6 +1031,9 @@ router.post("/projects/:projectId/reschedule", requireAuth, async (req: Authenti
   const [updated] = await db
     .update(projectsTable)
     .set({
+      // Re-assert the frozen baseline (no-op when already set; seeds legacy nulls).
+      baselineStartDate: frozenBaselineStart,
+      baselineDeliveryDate: frozenBaselineDelivery,
       activeStartDate: newActiveStart,
       activeDeliveryDate: newActiveDelivery,
       // Keep legacy columns in sync so calendar/board/etc don't break.
