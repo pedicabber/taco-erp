@@ -560,10 +560,10 @@ export default function ProjectsPage() {
                           <span>{formatQuoteNum(project.projectId)}</span>
                         </div>
                       )}
-                      {project.startDate && (
+                      {project.schedule?.activeStartDate && (
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Calendar className="w-3 h-3" />
-                          <span>{format(new Date(project.startDate), "MMM d, yyyy")}</span>
+                          <span>{format(new Date(project.schedule.activeStartDate), "MMM d, yyyy")}</span>
                         </div>
                       )}
                       {project.totalPrice && (

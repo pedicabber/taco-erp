@@ -221,10 +221,10 @@ export default function ProjectDetailPage() {
                   {formatQuoteNum(project.projectId)}
                 </span>
               )}
-              {project.startDate && (
+              {project.schedule?.activeStartDate && (
                 <span className="flex items-center gap-1 text-sm text-muted-foreground">
                   <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
-                  Started {format(new Date(project.startDate), "MMM d, yyyy")}
+                  Started {format(new Date(project.schedule.activeStartDate), "MMM d, yyyy")}
                 </span>
               )}
             </div>
@@ -512,18 +512,17 @@ function ScheduleSection({
   canReschedule: boolean;
   onOpenReschedule: () => void;
 }) {
-  // Prefer the server-rendered schedule object; fall back to recomputing
-  // locally from the flat project fields so the section still works against
-  // any legacy /projects/:id response that hasn't been refetched yet.
+  // The server resolves the schedule (baseline/active, self-healed from legacy).
+  // Read ONLY the normalized schedule object — no per-component legacy fallbacks.
   const s = project.schedule;
-  const baselineStart = s?.baselineStartDate ?? project.baselineStartDate ?? null;
-  const baselineDelivery = s?.baselineDeliveryDate ?? project.baselineDeliveryDate ?? null;
-  const activeStart = s?.activeStartDate ?? project.activeStartDate ?? project.startDate ?? null;
-  const activeDelivery = s?.activeDeliveryDate ?? project.activeDeliveryDate ?? project.deliveryDate ?? null;
-  const drift = s?.scheduleDriftDays ?? project.scheduleDriftDays ?? 0;
+  const baselineStart = s?.baselineStartDate ?? null;
+  const baselineDelivery = s?.baselineDeliveryDate ?? null;
+  const activeStart = s?.activeStartDate ?? null;
+  const activeDelivery = s?.activeDeliveryDate ?? null;
+  const drift = s?.scheduleDriftDays ?? 0;
   const severity = s?.driftSeverity ?? computeDriftSeverity(drift);
-  const delayReason = s?.delayReason ?? project.delayReason ?? null;
-  const delayNotes = s?.delayNotes ?? project.delayNotes ?? null;
+  const delayReason = s?.delayReason ?? null;
+  const delayNotes = s?.delayNotes ?? null;
   const windows = s
     ? { engineering: s.engineeringPhase, manufacturing: s.manufacturingPhase }
     : computePhaseWindows(activeStart, activeDelivery);
@@ -616,8 +615,8 @@ function RescheduleDialog({
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
-  const initialStart = project.schedule?.activeStartDate ?? project.activeStartDate ?? project.startDate ?? "";
-  const initialDelivery = project.schedule?.activeDeliveryDate ?? project.activeDeliveryDate ?? project.deliveryDate ?? "";
+  const initialStart = project.schedule?.activeStartDate ?? "";
+  const initialDelivery = project.schedule?.activeDeliveryDate ?? "";
 
   const [activeStartDate, setActiveStartDate] = useState(initialStart ?? "");
   const [activeDeliveryDate, setActiveDeliveryDate] = useState(initialDelivery ?? "");

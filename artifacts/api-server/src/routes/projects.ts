@@ -23,6 +23,7 @@ import {
 } from "../lib/officeAdmin";
 import { engineeringChangeOrdersTable } from "@workspace/db";
 import { centsToDollars, parseMoneyToCents } from "../lib/money";
+import { resolveSchedule } from "../lib/schedule";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -112,14 +113,17 @@ export function computeDriftSeverity(driftDays: number): "green" | "yellow" | "r
 }
 
 function buildSchedule(p: typeof projectsTable.$inferSelect) {
-  const windows = computePhaseWindows(p.activeStartDate, p.activeDeliveryDate);
+  // Single source of truth: resolve baseline/active from normalized columns,
+  // self-healing from legacy only when a normalized field is null.
+  const r = resolveSchedule(p);
+  const windows = computePhaseWindows(r.activeStartDate, r.activeDeliveryDate);
   return {
-    baselineStartDate: p.baselineStartDate,
-    baselineDeliveryDate: p.baselineDeliveryDate,
-    activeStartDate: p.activeStartDate,
-    activeDeliveryDate: p.activeDeliveryDate,
-    scheduleDriftDays: p.scheduleDriftDays ?? 0,
-    driftSeverity: computeDriftSeverity(p.scheduleDriftDays ?? 0),
+    baselineStartDate: r.baselineStartDate,
+    baselineDeliveryDate: r.baselineDeliveryDate,
+    activeStartDate: r.activeStartDate,
+    activeDeliveryDate: r.activeDeliveryDate,
+    scheduleDriftDays: r.scheduleDriftDays,
+    driftSeverity: computeDriftSeverity(r.scheduleDriftDays),
     delayReason: p.delayReason,
     delayNotes: p.delayNotes,
     engineeringPhase: windows.engineering,

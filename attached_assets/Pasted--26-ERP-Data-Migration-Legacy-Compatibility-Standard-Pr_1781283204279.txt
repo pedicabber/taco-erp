@@ -1,0 +1,346 @@
+#26 - ERP Data Migration & Legacy Compatibility Standard
+
+## Priority
+
+Platform Standard (Applies to All Future ERP Development)
+
+---
+
+# What & Why
+
+As the ERP grows, new features regularly introduce new database fields, tables, calculations, workflows, and UI elements. Historically, newly added functionality has worked correctly for records created after deployment but has not always been applied to records that existed before the release.
+
+Examples include:
+
+* Baseline schedule dates
+* Active schedule dates
+* ECO original/current delivery tracking
+* Future SQDC metrics
+* Future training records
+* Future project metadata
+* Future inventory allocations
+* Future safety compliance tracking
+
+This creates situations where:
+
+* New projects behave correctly.
+* Legacy projects display incomplete information.
+* Existing data is available but not migrated.
+* Users lose trust in reporting consistency.
+
+This standard establishes a permanent ERP development requirement that all future schema changes, feature additions, and workflow changes include a documented strategy for legacy record compatibility.
+
+The objective is that an existing record should receive the same functionality as a newly created record whenever sufficient source data exists.
+
+---
+
+# Done Looks Like
+
+Every future ERP feature includes:
+
+* Migration strategy
+* Backfill strategy
+* Legacy compatibility review
+* Production validation
+
+New releases do not leave existing projects, tasks, inventory items, ECOs, safety records, users, or future ERP entities in a partially functional state.
+
+Feature rollouts are predictable and recoverable.
+
+Database updates remain safe, repeatable, and production-friendly.
+
+---
+
+# Development Standard
+
+Every future PRD must include a Legacy Compatibility section.
+
+Before implementation is considered complete, the developer must evaluate:
+
+```text
+Can existing records use this feature?
+
+If yes:
+    How will they be upgraded?
+
+If no:
+    Why not?
+```
+
+---
+
+# Migration Requirements
+
+Whenever a new field is introduced:
+
+Examples:
+
+```text
+baseline_delivery_date
+priority
+notes
+training_expiration_date
+sqdc_score
+```
+
+the implementation must determine:
+
+```text
+Can this value be derived from existing data?
+```
+
+If yes:
+
+```text
+Backfill it automatically.
+```
+
+If no:
+
+```text
+Leave NULL intentionally.
+```
+
+and document why.
+
+---
+
+# Backfill Requirements
+
+Any migration that can safely derive data from existing records shall include a backfill.
+
+Examples:
+
+### Good
+
+```text
+baseline_delivery_date
+← delivery_date
+```
+
+### Good
+
+```text
+active_delivery_date
+← delivery_date
+```
+
+### Good
+
+```text
+current_contract_value
+← original_contract_value
+```
+
+### Acceptable
+
+```text
+training_expiration_date
+← NULL
+
+Reason:
+No historical source exists.
+```
+
+---
+
+# Idempotent Requirement
+
+All migration and backfill scripts must be idempotent.
+
+Meaning:
+
+```text
+Safe to run once.
+Safe to run twice.
+Safe to run multiple times.
+```
+
+The result must remain unchanged after the first successful execution.
+
+---
+
+# Non-Destructive Requirement
+
+Backfills must:
+
+```text
+Fill missing values.
+```
+
+They must NOT:
+
+```text
+Overwrite valid data.
+Delete records.
+Replace user-entered values.
+Reset project history.
+```
+
+Examples:
+
+### Acceptable
+
+```sql
+COALESCE(existing_value, derived_value)
+```
+
+### Unacceptable
+
+```sql
+SET value = derived_value
+```
+
+without validation.
+
+---
+
+# Self-Healing Requirement
+
+Whenever practical, newly added systems should self-heal legacy records.
+
+Example:
+
+```text
+Project loaded.
+
+baseline_delivery_date is NULL.
+
+delivery_date exists.
+
+System automatically initializes baseline.
+```
+
+This protects production records even if a migration was missed.
+
+---
+
+# Data Health Validation
+
+Every major release must include validation checks.
+
+Examples:
+
+```text
+Projects missing baseline dates
+Projects missing active dates
+ECOs missing status
+Tasks missing owner
+LOTO records missing commander
+```
+
+The implementation should provide queries or validation reports that identify incompatible records.
+
+---
+
+# Future Admin Data Health Page
+
+Reserved future feature.
+
+Potential location:
+
+```text
+Admin
+ └── Data Health
+```
+
+Example dashboard:
+
+```text
+Projects Missing Baseline Dates: 0
+
+Projects Missing Active Dates: 0
+
+Tasks Missing Assignees: 2
+
+LOTO Records Missing Commander: 0
+
+Training Records Missing Expiration: 4
+```
+
+This page is not required for this task.
+
+Only the underlying validation standard is required.
+
+---
+
+# Production Release Requirement
+
+Before production release:
+
+Developer must verify:
+
+```text
+Migration succeeds.
+
+Backfill succeeds.
+
+Legacy records remain functional.
+
+New records remain functional.
+
+No existing data is corrupted.
+```
+
+---
+
+# Acceptance Criteria
+
+For all future ERP feature implementations:
+
+### Schema Changes
+
+New fields include migration review.
+
+### Legacy Records
+
+Existing records remain functional whenever source data exists.
+
+### Backfills
+
+Backfills only populate missing values.
+
+### Safety
+
+Backfills are idempotent and non-destructive.
+
+### Validation
+
+Developer provides evidence that legacy records were evaluated.
+
+### Production
+
+Production records receive equivalent functionality to newly created records whenever technically possible.
+
+---
+
+# Applies To
+
+All future ERP modules including but not limited to:
+
+```text
+Projects
+Tasks
+ECOs
+Safety / LOTO
+Inventory
+Users
+Departments
+Notifications
+Office Ops
+SQDC
+Training Records
+Timeclock
+Sales Pipeline
+Future Modules
+```
+
+---
+
+# Relevant Files
+
+Applies globally to the ERP architecture.
+
+No single implementation file.
+
+All future database schema changes, migrations, backfills, APIs, and UI modules must comply with this standard.

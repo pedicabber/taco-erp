@@ -11,6 +11,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { syncUserFromClerk } from "../lib/userSync";
 import { rejectIfHiddenProject } from "../lib/officeAdmin";
 import { centsToDollars, dollarsToCents, parseMoneyToCents } from "../lib/money";
+import { resolveSchedule } from "../lib/schedule";
 import {
   CreateEcoBody,
   UpdateEcoBody,
@@ -107,8 +108,11 @@ router.get("/projects/:projectId/eco-summary", requireAuth, async (req, res): Pr
     project.originalContractValueCents ?? parseMoneyToCents(project.totalPrice);
   const currentCents = originalCents === null ? null : originalCents + realizedCostCents;
 
-  const originalDelivery = project.baselineDeliveryDate ?? project.deliveryDate ?? null;
-  const currentDelivery = project.activeDeliveryDate ?? project.deliveryDate ?? null;
+  // Same resolver as the project Schedule card so Original/Current Delivery
+  // match exactly between the ECO summary and the project overview.
+  const resolved = resolveSchedule(project);
+  const originalDelivery = resolved.baselineDeliveryDate;
+  const currentDelivery = resolved.activeDeliveryDate;
 
   res.json(
     GetEcoSummaryResponse.parse({

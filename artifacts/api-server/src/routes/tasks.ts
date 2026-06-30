@@ -6,6 +6,7 @@ import { requireAuth, type AuthenticatedRequest } from "../middlewares/requireAu
 import { requireAdmin } from "../middlewares/requireAdmin";
 import { syncUserFromClerk } from "../lib/userSync";
 import { createNotification } from "./notifications";
+import { resolveSchedule } from "../lib/schedule";
 import {
   ListTasksResponse,
   CreateTaskBody,
@@ -2057,15 +2058,16 @@ router.get("/dashboard/sqdc", requireAuth, async (req: AuthenticatedRequest, res
     .filter(p => {
       // SQDC "D" tracks projects against their ORIGINAL commitment (baseline
       // delivery), so a reschedule cannot retroactively erase a missed deadline.
-      // Fall back to deliveryDate for any legacy row missing baseline.
-      const deliveryRef = p.baselineDeliveryDate ?? p.deliveryDate;
+      // Uses the shared resolver (baseline ?? active ?? legacy) so the reference
+      // matches the rest of the app and self-heals legacy rows missing baseline.
+      const deliveryRef = resolveSchedule(p).baselineDeliveryDate;
       if (p.status !== "active" || !deliveryRef) return false;
       const dd = sqdcParseDueDate(deliveryRef);
       return !!dd && dd < today;
     })
     .slice(0, 5)) {
-    const deliveryRef = p.baselineDeliveryDate ?? p.deliveryDate;
-    const dd = sqdcParseDueDate(deliveryRef!)!;
+    const deliveryRef = resolveSchedule(p).baselineDeliveryDate!;
+    const dd = sqdcParseDueDate(deliveryRef)!;
     dRecords.push({
       id: `project:${p.id}`,
       kind: "project",

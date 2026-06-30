@@ -2,5 +2,6 @@
 - [LOTO lifecycle cycle guards](loto-lifecycle-cycle-guards.md) — staged approval endpoints must guard exact predecessor state server-side and clear all downstream fields on reject/restart; UI hiding is not enough.
 - [Scrollable content standard](scrollable-content-standard.md) — shared dialog/panel overflow pattern; AlertDialog keeps overflow-y-auto fallback (no clip), Sheet base must stay gap-free (sidebar coupling).
 - [Monorepo tsc baseline](monorepo-tsc-baseline.md) — full tsc/tsc --build is pre-existing RED (api-zod export ambiguity, object-storage-web composite); apps run from src via tsx/vite; how to verify only your changed files.
+- [Schedule single source of truth](schedule-ssot.md) — one resolver (resolveSchedule) normalizes baseline/active (legacy = self-heal input only); never read raw date columns as a schedule source.
 - [Project contract value consistency](contract-value-consistency.md) — currentContractValue (original + realized ECO cents) must be applied in EVERY project-returning endpoint (list/single/patch/reschedule), or values drift between views.
 - [Schedule baseline freeze](schedule-baseline-freeze.md) — baseline_start/delivery are frozen; never write them except null-init from the PRE-edit/PRE-move committed value; legacy rows (drizzle-kit push, no backfill) start NULL.

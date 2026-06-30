@@ -51,14 +51,14 @@ export default function ProjectInfoDialog({
     projectId: project.projectId,
     description: project.description ?? "",
     fullDescription: project.fullDescription ?? "",
-    startDate: project.startDate ?? "",
+    startDate: project.schedule?.activeStartDate ?? "",
     status: project.status,
     address: project.address ?? "",
     contactName: project.contactName ?? "",
     contactPhone: project.contactPhone ?? "",
     contactEmail: project.contactEmail ?? "",
     totalPrice: project.totalPrice ?? "",
-    deliveryDate: (project as any).deliveryDate ?? "",
+    deliveryDate: project.schedule?.activeDeliveryDate ?? "",
     scopeOfWork: (project as any).scopeOfWork ?? "",
     notes: (project as any).notes ?? "",
     priority: ((project as any).priority ?? "medium") as "low" | "medium" | "high",
@@ -83,14 +83,14 @@ export default function ProjectInfoDialog({
       projectId: project.projectId,
       description: project.description ?? "",
       fullDescription: project.fullDescription ?? "",
-      startDate: project.startDate ?? "",
+      startDate: project.schedule?.activeStartDate ?? "",
       status: project.status,
       address: project.address ?? "",
       contactName: project.contactName ?? "",
       contactPhone: project.contactPhone ?? "",
       contactEmail: project.contactEmail ?? "",
       totalPrice: project.totalPrice ?? "",
-      deliveryDate: (project as any).deliveryDate ?? "",
+      deliveryDate: project.schedule?.activeDeliveryDate ?? "",
       scopeOfWork: (project as any).scopeOfWork ?? "",
       notes: (project as any).notes ?? "",
       priority: ((project as any).priority ?? "medium") as "low" | "medium" | "high",
@@ -163,6 +163,11 @@ export default function ProjectInfoDialog({
                   ) : (
                     <p className="mt-0.5">{form.startDate ? format(new Date(form.startDate), "MMM d, yyyy") : "—"}</p>
                   )}
+                  {editing && project.schedule?.baselineStartDate && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Baseline (frozen): {format(new Date(project.schedule.baselineStartDate), "MMM d, yyyy")}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground flex items-center gap-1">
@@ -172,6 +177,11 @@ export default function ProjectInfoDialog({
                     <Input type="date" value={form.deliveryDate} onChange={e => setForm(p => ({ ...p, deliveryDate: e.target.value }))} />
                   ) : (
                     <p className="mt-0.5">{form.deliveryDate ? format(new Date(form.deliveryDate), "MMM d, yyyy") : "—"}</p>
+                  )}
+                  {editing && project.schedule?.baselineDeliveryDate && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Baseline (frozen): {format(new Date(project.schedule.baselineDeliveryDate), "MMM d, yyyy")}
+                    </p>
                   )}
                 </div>
                 <div>
