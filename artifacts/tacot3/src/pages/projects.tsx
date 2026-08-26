@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
 } from "@/components/ui/dialog";
@@ -19,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
 import { cn, formatQuoteNum } from "@/lib/utils";
 import ProjectInfoDialog from "@/components/projects/ProjectInfoDialog";
@@ -31,6 +32,59 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   on_hold: "outline",
   cancelled: "destructive",
 };
+
+type ProjectStatusGroup = "active" | "on_hold" | "completed" | "cancelled";
+
+const PROJECT_STATUS_SECTIONS: Array<{ key: ProjectStatusGroup; label: string }> = [
+  { key: "active", label: "Active" },
+  { key: "on_hold", label: "On Hold" },
+  { key: "completed", label: "Complete" },
+  { key: "cancelled", label: "Cancelled" },
+];
+
+const STATUS_LABELS: Record<ProjectStatusGroup, string> = {
+  active: "Active",
+  on_hold: "On Hold",
+  completed: "Complete",
+  cancelled: "Cancelled",
+};
+
+const DEFAULT_OPEN_SECTIONS: Record<ProjectStatusGroup, boolean> = {
+  active: true,
+  on_hold: false,
+  completed: false,
+  cancelled: false,
+};
+
+function normalizeProjectStatus(status: string | null | undefined): ProjectStatusGroup {
+  const normalized = (status ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (normalized === "on_hold" || normalized === "onhold") return "on_hold";
+  if (normalized === "complete" || normalized === "completed") return "completed";
+  if (normalized === "cancelled" || normalized === "canceled") return "cancelled";
+  return "active";
+}
+
+function getProjectDeliveryDate(project: Project): string | null {
+  return project.schedule?.activeDeliveryDate ?? project.deliveryDate ?? null;
+}
+
+function getProjectDeliveryTimestamp(project: Project): number | null {
+  const deliveryDate = getProjectDeliveryDate(project);
+  if (!deliveryDate) return null;
+  const timestamp = parseISO(deliveryDate).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function sortProjectsByDeliveryDate(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => {
+    const aDelivery = getProjectDeliveryTimestamp(a);
+    const bDelivery = getProjectDeliveryTimestamp(b);
+    if (aDelivery === null && bDelivery === null) return a.id - b.id;
+    if (aDelivery === null) return 1;
+    if (bDelivery === null) return -1;
+    return aDelivery - bDelivery || a.id - b.id;
+  });
+}
 
 const PRIORITY_ORDER = ["low", "medium", "high", "urgent"] as const;
 type Priority = (typeof PRIORITY_ORDER)[number];
@@ -464,18 +518,115 @@ function NewProjectDialog({
   );
 }
 
+function ProjectCard({
+  project,
+  index,
+  onShowInfo,
+}: {
+  project: Project;
+  index: number;
+  onShowInfo: (project: Project) => void;
+}) {
+  const statusGroup = normalizeProjectStatus(project.status);
+  const deliveryDate = getProjectDeliveryDate(project);
+  const hasValidDeliveryDate = getProjectDeliveryTimestamp(project) !== null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04 }}
+    >
+      <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 group">
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between mb-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <FolderKanban className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={e => { e.preventDefault(); e.stopPropagation(); onShowInfo(project); }}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                title="View project info"
+              >
+                <Info className="w-4 h-4" />
+              </button>
+              <Badge variant={STATUS_VARIANTS[statusGroup]}>{STATUS_LABELS[statusGroup]}</Badge>
+            </div>
+          </div>
+
+          <Link href={`/projects/${project.id}`} className="block">
+            <div className="flex items-start gap-2 min-w-0">
+              <Building2 className="w-4 h-4 mt-1 text-muted-foreground flex-shrink-0" />
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+                  {project.company || "Unassigned customer"}
+                </h3>
+                <p className="text-sm font-medium text-foreground/80 mt-1 line-clamp-2">{project.name}</p>
+              </div>
+            </div>
+            <div className="space-y-1 mt-3">
+              {project.projectId && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <FileText className="w-3 h-3" />
+                  <span>{formatQuoteNum(project.projectId)}</span>
+                </div>
+              )}
+              {deliveryDate && hasValidDeliveryDate && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Calendar className="w-3 h-3" />
+                  <span>Delivery {format(parseISO(deliveryDate), "MMM d, yyyy")}</span>
+                </div>
+              )}
+              {project.totalPrice && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <DollarSign className="w-3 h-3" />
+                  <span className="font-medium text-green-600 dark:text-green-400">{project.totalPrice}</span>
+                </div>
+              )}
+            </div>
+            {project.description && (
+              <p className="text-xs text-muted-foreground mt-3 line-clamp-2">{project.description}</p>
+            )}
+            <div className="flex items-center justify-end mt-3">
+              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            </div>
+          </Link>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
 // ── Projects Page ───────────────────────────────────────────────────────────
 export default function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [infoProject, setInfoProject] = useState<Project | null>(null);
+  const [openSections, setOpenSections] = useState<Record<ProjectStatusGroup, boolean>>(
+    () => ({ ...DEFAULT_OPEN_SECTIONS }),
+  );
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: () => apiClient.get("/projects").then(r => r.data),
   });
 
+  const query = search.trim().toLowerCase();
   const filtered = (projects as Project[]).filter(p =>
-    [p.name, p.company, p.projectId].some(v => v?.toLowerCase().includes(search.toLowerCase()))
+    [p.name, p.company, p.projectId].some(v => v?.toLowerCase().includes(query))
+  );
+  const groupedProjects = PROJECT_STATUS_SECTIONS.reduce<Record<ProjectStatusGroup, Project[]>>(
+    (groups, section) => {
+      groups[section.key] = sortProjectsByDeliveryDate(
+        filtered.filter(project => normalizeProjectStatus(project.status) === section.key),
+      );
+      return groups;
+    },
+    { active: [], on_hold: [], completed: [], cancelled: [] },
+  );
+  const visibleSections = PROJECT_STATUS_SECTIONS.filter(
+    section => query.length === 0 || groupedProjects[section.key].length > 0,
   );
 
   return (
@@ -509,81 +660,66 @@ export default function ProjectsPage() {
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <FolderKanban className="w-12 h-12 text-muted-foreground mb-3" />
           <p className="text-muted-foreground">No projects found</p>
-          <Button className="mt-4" onClick={() => setDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create first project
-          </Button>
+          {projects.length === 0 && (
+            <Button className="mt-4" onClick={() => setDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create first project
+            </Button>
+          )}
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((project, i: number) => (
-            <motion.div
-              key={project.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-            >
-              <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 group">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <FolderKanban className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={e => { e.preventDefault(); e.stopPropagation(); setInfoProject(project); }}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                        title="View project info"
-                      >
-                        <Info className="w-4 h-4" />
-                      </button>
-                      <Badge variant={STATUS_VARIANTS[project.status] ?? "secondary"} className="capitalize">
-                        {project.status.replace("_", " ")}
-                      </Badge>
-                    </div>
-                  </div>
+        <div className="space-y-4">
+          {visibleSections.map(section => {
+            const sectionProjects = groupedProjects[section.key];
+            const isOpen = query.length > 0 ? true : openSections[section.key];
 
-                  <Link href={`/projects/${project.id}`} className="block">
-                    <h3 className="font-semibold line-clamp-2 mb-1 group-hover:text-primary transition-colors">
-                      {project.name}
-                    </h3>
-                    <div className="space-y-1 mt-2">
-                      {project.company && (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Building2 className="w-3 h-3" />
-                          <span className="truncate">{project.company}</span>
-                        </div>
+            return (
+              <Collapsible
+                key={section.key}
+                open={isOpen}
+                onOpenChange={open => {
+                  if (query.length === 0) {
+                    setOpenSections(current => ({ ...current, [section.key]: open }));
+                  }
+                }}
+              >
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+                    data-testid={`project-section-toggle-${section.key}`}
+                  >
+                    <ChevronRight
+                      className={cn(
+                        "w-4 h-4 text-muted-foreground transition-transform flex-shrink-0",
+                        isOpen && "rotate-90",
                       )}
-                      {project.projectId && (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <FileText className="w-3 h-3" />
-                          <span>{formatQuoteNum(project.projectId)}</span>
-                        </div>
-                      )}
-                      {project.schedule?.activeStartDate && (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Calendar className="w-3 h-3" />
-                          <span>{format(new Date(project.schedule.activeStartDate), "MMM d, yyyy")}</span>
-                        </div>
-                      )}
-                      {project.totalPrice && (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <DollarSign className="w-3 h-3" />
-                          <span className="font-medium text-green-600 dark:text-green-400">{project.totalPrice}</span>
-                        </div>
-                      )}
+                    />
+                    <h2 className="font-semibold flex-1">{section.label}</h2>
+                    <Badge variant="secondary" className="tabular-nums">{sectionProjects.length}</Badge>
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  {sectionProjects.length === 0 ? (
+                    <p className="px-4 py-5 text-sm text-muted-foreground">
+                      No {section.label.toLowerCase()} projects.
+                    </p>
+                  ) : (
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
+                      {sectionProjects.map((project, index) => (
+                        <ProjectCard
+                          key={project.id}
+                          project={project}
+                          index={index}
+                          onShowInfo={setInfoProject}
+                        />
+                      ))}
                     </div>
-                    {project.description && (
-                      <p className="text-xs text-muted-foreground mt-3 line-clamp-2">{project.description}</p>
-                    )}
-                    <div className="flex items-center justify-end mt-3">
-                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                    </div>
-                  </Link>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
         </div>
       )}
 
