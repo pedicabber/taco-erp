@@ -1,0 +1,439 @@
+TACO ERP #7 — Quote Template Manager Inline Section Controls
+
+OBJECTIVE
+
+Update the Quote Template Manager so quote sections can be managed quickly inline.
+
+The approved behavior is:
+
+- Template Types stay on the left.
+- Selected template’s sections stay on the right.
+- Sections can be enabled/disabled.
+- Sections can be drag-reordered.
+- Sections can be renamed inline.
+- New custom sections can be added inline.
+- Custom sections can be deleted.
+- Default/core sections cannot be deleted.
+- Save/Cancel must use draft state.
+- Quote Builder must reflect the saved template configuration.
+
+
+DO NOT BUILD
+
+Do not build a large section editor panel.
+Do not use browser prompt().
+Do not use a modal for adding sections.
+Do not use a modal for renaming sections.
+Do not make users arrow sections up/down.
+Do not allow default/core sections to be fully deleted.
+
+
+CURRENT / EXPECTED LAYOUT
+
+Inside Quote Template Manager, keep this layout:
+
+LEFT PANEL:
+Template Types
+
+RIGHT PANEL:
+Sections for selected template type
+
+Example:
+
+Custom Integration Sections                         [+ Add Section]
+
+[✓] [☰] Header                  [edit] [locked/delete disabled]
+[✓] [☰] Project Description     [edit] [locked/delete disabled]
+[✓] [☰] Line Items              [edit] [locked/delete disabled]
+[✓] [☰] Custom Added Section    [edit] [delete]
+
+[Cancel] [Save Template]
+
+
+SECTION DATA SHAPE
+
+Each template section should support this shape:
+
+{
+  id: string;
+  templateTypeId: string;
+  key: string;
+  label: string;
+  enabled: boolean;
+  sortOrder: number;
+  isCustom: boolean;
+}
+
+Definitions:
+
+id:
+Unique section record ID.
+
+templateTypeId:
+The template this section belongs to.
+
+key:
+Stable internal key. Default sections can use fixed keys like header, description, lineitems, routing, milestones, install, terms, pdf.
+Custom sections should use something like custom_timestamp or custom_uuid.
+
+label:
+User-facing section name shown in Template Manager and Quote Builder.
+
+enabled:
+Controls whether the section appears in Quote Builder.
+
+sortOrder:
+Controls display order.
+
+isCustom:
+Controls whether the section can be deleted.
+
+
+SECTION ROW NORMAL STATE
+
+Each section row should include:
+
+[enabled checkbox] [drag handle] [section title + meta] [rename button] [delete/locked button]
+
+Example default row:
+
+[✓] [☰] Project Description
+        Enabled · Default section · locked from delete
+                                    [✎] [locked]
+
+Example custom row:
+
+[✓] [☰] Customer Supplied Items
+        Enabled · Custom section
+                                    [✎] [trash]
+
+
+RENAME BEHAVIOR
+
+Rename must happen inline in the same row.
+
+Normal state:
+
+[✓] [☰] Project Description    [✎] [locked]
+
+When edit is clicked:
+
+[✓] [☰] [Project Description input box]    [✓] [x]
+
+Rules:
+
+- Clicking edit turns the section title into a text input.
+- The checkmark saves the rename.
+- The X cancels rename.
+- Enter saves.
+- Escape cancels.
+- Empty title is not allowed.
+- If empty, show inline error:
+  Section title is required.
+- Drag should be disabled while that row is in rename mode.
+- Renaming should be allowed for both default and custom sections.
+- Rename changes the display label only.
+- Rename must not change the internal key.
+
+
+ADD SECTION BEHAVIOR
+
+Clicking + Add Section should create a temporary inline add row.
+
+Do not use a modal.
+Do not use prompt().
+Do not use a separate side editor.
+
+Preferred add row location:
+Top of the section list, directly under the header.
+
+Add row layout:
+
+[blank checkbox area] [+] [Required section title input]    [✓] [x]
+
+Rules:
+
+- Section title is required.
+- Checkmark confirms and creates the new section.
+- X cancels add.
+- Enter confirms.
+- Escape cancels.
+- If title is empty, show inline error:
+  Section title is required.
+- New section must be added to the currently selected template type.
+- New section must be enabled by default.
+- New section must be marked isCustom: true.
+- New section must receive a unique key.
+- New section must receive the next sortOrder unless the implementation intentionally inserts it elsewhere and recalculates sortOrder.
+
+Example new section object:
+
+{
+  id: crypto/random uuid,
+  templateTypeId: selectedTemplateTypeId,
+  key: "custom_" + timestampOrUuid,
+  label: enteredTitle,
+  enabled: true,
+  sortOrder: nextSortOrder,
+  isCustom: true
+}
+
+
+DELETE BEHAVIOR
+
+Delete button should be visible on each row, but behavior depends on section type.
+
+DEFAULT / CORE SECTIONS:
+
+- Default sections cannot be deleted.
+- Show locked state or disabled trash button.
+- Do not remove default sections from the template.
+- User can disable default sections instead.
+
+CUSTOM SECTIONS:
+
+- Custom sections can be deleted.
+- Delete removes the section from that selected template.
+- A large confirmation modal is not required.
+- A small confirm is acceptable for production, but not required for prototype.
+- Deleted custom sections should not appear in Quote Builder after Save Template.
+
+
+ENABLE / DISABLE BEHAVIOR
+
+The checkbox controls whether a section appears in Quote Builder.
+
+Rules:
+
+- Checked = visible in Quote Builder.
+- Unchecked = hidden from Quote Builder.
+- Works for both default and custom sections.
+- Does not delete the section.
+- Should update visually immediately in draft state.
+- Disabled rows should still remain visible in Template Manager.
+
+
+DRAG / DROP BEHAVIOR
+
+Sections must be draggable by row or drag handle.
+
+Rules:
+
+- Dragging changes visual order immediately in draft state.
+- After drop, recalculate sortOrder.
+- Drag should work for default and custom sections.
+- Drag should be disabled while a row is in rename mode.
+- Drag should not trigger when clicking:
+  - enabled checkbox
+  - edit button
+  - delete button
+  - checkmark
+  - cancel X
+  - text input
+- Do not use slow up/down arrows for reorder.
+
+
+SAVE / CANCEL BEHAVIOR
+
+Template Manager must operate on draft state until saved.
+
+SAVE TEMPLATE:
+
+When Save Template is clicked:
+
+- Persist section order.
+- Persist enabled/disabled states.
+- Persist renamed labels.
+- Persist added custom sections.
+- Persist deleted custom sections.
+- Recalculate and persist sortOrder.
+- Quote Builder must immediately reflect saved changes.
+
+CANCEL:
+
+When Cancel is clicked:
+
+- Discard all draft changes.
+- Restore last saved template configuration.
+- Return to Quote Builder or stay in Template Manager based on the app’s existing convention.
+- No draft changes should affect Quote Builder after cancel.
+
+
+QUOTE BUILDER BEHAVIOR
+
+Quote Builder should render sections based on the selected template’s saved section configuration.
+
+Rules:
+
+- Only enabled: true sections appear.
+- Order follows sortOrder.
+- Labels use renamed/custom labels.
+- Deleted custom sections do not appear.
+- Disabled sections do not appear.
+- Custom sections should render as a simple generic editable section.
+
+Example custom section UI:
+
+Custom Section Title
+
+[textarea for custom quote content]
+
+
+DEFAULT SECTION LOCKING
+
+Default/core sections should have:
+
+isCustom: false
+
+They can be:
+
+- enabled/disabled
+- renamed
+- reordered
+
+They cannot be:
+
+- deleted
+
+Custom sections should have:
+
+isCustom: true
+
+They can be:
+
+- enabled/disabled
+- renamed
+- reordered
+- deleted
+
+
+RECOMMENDED HELPER FUNCTIONS
+
+Implement these or equivalent:
+
+startAddSection()
+confirmAddSection()
+cancelAddSection()
+
+startRename(sectionId)
+confirmRename(sectionId)
+cancelRename()
+
+deleteSection(sectionId)
+toggleSectionEnabled(sectionId)
+handleDragEnd()
+
+saveTemplateChanges()
+cancelTemplateChanges()
+
+recalculateSortOrder()
+
+
+STATE REQUIREMENTS
+
+Use separate draft state from saved state.
+
+Example:
+
+savedTemplateSections:
+The last persisted template section configuration.
+
+draftTemplateSections:
+Editable copy used while Template Manager is open.
+
+Only Save Template should update savedTemplateSections/database/API.
+
+Cancel should throw away draftTemplateSections and reload from savedTemplateSections.
+
+
+DATABASE / API REQUIREMENTS
+
+Persist final template section configuration.
+
+At minimum, persistence must save:
+
+- templateTypeId
+- key
+- label
+- enabled
+- sortOrder
+- isCustom
+
+If using database records, custom section delete should remove or soft-delete the custom section record.
+
+Default/core section delete should be blocked at UI and server/API level if applicable.
+
+
+ACCEPTANCE TEST
+
+Implementation is not complete until all of this works:
+
+1. Open Template Manager.
+2. Select Custom Integration.
+3. Drag Line Items above Project Description.
+4. Rename Project Description inline.
+5. Confirm rename with checkmark.
+6. Rename another row and cancel with X.
+7. Disable PDF Tracking.
+8. Click + Add Section.
+9. Try to confirm with empty title.
+10. Confirm inline error appears:
+    Section title is required.
+11. Enter Customer Supplied Items.
+12. Click checkmark.
+13. Verify new section appears in the section list.
+14. Rename the new custom section inline.
+15. Delete the new custom section.
+16. Confirm default/core sections cannot be deleted.
+17. Re-add Customer Supplied Items.
+18. Click Save Template.
+19. Open New Quote.
+20. Confirm enabled sections appear in saved order.
+21. Confirm disabled sections are hidden.
+22. Confirm renamed labels show correctly.
+23. Confirm custom section appears as title + textarea.
+24. Reopen Template Manager.
+25. Make changes and click Cancel.
+26. Confirm canceled changes do not affect Quote Builder.
+
+
+UI DETAILS TO MATCH APPROVED PROTOTYPE
+
+Normal row:
+
+[checkbox] [☰] [section label + meta] [✎] [trash/locked]
+
+Add row:
+
+[blank checkbox area] [+] [Required section title input] [✓] [x]
+
+Rename row:
+
+[checkbox] [☰] [section title input] [✓] [x]
+
+Meta text examples:
+
+Enabled · Default section · locked from delete
+Disabled · Default section · locked from delete
+Enabled · Custom section
+Disabled · Custom section
+
+Inline error:
+
+Section title is required.
+
+
+FINAL EXPECTATION
+
+The Template Manager should feel fast and spreadsheet-like.
+
+A user should be able to:
+- click Add Section,
+- type a title,
+- hit checkmark,
+- drag it where they want,
+- rename any row inline,
+- disable rows they do not want,
+- delete only custom rows,
+- save the template,
+- and immediately see the Quote Builder update.

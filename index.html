@@ -1,0 +1,979 @@
+<!doctype html>
+<html>
+  <head>
+    <title>TODDCO Quote Builder Prototype</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: Arial;
+        background: #050b14;
+        color: #e5eefc;
+      }
+      .app {
+        display: flex;
+        min-height: 100vh;
+      }
+      .side {
+        width: 220px;
+        background: #08111f;
+        border-right: 1px solid #1f2d44;
+        padding: 20px;
+      }
+      .logo {
+        font-size: 22px;
+        font-weight: bold;
+        margin-bottom: 30px;
+      }
+      .nav div {
+        padding: 12px;
+        border-radius: 8px;
+        color: #9db5d1;
+      }
+      .nav .active {
+        background: #e5eefc;
+        color: #06101f;
+        font-weight: bold;
+      }
+      .main {
+        flex: 1;
+        padding: 28px 42px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+      .card {
+        background: #08111f;
+        border: 1px solid #22314a;
+        border-radius: 10px;
+        padding: 18px;
+        margin-bottom: 18px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      label {
+        display: block;
+        color: #9db5d1;
+        font-size: 13px;
+        margin-bottom: 6px;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        background: #050b14;
+        color: #e5eefc;
+        border: 1px solid #263850;
+        border-radius: 6px;
+        padding: 10px;
+      }
+      textarea {
+        min-height: 90px;
+      }
+      button {
+        background: #2563eb;
+        color: white;
+        border: 0;
+        padding: 10px 14px;
+        border-radius: 7px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #111827;
+        border: 1px solid #334155;
+      }
+      button.gray {
+        background: #334155;
+      }
+      button.danger {
+        background: #7f1d1d;
+        border: 1px solid #991b1b;
+      }
+      button.icon {
+        padding: 7px 9px;
+        font-size: 13px;
+        min-width: 34px;
+      }
+      button:disabled,
+      input:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 20px;
+      }
+      .section-item {
+        padding: 12px;
+        border: 1px solid #263850;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        color: #cbd5e1;
+      }
+      .section-item.active {
+        border-color: #3b82f6;
+        background: #0b1a30;
+        color: white;
+      }
+      .pill {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #0f2f22;
+        color: #22c55e;
+        font-size: 12px;
+        margin-left: 8px;
+      }
+      .pill.yellow {
+        background: #302707;
+        color: #facc15;
+      }
+      .pill.locked {
+        background: #1e293b;
+        color: #94a3b8;
+      }
+      .line {
+        display: grid;
+        grid-template-columns: 60px 1fr 120px 120px;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .footer {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 20px;
+      }
+      .hidden {
+        display: none;
+      }
+      .checkline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 10px 0;
+        color: #cbd5e1;
+      }
+      .checkline input {
+        width: auto;
+      }
+      .subbox {
+        margin-left: 25px;
+        margin-top: 8px;
+        padding: 12px;
+        border: 1px dashed #334155;
+        border-radius: 8px;
+      }
+      .muted {
+        color: #9db5d1;
+        font-size: 13px;
+      }
+
+      .template-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .drag-row {
+        display: grid;
+        grid-template-columns: 26px 28px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        border: 1px solid #263850;
+        border-radius: 8px;
+        padding: 11px;
+        margin-bottom: 8px;
+        background: #071120;
+        cursor: grab;
+        user-select: none;
+      }
+
+      .drag-row:active {
+        cursor: grabbing;
+      }
+      .drag-row.dragging {
+        opacity: 0.45;
+        border-color: #3b82f6;
+        background: #0b1a30;
+      }
+
+      .drag-handle {
+        color: #64748b;
+        font-size: 18px;
+        line-height: 1;
+      }
+      .drag-row input[type="checkbox"] {
+        width: auto;
+      }
+      .drag-row input[type="text"] {
+        padding: 8px;
+      }
+      .section-name {
+        font-weight: bold;
+        color: #e5eefc;
+      }
+      .section-meta {
+        font-size: 12px;
+        color: #64748b;
+        margin-top: 3px;
+      }
+      .row-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .drop-target {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 1px #60a5fa inset;
+      }
+      .add-row {
+        border-color: #3b82f6;
+        background: #06172d;
+        cursor: default;
+      }
+      .error-text {
+        color: #f87171;
+        font-size: 12px;
+        margin-top: 5px;
+        display: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="app">
+      <div class="side">
+        <div class="logo">TODDCO ERP</div>
+        <div class="nav">
+          <div>Dashboard</div>
+          <div>Sales Pipeline</div>
+          <div class="active">Quotes</div>
+          <div>Projects</div>
+          <div>Tasks</div>
+          <div>Safety</div>
+        </div>
+      </div>
+
+      <div class="main">
+        <div class="top">
+          <div>
+            <h1>Quote Builder</h1>
+            <p class="muted">
+              Structured quote first. PDF is optional and tracked.
+            </p>
+          </div>
+          <div>
+            <button class="secondary" onclick="showPage('templates')">
+              Template Manager
+            </button>
+            <button onclick="showPage('builder')">New Quote</button>
+          </div>
+        </div>
+
+        <div id="builder">
+          <div class="card">
+            <div class="row">
+              <div>
+                <label>Quote Template</label>
+                <select id="templateSelect" onchange="loadTemplate(this.value)">
+                  <option value="integration">Custom Integration</option>
+                  <option value="fabrication">Custom Fabrication</option>
+                  <option value="service">Service / Install</option>
+                  <option value="programming">Programming Only</option>
+                  <option value="eco">ECO / Change Order</option>
+                </select>
+              </div>
+              <div>
+                <label>Status</label>
+                <select>
+                  <option>Draft</option>
+                  <option>Issued</option>
+                  <option>Customer Review</option>
+                  <option>Awarded</option>
+                  <option>Lost</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="layout">
+            <div class="card">
+              <h3>Sections</h3>
+              <div id="sectionList"></div>
+            </div>
+
+            <div>
+              <div id="sectionContent"></div>
+
+              <div class="footer">
+                <button class="secondary">Save Draft</button>
+                <button class="gray">Issue Quote</button>
+                <button>Convert to Project</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="templates" class="hidden">
+          <div class="card">
+            <h2>Quote Template Manager</h2>
+            <p class="muted">
+              Enable, rename, add, delete, and drag quote sections.
+            </p>
+          </div>
+
+          <div class="layout">
+            <div class="card">
+              <h3>Template Types</h3>
+              <div id="templateTypeList"></div>
+            </div>
+
+            <div>
+              <div class="card">
+                <div class="template-head">
+                  <div>
+                    <h3 id="templateEditorTitle">
+                      Custom Integration Sections
+                    </h3>
+                    <p class="muted">
+                      Quick inline edits. Default sections can be disabled but
+                      not deleted.
+                    </p>
+                  </div>
+                  <button onclick="startAddSection()">+ Add Section</button>
+                </div>
+
+                <div id="templateSectionEditor"></div>
+
+                <div class="footer">
+                  <button class="secondary" onclick="cancelTemplateChanges()">
+                    Cancel
+                  </button>
+                  <button onclick="saveTemplateChanges()">Save Template</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const defaultTemplates = {
+        integration: [
+          { key: "header", label: "Header", enabled: true, custom: false },
+          {
+            key: "description",
+            label: "Project Description",
+            enabled: true,
+            custom: false,
+          },
+          {
+            key: "lineitems",
+            label: "Line Items",
+            enabled: true,
+            custom: false,
+          },
+          { key: "routing", label: "Routing", enabled: true, custom: false },
+          {
+            key: "milestones",
+            label: "Milestones",
+            enabled: true,
+            custom: false,
+          },
+          {
+            key: "install",
+            label: "Install / Training",
+            enabled: true,
+            custom: false,
+          },
+          { key: "terms", label: "Terms", enabled: true, custom: false },
+          { key: "pdf", label: "PDF Tracking", enabled: true, custom: false },
+        ],
+        fabrication: [
+          { key: "header", label: "Header", enabled: true, custom: false },
+          {
+            key: "description",
+            label: "Fabrication Scope",
+            enabled: true,
+            custom: false,
+          },
+          {
+            key: "lineitems",
+            label: "Line Items",
+            enabled: true,
+            custom: false,
+          },
+          {
+            key: "routing",
+            label: "Manufacturing",
+            enabled: true,
+            custom: false,
+          },
+          {
+            key: "milestones",
+            label: "Delivery",
+            enabled: true,
+            custom: false,
+          },
+          { key: "terms", label: "Terms", enabled: true, custom: false },
+          { key: "pdf", label: "PDF Tracking", enabled: true, custom: false },
+        ],
+        service: [
+          { key: "header", label: "Header", enabled: true, custom: false },
+          {
+            key: "description",
+            label: "Service Scope",
+            enabled: true,
+            custom: false,
+          },
+          {
+            key: "lineitems",
+            label: "Labor / Travel",
+            enabled: true,
+            custom: false,
+          },
+          { key: "terms", label: "Terms", enabled: true, custom: false },
+          { key: "pdf", label: "PDF Tracking", enabled: true, custom: false },
+        ],
+        programming: [
+          { key: "header", label: "Header", enabled: true, custom: false },
+          {
+            key: "description",
+            label: "Software Scope",
+            enabled: true,
+            custom: false,
+          },
+          {
+            key: "routing",
+            label: "Controls / HMI",
+            enabled: true,
+            custom: false,
+          },
+          { key: "lineitems", label: "Pricing", enabled: true, custom: false },
+          { key: "terms", label: "Terms", enabled: true, custom: false },
+          { key: "pdf", label: "PDF Tracking", enabled: true, custom: false },
+        ],
+        eco: [
+          { key: "header", label: "Header", enabled: true, custom: false },
+          {
+            key: "description",
+            label: "ECO Scope",
+            enabled: true,
+            custom: false,
+          },
+          {
+            key: "lineitems",
+            label: "Cost Impact",
+            enabled: true,
+            custom: false,
+          },
+          {
+            key: "milestones",
+            label: "Schedule Impact",
+            enabled: true,
+            custom: false,
+          },
+          {
+            key: "terms",
+            label: "Customer Approval",
+            enabled: true,
+            custom: false,
+          },
+          { key: "pdf", label: "PDF Tracking", enabled: true, custom: false },
+        ],
+      };
+
+      let templates = JSON.parse(JSON.stringify(defaultTemplates));
+      let draftTemplates = JSON.parse(JSON.stringify(templates));
+      let activeTemplateType = "integration";
+      let draggedIndex = null;
+      let editingIndex = null;
+      let addingSection = false;
+
+      const templateNames = {
+        integration: "Custom Integration",
+        fabrication: "Custom Fabrication",
+        service: "Service / Install",
+        programming: "Programming Only",
+        eco: "ECO / Change Order",
+      };
+
+      const sectionContent = {
+        header: `
+    <div class="card">
+      <h3>Quote Header <span class="pill">Required</span></h3>
+      <div class="row">
+        <div><label>Customer</label><input placeholder="Company name"></div>
+        <div><label>Contact</label><input placeholder="Customer contact"></div>
+        <div><label>Quote Number</label><input placeholder="26-####REVA"></div>
+        <div><label>Date Issued</label><input type="date"></div>
+      </div>
+    </div>
+  `,
+        description: `
+    <div class="card">
+      <h3>Project Description</h3>
+      <label>Project / Machine Name</label>
+      <input placeholder="Robotic Material Handling Cell">
+      <br><br>
+      <label>Scope Summary</label>
+      <textarea placeholder="Plain English description of what TODDCO is quoting."></textarea>
+    </div>
+  `,
+        lineitems: `
+    <div class="card">
+      <h3>Line Items</h3>
+      <div class="line">
+        <label>Qty</label><label>Description</label><label>Unit Price</label><label>Total</label>
+      </div>
+      <div class="line">
+        <input value="1">
+        <input value="CUSTOM-INTEGRATION - Robotic Material Handling Cell">
+        <input value="$265,450">
+        <input value="$265,450">
+      </div>
+      <button class="secondary">Add Line Item</button>
+    </div>
+  `,
+        routing: `
+    <div class="card">
+      <h3>Routing / Classification</h3>
+      <label class="checkline">
+        <input type="checkbox" id="engCheck" onchange="toggleEngineering()">
+        Requires Engineering
+      </label>
+      <div class="subbox">
+        <label class="checkline"><input type="radio" name="engType" disabled> RE - Recurring Engineering</label>
+        <label class="checkline"><input type="radio" name="engType" disabled> NRE - Non-Recurring Engineering</label>
+      </div>
+      <label class="checkline"><input type="checkbox"> Manufacturing Required</label>
+      <label class="checkline"><input type="checkbox"> Controls / Programming Required</label>
+      <label class="checkline"><input type="checkbox"> Installation Required</label>
+      <label class="checkline"><input type="checkbox"> Training Required</label>
+      <label class="checkline"><input type="checkbox"> Customer Supplied Hardware</label>
+    </div>
+  `,
+        milestones: `
+    <div class="card">
+      <h3>Milestones / Delivery</h3>
+      <div class="row">
+        <div><label>Delivery</label><input placeholder="32-36 weeks A.R.O."></div>
+        <div><label>Valid Period</label><input placeholder="30 days"></div>
+      </div>
+      <br>
+      <label>Milestone Payments</label>
+      <select>
+        <option>50 / 25 / 15 / 10 Standard</option>
+        <option>50 / 50 Fabrication</option>
+        <option>NET30</option>
+        <option>Custom - Use Once</option>
+        <option>Custom - Save as Reusable</option>
+      </select>
+    </div>
+  `,
+        install: `
+    <div class="card">
+      <h3>Installation / Training</h3>
+      <label>Installation / Training Language</label>
+      <select>
+        <option>1-day installation and training</option>
+        <option>2-day installation and training</option>
+        <option>Training only</option>
+        <option>No installation/training</option>
+        <option>Custom - Save as Reusable</option>
+      </select>
+      <br><br>
+      <label>Custom Notes</label>
+      <textarea placeholder="Install requirements, customer-provided items, site conditions, etc."></textarea>
+    </div>
+  `,
+        terms: `
+    <div class="card">
+      <h3>Terms</h3>
+      <div class="row">
+        <div>
+          <label>F.C.A. / F.O.B.</label>
+          <select>
+            <option>Temecula, CA</option>
+            <option>Customer Site</option>
+            <option>Custom</option>
+          </select>
+        </div>
+        <div>
+          <label>Freight</label>
+          <select>
+            <option>Truck freight, carrier TBD</option>
+            <option>TBD</option>
+            <option>International Crate</option>
+            <option>Custom</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  `,
+        pdf: `
+    <div class="card">
+      <h3>PDF Output Tracking</h3>
+      <p>Status: <span class="pill yellow" id="pdfStatus">Not Generated</span></p>
+      <p class="muted">PDF is an output, not the source of truth.</p>
+      <button class="secondary" onclick="generatePdf()">Generate PDF</button>
+      <button class="secondary" onclick="markSent()">Mark Sent to Customer</button>
+    </div>
+  `,
+      };
+
+      function enabledSections(type) {
+        return templates[type].filter((s) => s.enabled);
+      }
+
+      function loadTemplate(type) {
+        const list = document.getElementById("sectionList");
+        list.innerHTML = "";
+
+        const activeSections = enabledSections(type);
+
+        activeSections.forEach((section, i) => {
+          const div = document.createElement("div");
+          div.className = "section-item" + (i === 0 ? " active" : "");
+          div.innerText = section.label;
+          div.onclick = () => {
+            document
+              .querySelectorAll("#sectionList .section-item")
+              .forEach((x) => x.classList.remove("active"));
+            div.classList.add("active");
+            showSection(section);
+          };
+          list.appendChild(div);
+        });
+
+        if (activeSections.length) {
+          showSection(activeSections[0]);
+        } else {
+          document.getElementById("sectionContent").innerHTML =
+            "<div class='card'><h3>No sections enabled</h3></div>";
+        }
+      }
+
+      function showSection(section) {
+        if (section.custom) {
+          document.getElementById("sectionContent").innerHTML = `
+      <div class="card">
+        <h3>${escapeHtml(section.label)} <span class="pill yellow">Custom</span></h3>
+        <label>Section Content</label>
+        <textarea placeholder="Custom quote section language."></textarea>
+      </div>
+    `;
+          return;
+        }
+
+        document.getElementById("sectionContent").innerHTML =
+          sectionContent[section.key] || sectionContent.description;
+      }
+
+      function showPage(page) {
+        document
+          .getElementById("builder")
+          .classList.toggle("hidden", page !== "builder");
+        document
+          .getElementById("templates")
+          .classList.toggle("hidden", page !== "templates");
+
+        if (page === "templates") {
+          draftTemplates = JSON.parse(JSON.stringify(templates));
+          editingIndex = null;
+          addingSection = false;
+          renderTemplateTypes();
+          renderTemplateEditor(activeTemplateType);
+        }
+
+        if (page === "builder") {
+          loadTemplate(document.getElementById("templateSelect").value);
+        }
+      }
+
+      function renderTemplateTypes() {
+        const box = document.getElementById("templateTypeList");
+        box.innerHTML = "";
+
+        Object.keys(draftTemplates).forEach((type) => {
+          const div = document.createElement("div");
+          div.className =
+            "section-item" + (type === activeTemplateType ? " active" : "");
+          div.innerText = templateNames[type];
+          div.onclick = () => {
+            activeTemplateType = type;
+            editingIndex = null;
+            addingSection = false;
+            renderTemplateTypes();
+            renderTemplateEditor(type);
+          };
+          box.appendChild(div);
+        });
+      }
+
+      function renderTemplateEditor(type) {
+        draggedIndex = null;
+        document.getElementById("templateEditorTitle").innerText =
+          templateNames[type] + " Sections";
+
+        const editor = document.getElementById("templateSectionEditor");
+        editor.innerHTML = "";
+
+        if (addingSection) {
+          const addRow = document.createElement("div");
+          addRow.className = "drag-row add-row";
+          addRow.innerHTML = `
+      <div></div>
+      <div class="drag-handle">+</div>
+      <div>
+        <input id="newSectionTitle" type="text" placeholder="Required section title" onkeydown="handleNewSectionKey(event)">
+        <div id="newSectionError" class="error-text">Section title is required.</div>
+      </div>
+      <div class="row-actions">
+        <button class="icon" onclick="confirmAddSection()">✓</button>
+        <button class="secondary icon" onclick="cancelAddSection()">✕</button>
+      </div>
+    `;
+          editor.appendChild(addRow);
+
+          setTimeout(() => {
+            const input = document.getElementById("newSectionTitle");
+            if (input) input.focus();
+          }, 0);
+        }
+
+        draftTemplates[type].forEach((section, index) => {
+          const row = document.createElement("div");
+          row.className = "drag-row";
+          row.draggable = editingIndex !== index;
+          row.dataset.index = index;
+
+          const meta = section.custom
+            ? "Custom section"
+            : "Default section · locked from delete";
+
+          if (editingIndex === index) {
+            row.innerHTML = `
+        <input type="checkbox" ${section.enabled ? "checked" : ""} onchange="toggleTemplateSection('${type}',${index},this.checked)">
+        <div class="drag-handle">☰</div>
+        <div>
+          <input id="editSectionInput_${index}" type="text" value="${escapeHtml(section.label)}" onkeydown="handleRenameKey(event,${index})">
+          <div id="editSectionError_${index}" class="error-text">Section title is required.</div>
+        </div>
+        <div class="row-actions">
+          <button class="icon" onclick="confirmRename(${index})">✓</button>
+          <button class="secondary icon" onclick="cancelRename()">✕</button>
+        </div>
+      `;
+          } else {
+            row.innerHTML = `
+        <input type="checkbox" ${section.enabled ? "checked" : ""} onclick="event.stopPropagation()" onchange="toggleTemplateSection('${type}',${index},this.checked)">
+        <div class="drag-handle">☰</div>
+        <div>
+          <div class="section-name">
+            ${escapeHtml(section.label)}
+            ${section.custom ? "<span class='pill yellow'>Custom</span>" : "<span class='pill locked'>Default</span>"}
+          </div>
+          <div class="section-meta">${section.enabled ? "Enabled" : "Disabled"} · ${meta}</div>
+        </div>
+        <div class="row-actions">
+          <button class="secondary icon" onclick="startRename(${index})">✎</button>
+          <button class="danger icon" ${section.custom ? "" : "disabled"} onclick="deleteTemplateSection(${index})">🗑</button>
+        </div>
+      `;
+          }
+
+          row.addEventListener("dragstart", () => {
+            if (editingIndex === index) return;
+            draggedIndex = index;
+            row.classList.add("dragging");
+          });
+
+          row.addEventListener("dragend", () => {
+            row.classList.remove("dragging");
+            document
+              .querySelectorAll(".drag-row")
+              .forEach((x) => x.classList.remove("drop-target"));
+          });
+
+          row.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            row.classList.add("drop-target");
+          });
+
+          row.addEventListener("dragleave", () => {
+            row.classList.remove("drop-target");
+          });
+
+          row.addEventListener("drop", (e) => {
+            e.preventDefault();
+            row.classList.remove("drop-target");
+
+            const dropIndex = Number(row.dataset.index);
+            if (draggedIndex === null || draggedIndex === dropIndex) return;
+
+            const list = draftTemplates[type];
+            const moved = list.splice(draggedIndex, 1)[0];
+            list.splice(dropIndex, 0, moved);
+
+            renderTemplateEditor(type);
+          });
+
+          editor.appendChild(row);
+        });
+      }
+
+      function startAddSection() {
+        addingSection = true;
+        editingIndex = null;
+        renderTemplateEditor(activeTemplateType);
+      }
+
+      function confirmAddSection() {
+        const input = document.getElementById("newSectionTitle");
+        const error = document.getElementById("newSectionError");
+        const title = input ? input.value.trim() : "";
+
+        if (!title) {
+          if (error) error.style.display = "block";
+          if (input) input.focus();
+          return;
+        }
+
+        draftTemplates[activeTemplateType].push({
+          key: "custom_" + Date.now(),
+          label: title,
+          enabled: true,
+          custom: true,
+        });
+
+        addingSection = false;
+        renderTemplateEditor(activeTemplateType);
+      }
+
+      function cancelAddSection() {
+        addingSection = false;
+        renderTemplateEditor(activeTemplateType);
+      }
+
+      function handleNewSectionKey(event) {
+        if (event.key === "Enter") confirmAddSection();
+        if (event.key === "Escape") cancelAddSection();
+      }
+
+      function startRename(index) {
+        editingIndex = index;
+        addingSection = false;
+        renderTemplateEditor(activeTemplateType);
+
+        setTimeout(() => {
+          const input = document.getElementById("editSectionInput_" + index);
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        }, 0);
+      }
+
+      function confirmRename(index) {
+        const input = document.getElementById("editSectionInput_" + index);
+        const error = document.getElementById("editSectionError_" + index);
+        const title = input ? input.value.trim() : "";
+
+        if (!title) {
+          if (error) error.style.display = "block";
+          if (input) input.focus();
+          return;
+        }
+
+        draftTemplates[activeTemplateType][index].label = title;
+        editingIndex = null;
+        renderTemplateEditor(activeTemplateType);
+      }
+
+      function cancelRename() {
+        editingIndex = null;
+        renderTemplateEditor(activeTemplateType);
+      }
+
+      function handleRenameKey(event, index) {
+        if (event.key === "Enter") confirmRename(index);
+        if (event.key === "Escape") cancelRename();
+      }
+
+      function deleteTemplateSection(index) {
+        const section = draftTemplates[activeTemplateType][index];
+
+        if (!section.custom) return;
+
+        draftTemplates[activeTemplateType].splice(index, 1);
+        renderTemplateEditor(activeTemplateType);
+      }
+
+      function toggleTemplateSection(type, index, checked) {
+        draftTemplates[type][index].enabled = checked;
+      }
+
+      function saveTemplateChanges() {
+        templates = JSON.parse(JSON.stringify(draftTemplates));
+        loadTemplate(document.getElementById("templateSelect").value);
+        showPage("builder");
+      }
+
+      function cancelTemplateChanges() {
+        draftTemplates = JSON.parse(JSON.stringify(templates));
+        showPage("builder");
+      }
+
+      function toggleEngineering() {
+        const checked = document.getElementById("engCheck").checked;
+        document.querySelectorAll("input[name='engType']").forEach((r) => {
+          r.disabled = !checked;
+          if (!checked) r.checked = false;
+        });
+      }
+
+      function generatePdf() {
+        const status = document.getElementById("pdfStatus");
+        if (status) {
+          status.innerText = "Generated";
+          status.className = "pill";
+        }
+      }
+
+      function markSent() {
+        const status = document.getElementById("pdfStatus");
+        if (status) {
+          status.innerText = "Sent to Customer";
+          status.className = "pill";
+        }
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      renderTemplateTypes();
+      loadTemplate("integration");
+    </script>
+  </body>
+</html>

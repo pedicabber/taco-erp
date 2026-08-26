@@ -1,0 +1,208 @@
+Please revise and recreate the full task plan before implementation.
+
+Important correction:
+
+I do NOT want the Quotes module to be a visual-only placeholder or just a template rendering preview.
+
+This should be an integral, usable ERP module now.
+
+The previous plan treated Quote Builder too lightly. I want the Quotes module to support real quote drafting and saving inside the ERP.
+
+TACO ERP #7 should build:
+
+1. A new Quotes sidebar page/module
+2. A working Quote Template Manager
+3. A working Quote Builder
+4. Database-backed quote template types
+5. Database-backed quote template sections
+6. Database-backed saved quote records
+7. Database-backed quote line items
+8. Database-backed quote section content
+9. Ability to create a new quote
+10. Ability to edit and save quote drafts
+11. Ability to reopen saved quote drafts
+12. Ability to track quote status
+13. Ability to calculate line item subtotal/total
+14. Ability to use saved template configuration to control quote layout
+
+This should not be like the current Sales Pipeline visual-only page. Quotes should be usable immediately for actual quote drafting and internal quote management.
+
+Required Quotes module structure:
+
+Quotes sidebar module should include:
+
+- Quote List / Saved Quotes
+- New Quote / Quote Builder
+- Template Manager
+
+Quote List / Saved Quotes:
+- Shows saved quotes
+- Allows opening/reopening a saved quote
+- Shows quote number, customer/company, template type, status, total, last updated
+- Can filter or at least visually separate Draft / Issued / Awarded / Lost later, but basic list is fine now
+
+Quote Builder:
+- Create new quote
+- Select template type
+- Fill out quote header fields
+- Fill out enabled quote sections
+- Add/edit/remove line items
+- Calculate subtotal and total
+- Save quote draft
+- Reopen and edit saved quote
+- Store quote section content
+- Respect selected template section order, labels, enabled/disabled states, and custom sections
+
+Quote statuses:
+- Draft
+- Issued
+- Customer Review
+- Awarded
+- Lost
+
+Template Manager:
+- Keep the approved inline section controls
+- Template Types on left
+- Selected template sections on right
+- Enable/disable sections
+- Drag/drop reorder sections
+- Rename sections inline
+- Add custom section inline with required title and checkmark
+- Delete custom sections only
+- Default/core sections cannot be deleted
+- Save/cancel template changes
+- Template types are fixed for now but stored as DB records for future admin editing
+
+Template types to seed:
+1. Custom Integration
+2. Custom Fabrication
+3. Service / Install
+4. Programming Only
+5. ECO / Change Order
+
+Initial default sections:
+
+Custom Integration:
+- Header
+- Project Description
+- Line Items
+- Routing
+- Milestones
+- Install / Training
+- Terms
+- PDF Tracking
+
+Custom Fabrication:
+- Header
+- Fabrication Scope
+- Line Items
+- Manufacturing
+- Delivery
+- Terms
+- PDF Tracking
+
+Service / Install:
+- Header
+- Service Scope
+- Labor / Travel
+- Terms
+- PDF Tracking
+
+Programming Only:
+- Header
+- Software Scope
+- Controls / HMI
+- Pricing
+- Terms
+- PDF Tracking
+
+ECO / Change Order:
+- Header
+- ECO Scope
+- Cost Impact
+- Schedule Impact
+- Customer Approval
+- PDF Tracking
+
+Quote Builder usable fields:
+
+Header:
+- Customer / Company
+- Contact
+- Quote Number
+- Date Issued
+- Status
+
+Description / Scope sections:
+- Project / Machine Name
+- Scope Summary textarea
+
+Line Items / Pricing / Cost Impact:
+- Editable line item rows
+- Qty
+- Part Number / Category
+- Description
+- Unit Price
+- Total
+- Add Line Item button
+- Remove Line Item button
+- Subtotal calculation
+- Total calculation
+
+Routing / Manufacturing / Controls:
+- Requires Engineering checkbox
+- RE / NRE radio selection when engineering is checked
+- Manufacturing Required checkbox
+- Controls / Programming Required checkbox
+- Installation Required checkbox
+- Training Required checkbox
+- Customer Supplied Hardware checkbox
+
+Milestones / Delivery / Schedule Impact:
+- Delivery field
+- Valid Period field
+- Milestone Payment Terms field/dropdown/textarea
+- Schedule Notes textarea
+
+Install / Training:
+- Install / Training dropdown
+- Custom Notes textarea
+
+Terms / Customer Approval:
+- F.C.A. / F.O.B.
+- Freight
+- Terms
+- Approval Notes textarea
+
+PDF Tracking:
+- Status display is acceptable for now
+- Buttons can update local/saved PDF tracking status
+- Actual PDF export can remain future scope
+
+Custom sections:
+- Section title
+- Editable textarea
+- Saved with the quote
+
+Build now:
+- Quotes sidebar module
+- Saved quote list
+- New Quote / Quote Builder
+- Template Manager
+- Saved quote drafts
+- Saved quote line items
+- Saved quote section content
+- Quote status tracking
+- Template-driven quote rendering
+
+Future/out of scope:
+- Real PDF generation/export
+- Email sending
+- Sales Pipeline linking
+- Customer/contact database integration
+- Terms Library
+- Milestone Payment Template Library
+- Full quote revision system
+- Full quote approval workflow
+
+Please rewrite the full implementation plan around this corrected scope before coding.

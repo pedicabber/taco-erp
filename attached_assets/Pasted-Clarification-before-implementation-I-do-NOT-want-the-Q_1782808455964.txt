@@ -1,0 +1,75 @@
+Clarification before implementation:
+
+I do NOT want the Quotes module to be a visual-only placeholder.
+
+This should be an integral, usable ERP module now.
+
+TACO ERP #7 should build the Quotes section as a real working module with:
+
+1. A new Quotes sidebar page/module
+2. A working Quote Template Manager
+3. A working Quote Builder
+4. Database-backed quote template types
+5. Database-backed quote template sections
+6. Database-backed quote draft records
+7. Database-backed quote line items
+8. Ability to create, edit, and save quote drafts
+9. Ability to reopen saved quote drafts
+10. Ability to use the saved template structure to generate/edit quote content
+11. Ability to calculate line item totals/subtotals
+12. Ability to track quote status
+
+This should not be just a rendering surface.
+
+The Quote Builder should be usable for actual quote creation inside the ERP.
+
+Required quote draft functionality:
+
+- Create new quote
+- Select quote template type
+- Fill out header/customer/contact/date/status fields
+- Fill out enabled quote sections
+- Add/edit/remove line items
+- Calculate subtotal and total
+- Save quote draft
+- Reopen saved quote draft
+- Edit saved quote draft
+- Keep quote data tied to its selected template
+- Respect template section order, labels, enabled/disabled state, and custom sections
+
+Quote statuses should include at minimum:
+
+- Draft
+- Issued
+- Customer Review
+- Awarded
+- Lost
+
+For now, PDF generation/export can still be future scope, but the quote itself should be saved and usable in the ERP.
+
+Issued Quotes / Quote History should not be treated as a fake future-only screen. At minimum, the Quotes module should have a saved quote list so users can reopen quote drafts or issued quotes.
+
+Acceptable scope for this phase:
+
+Build:
+- Quotes sidebar module
+- Quote list / saved quotes view
+- New Quote / Quote Builder
+- Template Manager
+- Saved quote drafts
+- Saved quote line items
+- Saved quote section content
+- Quote status tracking
+- Template-driven quote rendering
+
+Future:
+- Real PDF generation/export
+- Email sending
+- Sales Pipeline linking
+- Customer/contact database integration
+- Terms Library
+- Milestone Payment Template Library
+- Full quote revision system
+
+Important:
+Do not build Quotes like the current Sales Pipeline visual-only page. This should be a functional ERP module that stores real quote data and can be used immediately for quote drafting and internal quote management.
